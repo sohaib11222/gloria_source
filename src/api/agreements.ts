@@ -100,4 +100,9 @@ export const agreementsApi = {
     const response = await api.post('/agreements/check-duplicate', payload)
     return response.data
   },
+
+  getAgreement: async (id: string): Promise<Agreement & { agent?: any; source?: any }> => {
+    const response = await api.get(`/agreements/${id}`)
+    return response.data
+  },
 }

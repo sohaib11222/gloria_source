@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -12,6 +12,27 @@ import toast from 'react-hot-toast'
 export default function LoginPage() {
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
+
+  // Check if user is already logged in on mount
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    const userData = localStorage.getItem('user')
+    
+    if (token && userData) {
+      try {
+        const user = JSON.parse(userData)
+        if (user.company?.type === 'SOURCE') {
+          // User is already logged in, redirect to source page
+          navigate('/source', { replace: true })
+        }
+      } catch (e) {
+        // Invalid user data, clear it
+        localStorage.removeItem('token')
+        localStorage.removeItem('refreshToken')
+        localStorage.removeItem('user')
+      }
+    }
+  }, [navigate])
 
   const {
     register,

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Button } from './ui/Button'
 import { Loader } from './ui/Loader'
+import { Tooltip } from './ui/Tooltip'
 import { Agent } from '../api/agreements'
 import { getStatusColor } from '../lib/utils'
 
@@ -9,6 +10,18 @@ interface AvailableAgentsProps {
   isLoadingAgents: boolean
   isOfferingAgreement: string | null
   offerAgreement: (agreementId: string) => void
+  user?: {
+    company: {
+      status: string
+    }
+  } | null
+  endpointConfig?: {
+    grpcEndpoint?: string | null
+  } | null
+  grpcTestResult?: {
+    ok?: boolean
+  } | null
+  onViewAgreement?: (agreementId: string) => void
 }
 
 export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
@@ -16,7 +29,46 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
   isLoadingAgents,
   isOfferingAgreement,
   offerAgreement,
+  user,
+  endpointConfig,
+  grpcTestResult,
+  onViewAgreement,
 }) => {
+  // Determine if offer button should be disabled and why
+  const getOfferButtonState = (agreementStatus: string) => {
+    if (agreementStatus !== 'DRAFT') {
+      return {
+        disabled: true,
+        reason: `Agreement status is ${agreementStatus}. Only DRAFT agreements can be offered.`,
+      }
+    }
+
+    if (user?.company.status !== 'ACTIVE') {
+      return {
+        disabled: true,
+        reason: `Company status is ${user?.company.status}. Company must be ACTIVE to offer agreements.`,
+      }
+    }
+
+    if (!endpointConfig?.grpcEndpoint) {
+      return {
+        disabled: true,
+        reason: 'gRPC endpoint is not configured. Please configure your gRPC endpoint in the Dashboard.',
+      }
+    }
+
+    if (!grpcTestResult?.ok) {
+      return {
+        disabled: true,
+        reason: 'gRPC connection test has not passed. Please test your gRPC connection in the Dashboard.',
+      }
+    }
+
+    return {
+      disabled: false,
+      reason: '',
+    }
+  }
   return (
     <Card>
       <CardHeader>
@@ -72,9 +124,18 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
                               <div className="flex items-center justify-between">
                                 <div className="flex-1">
                                   <div className="flex items-center space-x-2">
-                                    <span className="text-sm font-medium text-gray-900">
-                                      {agreement.agreementRef}
-                                    </span>
+                                    {onViewAgreement ? (
+                                      <button
+                                        onClick={() => onViewAgreement(agreement.id)}
+                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                                      >
+                                        {agreement.agreementRef}
+                                      </button>
+                                    ) : (
+                                      <span className="text-sm font-medium text-gray-900">
+                                        {agreement.agreementRef}
+                                      </span>
+                                    )}
                                     <span
                                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(agreement.status)}`}
                                     >
@@ -88,16 +149,36 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
                                     Source: {agreement.source.companyName}
                                   </p>
                                 </div>
-                                {agreement.status === 'DRAFT' && (
-                                  <Button
-                                    onClick={() => offerAgreement(agreement.id)}
-                                    loading={isOfferingAgreement === agreement.id}
-                                    variant="primary"
-                                    size="sm"
-                                  >
-                                    Offer Agreement
-                                  </Button>
-                                )}
+                                {(() => {
+                                  const buttonState = getOfferButtonState(agreement.status)
+                                  
+                                  const button = (
+                                    <Button
+                                      onClick={() => offerAgreement(agreement.id)}
+                                      loading={isOfferingAgreement === agreement.id}
+                                      variant="primary"
+                                      size="sm"
+                                      disabled={buttonState.disabled}
+                                      title={buttonState.disabled ? buttonState.reason : undefined}
+                                    >
+                                      Offer Agreement
+                                    </Button>
+                                  )
+
+                                  // For disabled buttons, we need to wrap in a container that can receive hover events
+                                  // since disabled buttons don't trigger mouse events
+                                  return buttonState.disabled ? (
+                                    <div className="relative inline-block" title={buttonState.reason}>
+                                      <Tooltip content={buttonState.reason} position="top">
+                                        <div className="inline-block">
+                                          {button}
+                                        </div>
+                                      </Tooltip>
+                                    </div>
+                                  ) : (
+                                    button
+                                  )
+                                })()}
                               </div>
                             </div>
                           ))}

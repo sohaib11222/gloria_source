@@ -70,7 +70,7 @@ export const GrpcConnectionTest: React.FC<GrpcConnectionTestProps> = ({
             {grpcTestResult.endpoints.health && (
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="flex items-center justify-between mb-3">
-                  <h5 className="font-medium text-gray-900">Health Endpoint</h5>
+                  <h5 className="font-medium text-gray-900">Health Endpoint (gRPC)</h5>
                   <span className={`text-xs font-medium px-2 py-1 rounded ${
                     grpcTestResult.endpoints.health.ok 
                       ? 'bg-green-100 text-green-800' 
@@ -100,6 +100,48 @@ export const GrpcConnectionTest: React.FC<GrpcConnectionTestProps> = ({
                     </p>
                     <p className="text-xs text-gray-500 mt-2">
                       Failed after: {grpcTestResult.endpoints.health.ms}ms
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Locations Endpoint Details */}
+            {grpcTestResult.endpoints.locations && (
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h5 className="font-medium text-gray-900">Locations Endpoint (gRPC)</h5>
+                  <span className={`text-xs font-medium px-2 py-1 rounded ${
+                    grpcTestResult.endpoints.locations.ok 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {grpcTestResult.endpoints.locations.ok ? 'OK' : 'FAILED'}
+                  </span>
+                </div>
+                
+                {grpcTestResult.endpoints.locations.ok && grpcTestResult.endpoints.locations.result ? (
+                  <div>
+                    <p className="text-sm text-gray-700">
+                      <span className="font-medium">Locations returned:</span>{' '}
+                      <span className="text-green-700 font-semibold">
+                        {Array.isArray(grpcTestResult.endpoints.locations.result.locations) 
+                          ? grpcTestResult.endpoints.locations.result.locations.length 
+                          : 'N/A'}
+                      </span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Response time: {grpcTestResult.endpoints.locations.ms}ms
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm text-red-700 break-words">
+                      <span className="font-medium">Error:</span>{' '}
+                      <span className="block mt-1">{grpcTestResult.endpoints.locations.error}</span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Failed after: {grpcTestResult.endpoints.locations.ms}ms
                     </p>
                   </div>
                 )}

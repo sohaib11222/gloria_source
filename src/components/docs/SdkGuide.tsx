@@ -1,7 +1,28 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './docs.css';
 
 const SdkGuide: React.FC<{ role?: 'agent' | 'source' | 'admin' }> = ({ role = 'source' }) => {
+  const [companyId, setCompanyId] = useState<string>('YOUR_COMPANY_ID');
+  const [companyType, setCompanyType] = useState<string>('SOURCE');
+
+  useEffect(() => {
+    // Load user info for SDK examples
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        if (user.company?.id) {
+          setCompanyId(user.company.id);
+        }
+        if (user.company?.type) {
+          setCompanyType(user.company.type);
+        }
+      } catch (e) {
+        console.error('Failed to parse user data:', e);
+      }
+    }
+  }, []);
+
   const prefaceText = {
     agent: 'Start here: login → approve agreement → availability → booking',
     source: 'Start here: login → offer agreement → locations → verification',
@@ -16,6 +37,18 @@ const SdkGuide: React.FC<{ role?: 'agent' | 'source' | 'admin' }> = ({ role = 's
       {role && (
         <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '0.5rem' }}>
           <p style={{ margin: 0, fontWeight: 600, color: '#1e40af' }}>{prefaceText[role]}</p>
+        </div>
+      )}
+
+      {companyId !== 'YOUR_COMPANY_ID' && (
+        <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#dbeafe', border: '1px solid #bfdbfe', borderRadius: '0.5rem' }}>
+          <p style={{ margin: 0, fontSize: '0.875rem', color: '#1e40af' }}>
+            <strong>Your Company ID:</strong> <code style={{ backgroundColor: '#fff', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontFamily: 'monospace' }}>{companyId}</code> | 
+            <strong> Type:</strong> <code style={{ backgroundColor: '#fff', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontFamily: 'monospace' }}>{companyType}</code>
+          </p>
+          <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.875rem', color: '#1e40af' }}>
+            💡 Use your Company ID in API requests where <code>sourceId</code>, <code>companyId</code>, or path parameters require it.
+          </p>
         </div>
       )}
 
@@ -122,8 +155,40 @@ const SdkGuide: React.FC<{ role?: 'agent' | 'source' | 'admin' }> = ({ role = 's
 
       <section>
         <h2>TypeScript Quick Start</h2>
+        {role === 'source' && (
+          <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '0.5rem' }}>
+            <p style={{ margin: 0, fontSize: '0.875rem', color: '#92400e' }}>
+              <strong>For Sources:</strong> After login, configure your endpoints, sync locations, and offer agreements to agents. Use your Company ID ({companyId !== 'YOUR_COMPANY_ID' ? <code style={{ backgroundColor: '#fff', padding: '0.125rem 0.25rem', borderRadius: '0.25rem' }}>{companyId}</code> : 'YOUR_COMPANY_ID'}) in API calls.
+            </p>
+          </div>
+        )}
         <div style={{ backgroundColor: '#1f2937', color: '#f9fafb', padding: '1.5rem', borderRadius: '0.5rem', marginTop: '1rem' }}>
-          <pre style={{ margin: 0, fontSize: '0.875rem', lineHeight: '1.5', fontFamily: 'Monaco, Menlo, monospace', whiteSpace: 'pre-wrap' }}>{`import { CarHireClient } from '@carhire/sdk';
+          <pre style={{ margin: 0, fontSize: '0.875rem', lineHeight: '1.5', fontFamily: 'Monaco, Menlo, monospace', whiteSpace: 'pre-wrap' }}>{role === 'source' ? `import { CarHireClient } from '@carhire/sdk';
+
+const client = new CarHireClient({
+  baseUrl: 'https://api.carhire.example.com',
+});
+
+// Login
+const { access, user } = await client.auth.login('source@example.com', 'password');
+client.setToken(access);
+
+// Configure endpoints
+await client.endpoints.updateConfig({
+  httpEndpoint: 'http://localhost:9090',
+  grpcEndpoint: 'localhost:51062',
+  adapterType: 'grpc',
+});
+
+// Sync locations
+await client.coverage.syncSource('${companyId !== 'YOUR_COMPANY_ID' ? companyId : 'YOUR_COMPANY_ID'}');
+
+// Offer agreement to an agent
+await client.agreements.offer({
+  agreementRef: 'AG-2025-001',
+  agentId: 'agent_company_id',
+  sourceId: '${companyId !== 'YOUR_COMPANY_ID' ? companyId : 'YOUR_COMPANY_ID'}',
+});` : `import { CarHireClient } from '@carhire/sdk';
 
 const client = new CarHireClient({
   baseUrl: 'https://api.carhire.example.com',
@@ -168,8 +233,38 @@ for await (const offers of client.availability.stream({
 
       <section>
         <h2>JavaScript Quick Start</h2>
+        {role === 'source' && (
+          <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '0.5rem' }}>
+            <p style={{ margin: 0, fontSize: '0.875rem', color: '#92400e' }}>
+              <strong>For Sources:</strong> Configure endpoints, sync locations, and manage agreements. Your Company ID is: <code style={{ backgroundColor: '#fff', padding: '0.125rem 0.25rem', borderRadius: '0.25rem' }}>{companyId !== 'YOUR_COMPANY_ID' ? companyId : 'YOUR_COMPANY_ID'}</code>
+            </p>
+          </div>
+        )}
         <div style={{ backgroundColor: '#1f2937', color: '#f9fafb', padding: '1.5rem', borderRadius: '0.5rem', marginTop: '1rem' }}>
-          <pre style={{ margin: 0, fontSize: '0.875rem', lineHeight: '1.5', fontFamily: 'Monaco, Menlo, monospace', whiteSpace: 'pre-wrap' }}>{`import { CarHireClient } from '@carhire/sdk';
+          <pre style={{ margin: 0, fontSize: '0.875rem', lineHeight: '1.5', fontFamily: 'Monaco, Menlo, monospace', whiteSpace: 'pre-wrap' }}>{role === 'source' ? `import { CarHireClient } from '@carhire/sdk';
+
+const client = new CarHireClient({
+  baseUrl: 'https://api.carhire.example.com',
+});
+
+// Login
+const { access } = await client.auth.login('source@example.com', 'password');
+client.setToken(access);
+
+// Get your company ID from user object
+const companyId = '${companyId !== 'YOUR_COMPANY_ID' ? companyId : 'YOUR_COMPANY_ID'}';
+
+// Configure endpoints
+await client.endpoints.updateConfig({
+  httpEndpoint: 'http://localhost:9090',
+  grpcEndpoint: 'localhost:51062',
+});
+
+// Sync locations
+await client.coverage.syncSource(companyId);
+
+// Import branches from HTTP endpoint
+await client.sources.importBranches();` : `import { CarHireClient } from '@carhire/sdk';
 
 const client = new CarHireClient({
   baseUrl: 'https://api.carhire.example.com',

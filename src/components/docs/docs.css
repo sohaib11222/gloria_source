@@ -56,7 +56,7 @@
   flex: 1;
   padding: 1.5rem 2rem;
   overflow-y: auto;
-  max-width: 900px;
+  max-width: 100%;
 }
 .docs-main h1 {
   font-size: 1.875rem;

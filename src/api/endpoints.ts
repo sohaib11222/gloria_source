@@ -10,6 +10,9 @@ export interface EndpointConfig {
   description: string
   status: string
   updatedAt: string
+  lastGrpcTestResult?: any
+  lastGrpcTestAt?: string
+  lastLocationSyncAt?: string
 }
 
 export interface UpdateEndpointRequest {
@@ -102,6 +105,21 @@ export const endpointsApi = {
 
   testSourceGrpc: async (data: SourceGrpcTestRequest): Promise<SourceGrpcTestResponse> => {
     const response = await api.post('/test/source-grpc', data)
+    return response.data
+  },
+
+  syncLocations: async (sourceId: string): Promise<any> => {
+    const response = await api.post(`/coverage/source/${sourceId}/sync`)
+    return response.data
+  },
+
+  getSyncedLocations: async (sourceId: string): Promise<LocationsResponse> => {
+    const response = await api.get(`/coverage/source/${sourceId}`)
+    return response.data
+  },
+
+  importBranches: async (): Promise<{ message: string; imported: number; updated: number; total: number }> => {
+    const response = await api.post('/sources/import-branches')
     return response.data
   },
 }
