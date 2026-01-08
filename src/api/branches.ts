@@ -32,6 +32,25 @@ export interface BranchListResponse {
   hasMore: boolean
 }
 
+export interface CreateBranchRequest {
+  branchCode: string
+  name: string
+  status?: string
+  locationType?: string
+  collectionType?: string
+  email?: string | null
+  phone?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  addressLine?: string | null
+  city?: string | null
+  postalCode?: string | null
+  country?: string | null
+  countryCode?: string | null
+  natoLocode?: string | null
+  agreementId?: string | null
+}
+
 export interface UpdateBranchRequest {
   name?: string
   status?: string
@@ -63,6 +82,11 @@ export const branchesApi = {
 
   getBranch: async (id: string): Promise<Branch> => {
     const response = await api.get(`/sources/branches/${id}`)
+    return response.data
+  },
+
+  createBranch: async (data: CreateBranchRequest): Promise<Branch> => {
+    const response = await api.post('/sources/branches', data)
     return response.data
   },
 

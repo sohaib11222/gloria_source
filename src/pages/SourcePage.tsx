@@ -15,10 +15,12 @@ import { BranchList } from '../components/BranchList'
 import { BranchEditModal } from '../components/BranchEditModal'
 import { LocationRequestForm } from '../components/LocationRequestForm'
 import { LocationRequestList } from '../components/LocationRequestList'
+import { AddLocationForm } from '../components/AddLocationForm'
 import { AgreementDetailModal } from '../components/AgreementDetailModal'
 import { MyAgreements } from '../components/MyAgreements'
 import { SettingsPage } from './SettingsPage'
 import { ErrorModal } from '../components/ErrorModal'
+import { Sidebar } from '../components/layout/Sidebar'
 import toast from 'react-hot-toast'
 import api from '../lib/api'
 import { Branch } from '../api/branches'
@@ -73,9 +75,10 @@ export default function SourcePage() {
         setLocations([])
         setShowLocations(false)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load synced locations:', error)
       // Don't show error toast on auto-load, only on manual sync
+      // Just log to console for debugging
     } finally {
       setIsLoadingLocations(false)
     }
@@ -86,26 +89,45 @@ export default function SourcePage() {
     setIsLoadingLocations(true)
     try {
       if (selectedAgreementFilterId) {
+        // Load locations for specific agreement
         const response = await endpointsApi.getLocationsByAgreement(selectedAgreementFilterId)
         const items = (response as any)?.items ?? (response as any) ?? []
         setLocations(items)
       } else {
-        const response = await endpointsApi.getLocations()
-        setLocations(response.items)
+        // Load synced locations (source coverage) when no agreement filter
+        if (user?.company?.id) {
+          const response = await endpointsApi.getSyncedLocations(user.company.id)
+          setLocations(response.items || [])
+        } else {
+          const response = await endpointsApi.getLocations()
+          setLocations(response.items)
+        }
       }
       setShowLocations(true)
       if (showToast) {
         toast.success('Locations loaded successfully!')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load locations:', error)
+      
       if (showToast) {
-        toast.error('Failed to load locations')
+        const errorData = error.response?.data || {}
+        const errorCode = errorData.error
+        const errorMessage = errorData.message || error.message
+        
+        // Show user-friendly error messages
+        if (errorCode === 'DATABASE_AUTH_ERROR' || errorCode === 'DATABASE_CONFIG_ERROR') {
+          toast.error('Server configuration error. Please contact the administrator.')
+        } else if (error.response?.status >= 500) {
+          toast.error('Server error. Please try again later or contact support.')
+        } else {
+          toast.error(errorMessage || 'Failed to load locations. Please try again.')
+        }
       }
     } finally {
       setIsLoadingLocations(false)
     }
-  }, [selectedAgreementFilterId])
+  }, [selectedAgreementFilterId, user?.company?.id])
   
   // Sync URL when tab changes
   const handleTabChange = (tab: 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-requests' | 'health' | 'verification' | 'docs' | 'settings') => {
@@ -264,11 +286,20 @@ export default function SourcePage() {
       setAgents(response.items)
     } catch (error: any) {
       console.error('Failed to load agents:', error)
-      // If 404, show a more helpful error
-      if (error.response?.status === 404) {
+      
+      const errorData = error.response?.data || {}
+      const errorCode = errorData.error
+      const errorMessage = errorData.message || error.message
+      
+      // Show user-friendly error messages
+      if (errorCode === 'DATABASE_AUTH_ERROR' || errorCode === 'DATABASE_CONFIG_ERROR') {
+        toast.error('Server configuration error. Please contact the administrator.')
+      } else if (error.response?.status === 404) {
         toast.error('Agreements endpoint not found. Please check your backend configuration.')
+      } else if (error.response?.status >= 500) {
+        toast.error('Server error. Please try again later or contact support.')
       } else {
-        toast.error(error.response?.data?.message || 'Failed to load agents')
+        toast.error(errorMessage || 'Failed to load agents. Please try again.')
       }
     } finally {
       setIsLoadingAgents(false)
@@ -334,9 +365,21 @@ export default function SourcePage() {
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load endpoint configuration:', error)
-      toast.error('Failed to load endpoint configuration')
+      
+      const errorData = error.response?.data || {}
+      const errorCode = errorData.error
+      const errorMessage = errorData.message || error.message
+      
+      // Show user-friendly error messages
+      if (errorCode === 'DATABASE_AUTH_ERROR' || errorCode === 'DATABASE_CONFIG_ERROR') {
+        toast.error('Server configuration error. Please contact the administrator.')
+      } else if (error.response?.status >= 500) {
+        toast.error('Server error. Please try again later or contact support.')
+      } else {
+        toast.error(errorMessage || 'Failed to load endpoint configuration. Please try again.')
+      }
     } finally {
       setIsLoadingEndpoints(false)
     }
@@ -636,72 +679,17 @@ export default function SourcePage() {
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Sidebar */}
-      <aside className="hidden lg:flex lg:flex-col w-56 bg-white border-r border-gray-200 shadow-sm">
-        <div className="flex items-center px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-blue-700">
-          <h1 className="text-lg font-bold text-white">Car Hire - Source</h1>
-        </div>
-        
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {[
-            { key: 'dashboard', label: 'Overview' },
-            { key: 'agreements', label: 'Agreements' },
-            { key: 'locations', label: 'Locations' },
-            { key: 'branches', label: 'Branches' },
-            { key: 'location-requests', label: 'Location Requests' },
-            { key: 'health', label: 'Health' },
-            { key: 'verification', label: 'Verification' },
-            { key: 'settings', label: 'Settings' },
-            { key: 'docs', label: 'Docs' },
-          ].map((n: any) => {
-            if (n.key === 'docs') {
-              return (
-                <a
-                  key={n.key}
-                  href="/docs-fullscreen"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 w-full text-left text-gray-700 hover:bg-blue-50 hover:text-blue-700"
-                >
-                  <span>{n.label}</span>
-                  <svg className="h-3 w-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              )
-            }
-            return (
-              <button
-                key={n.key}
-                onClick={() => handleTabChange(n.key)}
-                className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 w-full text-left ${
-                  activeTab === n.key
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                }`}
-              >
-                {n.label}
-              </button>
-            )
-          })}
-        </nav>
-
-        <div className="p-3 border-t border-gray-200">
-          <div className="flex items-center gap-2 px-2 py-2">
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-xs font-semibold text-white shadow-md">
-              {(user?.email || 'S')[0].toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-gray-900 truncate">{user?.company?.companyName}</div>
-              <div className="text-xs text-gray-500 truncate">{user?.email}</div>
-            </div>
-          </div>
-        </div>
-      </aside>
+      <Sidebar 
+        activeTab={activeTab} 
+        onTabChange={handleTabChange} 
+        user={user} 
+        onLogout={handleLogout}
+      />
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Topbar */}
-        <header className="bg-white border-b border-gray-200 shadow-sm">
+      <div className="flex-1 flex flex-col overflow-hidden lg:ml-0">
+        {/* Topbar - Hidden on mobile, shown on desktop */}
+        <header className="hidden lg:block bg-white border-b border-gray-200 shadow-sm">
           <div className="px-6 py-4 flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <h2 className="text-lg font-semibold text-gray-900">Car Hire - Source</h2>
@@ -714,19 +702,12 @@ export default function SourcePage() {
                   <div className="text-xs text-gray-500">{user?.email}</div>
                 </div>
               </div>
-              
-              <button
-                onClick={handleLogout}
-                className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                <span>Logout</span>
-              </button>
             </div>
           </div>
         </header>
+        
+        {/* Mobile topbar spacing */}
+        <div className="lg:hidden h-16"></div>
 
         {/* Main content area */}
         <main className="flex-1 overflow-y-auto">
@@ -736,7 +717,7 @@ export default function SourcePage() {
                 <h3 className="text-lg font-semibold text-blue-900 mb-2">API Documentation</h3>
                 <p className="text-sm text-blue-700 mb-4">Click the "Docs" link in the sidebar to open the full API documentation in a new tab.</p>
                 <a
-                  href="/docs-fullscreen"
+                  href={`${import.meta.env.PROD ? '/source' : ''}/docs-fullscreen`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
@@ -1008,6 +989,24 @@ export default function SourcePage() {
                       </div>
                     </div>
 
+                    {/* Add Location Form */}
+                    <div className="mb-6">
+                      <AddLocationForm
+                        onSuccess={() => {
+                          // Reload synced locations after adding
+                          if (user?.company?.id) {
+                            loadSyncedLocations()
+                          }
+                        }}
+                        onLocationAdded={() => {
+                          // Reload synced locations after adding
+                          if (user?.company?.id) {
+                            loadSyncedLocations()
+                          }
+                        }}
+                      />
+                    </div>
+
                     <div className="mb-4 flex items-center gap-3">
                       <select
                         className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1027,6 +1026,7 @@ export default function SourcePage() {
                       isLoadingLocations={isLoadingLocations}
                       showLocations={showLocations}
                       loadLocations={loadLocations}
+                      showRemoveButton={!selectedAgreementFilterId}
                     />
                   </div>
                 </>

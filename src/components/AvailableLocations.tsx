@@ -1,12 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Button } from './ui/Button'
 import { Location } from '../api/endpoints'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { endpointsApi } from '../api/endpoints'
+import toast from 'react-hot-toast'
 
 interface AvailableLocationsProps {
   locations: Location[]
   isLoadingLocations: boolean
   showLocations: boolean
   loadLocations: () => void
+  showRemoveButton?: boolean
 }
 
 export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
@@ -14,7 +18,32 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
   isLoadingLocations,
   showLocations,
   loadLocations,
+  showRemoveButton = false,
 }) => {
+  const queryClient = useQueryClient()
+
+  const removeLocationMutation = useMutation({
+    mutationFn: (unlocode: string) => endpointsApi.removeLocation(unlocode),
+    onSuccess: (data) => {
+      toast.success(`Location ${data.unlocode} removed successfully!`)
+      queryClient.invalidateQueries({ queryKey: ['locations'] })
+      queryClient.invalidateQueries({ queryKey: ['syncedLocations'] })
+      // Reload locations after removal
+      setTimeout(() => {
+        loadLocations()
+      }, 500)
+    },
+    onError: (error: any) => {
+      const errorMessage = error.response?.data?.message || 'Failed to remove location'
+      toast.error(errorMessage)
+    },
+  })
+
+  const handleRemoveLocation = (unlocode: string, place: string) => {
+    if (window.confirm(`Are you sure you want to remove ${unlocode} (${place}) from your coverage?`)) {
+      removeLocationMutation.mutate(unlocode)
+    }
+  }
   return (
     <Card className="mb-8">
       <CardHeader>
@@ -53,6 +82,9 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Country</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IATA</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Coordinates</th>
+                    {showRemoveButton && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -75,6 +107,19 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
                           {(location.latitude !== 0 || location.longitude !== 0) ? `${location.latitude}, ${location.longitude}` : '—'}
                         </span>
                       </td>
+                      {showRemoveButton && (
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <Button
+                            onClick={() => handleRemoveLocation(location.unlocode, location.place)}
+                            loading={removeLocationMutation.isPending}
+                            variant="secondary"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            Remove
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

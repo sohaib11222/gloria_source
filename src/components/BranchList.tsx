@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Edit, MapPin, X } from 'lucide-react'
+import { Search, Edit, MapPin, X, Plus } from 'lucide-react'
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -8,6 +8,7 @@ import { Select } from './ui/Select'
 import { Badge } from './ui/Badge'
 import { Loader } from './ui/Loader'
 import { branchesApi, Branch } from '../api/branches'
+import { BranchCreateModal } from './BranchCreateModal'
 import toast from 'react-hot-toast'
 
 interface BranchListProps {
@@ -21,6 +22,7 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
     search: '',
   })
   const [page, setPage] = useState(0)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const limit = 25
 
   const queryClient = useQueryClient()
@@ -111,9 +113,19 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
       {/* Branches Table */}
       <Card>
         <div className="p-4">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Branches ({branchesData?.total ?? 0})
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Branches ({branchesData?.total ?? 0})
+            </h3>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsCreateModalOpen(true)}
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Add Branch
+            </Button>
+          </div>
           {isLoading ? (
             <Loader className="min-h-48" />
           ) : (
@@ -222,6 +234,12 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
           )}
         </div>
       </Card>
+
+      {/* Create Branch Modal */}
+      <BranchCreateModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+      />
     </div>
   )
 }

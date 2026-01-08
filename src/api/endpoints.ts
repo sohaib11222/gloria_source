@@ -122,5 +122,22 @@ export const endpointsApi = {
     const response = await api.post('/sources/import-branches')
     return response.data
   },
+
+  searchLocations: async (query: string, limit = 25, cursor = ''): Promise<{ items: Location[]; next_cursor: string; has_more: boolean }> => {
+    const response = await api.get('/sources/locations/search', {
+      params: { query, limit, cursor },
+    })
+    return response.data
+  },
+
+  addLocation: async (unlocode: string): Promise<{ message: string; location: Location }> => {
+    const response = await api.post('/sources/locations', { unlocode })
+    return response.data
+  },
+
+  removeLocation: async (unlocode: string): Promise<{ message: string; unlocode: string }> => {
+    const response = await api.delete(`/sources/locations/${unlocode}`)
+    return response.data
+  },
 }
 

@@ -31,11 +31,37 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      window.location.href = '/login'
+      // Get base path (matches vite.config.js and main.jsx)
+      const basePath = import.meta.env.PROD ? '/source' : ''
+      const loginPath = `${basePath}/login`
+      const currentPath = window.location.pathname
+      // Only redirect if not already on login page
+      if (!currentPath.endsWith('/login') && !currentPath.endsWith('/login/')) {
+        window.location.href = loginPath
+      }
+      return Promise.reject(error)
     }
     
-    const message = error.response?.data?.message || error.message || 'An error occurred'
-    toast.error(message)
+    // Extract error details
+    const errorData = error.response?.data || {}
+    const errorCode = errorData.error
+    const errorMessage = errorData.message || error.message || 'An error occurred'
+    
+    // Don't show toast for every error - let components handle it
+    // Only show toast for critical errors
+    if (error.response?.status >= 500) {
+      // Handle specific error types
+      if (errorCode === 'DATABASE_AUTH_ERROR' || errorCode === 'DATABASE_CONFIG_ERROR') {
+        // Don't show toast - let component handle it with better message
+      } else {
+        // Only log to console, don't show toast for server errors
+        console.error('Server error:', {
+          status: error.response?.status,
+          code: errorCode,
+          message: errorMessage
+        })
+      }
+    }
     
     return Promise.reject(error)
   }
