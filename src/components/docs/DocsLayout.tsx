@@ -46,6 +46,9 @@ const DocsLayout: React.FC = () => {
   const [showGettingStarted, setShowGettingStarted] = useState<boolean>(false);
   const [companyId, setCompanyId] = useState<string>('YOUR_COMPANY_ID');
   const [companyType, setCompanyType] = useState<string>('SOURCE');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Load user info for code sample replacement
@@ -65,14 +68,19 @@ const DocsLayout: React.FC = () => {
     }
 
     // source gets source-filtered docs
+    setIsLoading(true);
+    setError(null);
     api.get('/docs/source').then((res) => {
       setCategories(res.data);
       const firstCat = res.data[0];
       if (firstCat && firstCat.endpoints && firstCat.endpoints[0]) {
         setSelectedEndpoint(firstCat.endpoints[0]);
       }
+      setIsLoading(false);
     }).catch((err) => {
       console.error('Failed to load docs:', err);
+      setError(err.response?.data?.message || 'Failed to load documentation');
+      setIsLoading(false);
     });
   }, []);
 
@@ -90,9 +98,66 @@ const DocsLayout: React.FC = () => {
       .replace(/<token>/g, '<your-token>');
   };
 
+  // Filter endpoints based on search query
+  const filteredCategories = categories.map(cat => ({
+    ...cat,
+    endpoints: cat.endpoints.filter(ep => {
+      if (!searchQuery.trim()) return true;
+      const query = searchQuery.toLowerCase();
+      return (
+        ep.name.toLowerCase().includes(query) ||
+        ep.path.toLowerCase().includes(query) ||
+        ep.method.toLowerCase().includes(query) ||
+        ep.description?.toLowerCase().includes(query) ||
+        cat.name.toLowerCase().includes(query)
+      );
+    })
+  })).filter(cat => cat.endpoints.length > 0);
+
+  if (isLoading) {
+    return (
+      <div className="docs-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>📚</div>
+          <div style={{ color: '#6b7280' }}>Loading documentation...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="docs-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⚠️</div>
+          <div style={{ color: '#ef4444', fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.5rem' }}>Error Loading Documentation</div>
+          <div style={{ color: '#6b7280' }}>{error}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="docs-shell">
       <aside className="docs-sidebar">
+        {/* Search Bar */}
+        <div style={{ marginBottom: '1rem', position: 'sticky', top: 0, zIndex: 10, background: '#fff', paddingBottom: '0.5rem' }}>
+          <input
+            type="text"
+            placeholder="Search endpoints..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.5rem 0.75rem',
+              border: '1px solid #e5e7eb',
+              borderRadius: '0.5rem',
+              fontSize: '0.875rem',
+              background: '#fff',
+            }}
+          />
+        </div>
+
         <div className="docs-cat">
           <button
             className={`docs-endpoint-btn ${showGettingStarted ? 'active' : ''}`}
@@ -100,6 +165,7 @@ const DocsLayout: React.FC = () => {
               setShowGettingStarted(true);
               setShowSdkGuide(false);
               setSelectedEndpoint(null);
+              setSearchQuery('');
             }}
             style={{ width: '100%', justifyContent: 'flex-start', padding: '0.5rem', marginBottom: '0.5rem' }}
           >
@@ -112,6 +178,7 @@ const DocsLayout: React.FC = () => {
               setShowSdkGuide(true);
               setShowGettingStarted(false);
               setSelectedEndpoint(null);
+              setSearchQuery('');
             }}
             style={{ width: '100%', justifyContent: 'flex-start', padding: '0.5rem' }}
           >
@@ -119,7 +186,12 @@ const DocsLayout: React.FC = () => {
             <span style={{ fontWeight: 600 }}>SDK Guide</span>
           </button>
         </div>
-        {categories.map((cat) => (
+        {filteredCategories.length === 0 && searchQuery ? (
+          <div style={{ padding: '1rem', textAlign: 'center', color: '#6b7280' }}>
+            No endpoints found matching "{searchQuery}"
+          </div>
+        ) : (
+          filteredCategories.map((cat) => (
           <div key={cat.id} className="docs-cat">
             <div className="docs-cat-title">{cat.name}</div>
             {cat.endpoints.map((ep) => (
@@ -140,7 +212,8 @@ const DocsLayout: React.FC = () => {
               </button>
             ))}
           </div>
-        ))}
+        ))
+        )}
       </aside>
       <main className="docs-main">
         {showGettingStarted ? (

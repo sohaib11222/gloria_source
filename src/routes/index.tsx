@@ -8,6 +8,7 @@ import RegisterPage from '../pages/RegisterPage'
 import VerifyEmailPage from '../pages/VerifyEmailPage'
 import SourcePage from '../pages/SourcePage'
 import DocsFullscreen from '../pages/DocsFullscreen'
+import NotFound from '../pages/NotFound'
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -28,7 +29,7 @@ export const AppRoutes: React.FC = () => {
 
       {/* Default redirects */}
       <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

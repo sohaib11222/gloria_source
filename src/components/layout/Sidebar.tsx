@@ -72,15 +72,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, user, 
       <aside
         className={`
           fixed lg:static inset-y-0 left-0 z-50
-          w-64 bg-white border-r border-gray-200 shadow-sm
+          w-64 bg-white border-r border-gray-200 shadow-lg
           transform transition-transform duration-300 ease-in-out
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           flex flex-col h-screen lg:h-auto
         `}
       >
         {/* Header */}
-        <div className="flex items-center px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-blue-700">
-          <h1 className="text-xl font-bold text-white">Car Hire - Source</h1>
+        <div className="flex items-center px-6 py-5 border-b border-blue-500/20 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-white">Car Hire</h1>
+              <p className="text-xs text-blue-100 font-medium">Source Portal</p>
+            </div>
+          </div>
         </div>
 
         {/* Navigation */}
@@ -100,13 +110,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, user, 
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => setMobileOpen(false)}
-                  className="flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+                  className="flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-xl transition-all duration-200 text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:text-blue-700 hover:shadow-sm group"
                 >
                   <div className="flex items-center">
-                    <Icon className="mr-3 h-5 w-5" />
+                    <Icon className="mr-3 h-5 w-5 text-gray-500 group-hover:text-blue-600 transition-colors" />
                     <span>{item.label}</span>
                   </div>
-                  <svg className="h-3 w-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="h-3 w-3 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
                 </a>
@@ -118,28 +128,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, user, 
                 key={item.key}
                 onClick={() => handleTabChange(item.key)}
                 className={`
-                  flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200
+                  flex items-center w-full px-3 py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 relative group
                   ${isActive
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 scale-[1.02]'
+                    : 'text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:text-blue-700 hover:shadow-sm'
                   }
                 `}
               >
-                <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-white' : 'text-gray-500'}`} />
-                <span>{item.label}</span>
+                {isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white rounded-r-full"></div>
+                )}
+                <Icon className={`mr-3 h-5 w-5 transition-all ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-blue-600'}`} />
+                <span className="relative z-10">{item.label}</span>
+                {isActive && (
+                  <div className="ml-auto">
+                    <div className="w-2 h-2 bg-white rounded-full"></div>
+                  </div>
+                )}
               </button>
             )
           })}
         </nav>
 
         {/* User section */}
-        <div className="p-3 border-t border-gray-200">
-          <div className="flex items-center gap-2 px-2 py-2 mb-2">
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-xs font-semibold text-white shadow-md">
+        <div className="p-4 border-t border-gray-200 bg-gradient-to-br from-gray-50 to-white">
+          <div className="flex items-center gap-3 px-3 py-3 mb-3 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 flex items-center justify-center text-sm font-bold text-white shadow-lg ring-2 ring-white">
               {userInitial}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-gray-900 truncate">{companyName}</div>
+              <div className="text-sm font-bold text-gray-900 truncate">{companyName}</div>
               <div className="text-xs text-gray-500 truncate">{userEmail}</div>
             </div>
           </div>
@@ -148,7 +166,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, user, 
               onLogout()
               setMobileOpen(false)
             }}
-            className="flex items-center w-full px-3 py-2 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+            className="flex items-center w-full px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gradient-to-r hover:from-red-50 hover:to-rose-50 hover:text-red-600 rounded-xl transition-all duration-200 hover:shadow-sm"
           >
             <LogOut className="mr-3 h-4 w-4" />
             <span>Logout</span>

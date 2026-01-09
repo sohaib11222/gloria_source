@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { endpointsApi, Location } from '../api/endpoints'
@@ -102,14 +101,8 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
   }
 
   return (
-    <Card>
-      <div className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Location to Coverage</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Search for a location by UN/LOCODE, city name, country, or IATA code and add it to your coverage.
-        </p>
-
-        <div className="space-y-4">
+    <div>
+      <div className="space-y-4">
           <div className="relative">
             <Input
               label="Search Location"
@@ -202,8 +195,7 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
             </div>
           )}
         </div>
-      </div>
-    </Card>
+    </div>
   )
 }
 

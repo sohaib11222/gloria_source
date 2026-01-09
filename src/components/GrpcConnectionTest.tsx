@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
+import { Zap, CheckCircle, XCircle, Activity, Clock, Globe } from 'lucide-react'
 import { SourceGrpcTestResponse } from '../api/endpoints'
 
 interface GrpcConnectionTestProps {
@@ -17,54 +18,79 @@ export const GrpcConnectionTest: React.FC<GrpcConnectionTestProps> = ({
   testSourceGrpc,
 }) => {
   return (
-    <Card className="mb-8">
-      <CardHeader>
+    <Card className="mb-8 transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100">
+      <CardHeader className="bg-gradient-to-r from-purple-50 via-pink-50 to-rose-50 border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <CardTitle>Test Source gRPC Connection</CardTitle>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white rounded-lg shadow-sm">
+              <Zap className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <CardTitle className="text-xl font-bold text-gray-900">Test Source gRPC Connection</CardTitle>
+              <p className="text-sm text-gray-600 mt-1">
+                Test your gRPC endpoint connectivity and health status
+              </p>
+            </div>
+          </div>
           <Button
             onClick={testSourceGrpc}
             loading={isTestingGrpc}
             disabled={!grpcEndpoint}
+            variant="primary"
+            className="flex items-center gap-2 shadow-md hover:shadow-lg"
           >
+            <Activity className="w-4 h-4" />
             Test Connection
           </Button>
         </div>
-        <p className="text-sm text-gray-600">
-          Test your gRPC endpoint connectivity and health status
-        </p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         {grpcTestResult ? (
           <div className="space-y-4">
             {/* Overall Status */}
-            <div className="p-4 rounded-lg" style={{
-              backgroundColor: grpcTestResult.ok ? '#f0fdf4' : '#fef2f2',
-              borderColor: grpcTestResult.ok ? '#86efac' : '#fca5a5',
-              borderWidth: '1px'
-            }}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-semibold" style={{
-                    color: grpcTestResult.ok ? '#166534' : '#991b1b'
-                  }}>
-                    {grpcTestResult.ok ? 'Connection Successful' : 'Connection Failed'}
-                  </h4>
-                  <p className="text-sm mt-1" style={{
-                    color: grpcTestResult.ok ? '#15803d' : '#b91c1c'
-                  }}>
-                    Address: {grpcTestResult.addr}
-                  </p>
-                  <p className="text-sm" style={{
-                    color: grpcTestResult.ok ? '#15803d' : '#b91c1c'
-                  }}>
-                    Total time: {grpcTestResult.totalMs}ms
-                  </p>
+            <Card className={`border-2 ${
+              grpcTestResult.ok ? 'border-green-200 bg-gradient-to-br from-green-50 to-emerald-50' : 'border-red-200 bg-gradient-to-br from-red-50 to-rose-50'
+            }`}>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-4 rounded-xl shadow-lg ${
+                      grpcTestResult.ok ? 'bg-gradient-to-br from-green-100 to-emerald-100' : 'bg-gradient-to-br from-red-100 to-rose-100'
+                    }`}>
+                      {grpcTestResult.ok ? (
+                        <CheckCircle className="w-8 h-8 text-green-600" />
+                      ) : (
+                        <XCircle className="w-8 h-8 text-red-600" />
+                      )}
+                    </div>
+                    <div>
+                      <h4 className={`text-xl font-bold mb-2 ${
+                        grpcTestResult.ok ? 'text-green-700' : 'text-red-700'
+                      }`}>
+                        {grpcTestResult.ok ? 'Connection Successful' : 'Connection Failed'}
+                      </h4>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Globe className={`w-4 h-4 ${grpcTestResult.ok ? 'text-green-600' : 'text-red-600'}`} />
+                          <span className={grpcTestResult.ok ? 'text-green-700' : 'text-red-700'}>
+                            <span className="font-semibold">Address:</span> {grpcTestResult.addr}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Clock className={`w-4 h-4 ${grpcTestResult.ok ? 'text-green-600' : 'text-red-600'}`} />
+                          <span className={grpcTestResult.ok ? 'text-green-700' : 'text-red-700'}>
+                            <span className="font-semibold">Total time:</span> {grpcTestResult.totalMs}ms
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <Badge variant={grpcTestResult.ok ? 'success' : 'danger'} size="lg" className="font-bold text-sm px-4 py-2">
+                    {grpcTestResult.ok ? 'HEALTHY' : 'UNHEALTHY'}
+                  </Badge>
                 </div>
-                <Badge variant={grpcTestResult.ok ? 'success' : 'danger'}>
-                  {grpcTestResult.ok ? 'HEALTHY' : 'UNHEALTHY'}
-                </Badge>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             {/* Health Endpoint Details */}
             {grpcTestResult.endpoints.health && (

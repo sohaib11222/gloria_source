@@ -3,6 +3,7 @@ import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Loader } from './ui/Loader'
+import { Settings, Globe, Zap, Edit2, Save, X } from 'lucide-react'
 import { EndpointConfig } from '../api/endpoints'
 
 interface EndpointConfigurationProps {
@@ -33,25 +34,34 @@ export const EndpointConfiguration: React.FC<EndpointConfigurationProps> = ({
   cancelEditEndpoints,
 }) => {
   return (
-    <Card className="mb-8">
-      <CardHeader>
+    <Card className="mb-8 transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100">
+      <CardHeader className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <CardTitle>Endpoint Configuration</CardTitle>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white rounded-lg shadow-sm">
+              <Settings className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <CardTitle className="text-xl font-bold text-gray-900">Endpoint Configuration</CardTitle>
+              <p className="text-sm text-gray-600 mt-1">
+                Configure your HTTP and gRPC endpoints
+              </p>
+            </div>
+          </div>
           {!isEditingEndpoints && (
             <Button
               onClick={() => setIsEditingEndpoints(true)}
               variant="secondary"
               size="sm"
+              className="flex items-center gap-2"
             >
-              Edit Endpoints
+              <Edit2 className="w-4 h-4" />
+              Edit
             </Button>
           )}
         </div>
-        <p className="text-sm text-gray-600">
-          Configure your HTTP and gRPC endpoints
-        </p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         {isLoadingEndpoints ? (
           <div className="flex justify-center py-8">
             <Loader />
@@ -74,19 +84,23 @@ export const EndpointConfiguration: React.FC<EndpointConfigurationProps> = ({
                     placeholder="e.g., localhost:5105"
                   />
                 </div>
-                <div className="flex space-x-3">
+                <div className="flex space-x-3 pt-4">
                   <Button
                     onClick={updateEndpointConfig}
                     loading={isUpdatingEndpoints}
                     disabled={!httpEndpoint || !grpcEndpoint}
+                    className="flex items-center gap-2 shadow-md hover:shadow-lg"
                   >
+                    <Save className="w-4 h-4" />
                     Save Changes
                   </Button>
                   <Button
                     onClick={cancelEditEndpoints}
                     variant="secondary"
                     disabled={isUpdatingEndpoints}
+                    className="flex items-center gap-2"
                   >
+                    <X className="w-4 h-4" />
                     Cancel
                   </Button>
                 </div>

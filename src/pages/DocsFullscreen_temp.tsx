@@ -55,7 +55,7 @@ const DocsFullscreen: React.FC = () => {
   useEffect(() => {
     setIsLoading(true);
     setError(null);
-    api.get('/docs/source').then((res) => {
+    api.get('/docs/agent').then((res) => {
       setCategories(res.data || []);
       if (endpointId) {
         const endpoint = res.data
@@ -155,7 +155,7 @@ const DocsFullscreen: React.FC = () => {
         ) : showGettingStarted ? (
           <GettingStartedGuide />
         ) : showSdkGuide ? (
-          <SdkGuide role="source" />
+          <SdkGuide role="agent" />
         ) : selectedEndpoint ? (
           <div className="docs-endpoint-content">
             <div className="docs-endpoint-header">
