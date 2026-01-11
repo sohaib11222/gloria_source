@@ -227,7 +227,7 @@ export default function VerifyEmailPage() {
 
         <div className="text-center">
           <p className="text-xs text-gray-500 font-medium tracking-wide">
-            Car Hire – Source Portal
+            Gloria Connect
           </p>
         </div>
       </div>

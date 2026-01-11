@@ -1,6 +1,6 @@
-# Car Hire Admin Panel
+# Gloria Connect Source Panel
 
-A comprehensive admin panel for the Car Hire Middleware backend, built with React, Vite, and Tailwind CSS.
+A comprehensive source panel for the Gloria Connect platform backend, built with React, Vite, and Tailwind CSS.
 
 ## Features
 
@@ -33,7 +33,7 @@ A comprehensive admin panel for the Car Hire Middleware backend, built with Reac
 
 - Node.js 18+ 
 - npm or yarn
-- Car Hire Middleware backend running on `http://localhost:8080`
+- Gloria Connect backend running on `http://localhost:8080`
 
 ## Installation
 

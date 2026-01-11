@@ -45,10 +45,26 @@ const DocsFullscreen: React.FC = () => {
   const { endpointId, view } = useParams<{ endpointId?: string; view?: string }>();
   const navigate = useNavigate();
   const [categories, setCategories] = useState<DocCategory[]>([]);
+  
+  // Safe setter that always ensures categories is an array
+  const setCategoriesSafe = (data: any) => {
+    if (Array.isArray(data)) {
+      setCategories(data);
+    } else if (data && typeof data === 'object') {
+      // Try to extract array from common response structures
+      const arrayData = data.categories || data.items || data.data || [];
+      setCategories(Array.isArray(arrayData) ? arrayData : []);
+    } else {
+      setCategories([]);
+    }
+  };
   const [selectedEndpoint, setSelectedEndpoint] = useState<DocEndpoint | null>(null);
   const [activeCode, setActiveCode] = useState<string>('curl');
+  // Default to "Getting Started" if no view or endpointId specified
   const [showSdkGuide, setShowSdkGuide] = useState<boolean>(view === 'sdk');
-  const [showGettingStarted, setShowGettingStarted] = useState<boolean>(view === 'getting-started');
+  const [showGettingStarted, setShowGettingStarted] = useState<boolean>(
+    view === 'getting-started' || (!view && !endpointId)
+  );
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<any>(null);
 
@@ -56,26 +72,41 @@ const DocsFullscreen: React.FC = () => {
     setIsLoading(true);
     setError(null);
     api.get('/docs/source').then((res) => {
-      setCategories(res.data || []);
+      // Ensure we always set an array
+      const data = res?.data;
+      let categoriesData: DocCategory[] = [];
+      
+      if (Array.isArray(data)) {
+        categoriesData = data;
+      } else if (data && typeof data === 'object') {
+        categoriesData = Array.isArray(data.categories) ? data.categories :
+                        Array.isArray(data.items) ? data.items :
+                        Array.isArray(data.data) ? data.data : [];
+      }
+      
+      setCategoriesSafe(categoriesData);
+      
       if (endpointId) {
-        const endpoint = res.data
+        const endpoint = categoriesData
           ?.flatMap(cat => cat.endpoints || [])
           .find(ep => ep.id === endpointId);
         if (endpoint) {
           setSelectedEndpoint(endpoint);
           setActiveCode(endpoint.codeSamples?.[0]?.lang ?? 'curl');
+          setShowGettingStarted(false);
+          setShowSdkGuide(false);
         }
-      } else if (!view) {
-        const firstCat = res.data?.[0];
-        if (firstCat && firstCat.endpoints && firstCat.endpoints[0]) {
-          setSelectedEndpoint(firstCat.endpoints[0]);
-          setActiveCode(firstCat.endpoints[0].codeSamples?.[0]?.lang ?? 'curl');
-        }
+      } else if (!view && !endpointId) {
+        // Default to Getting Started when no view or endpoint specified
+        setShowGettingStarted(true);
+        setShowSdkGuide(false);
+        setSelectedEndpoint(null);
       }
       setIsLoading(false);
     }).catch((err) => {
       console.error('Failed to load docs:', err);
       setError(err);
+      setCategoriesSafe([]); // Ensure categories is always an array on error
       setIsLoading(false);
     });
   }, [endpointId, view]);
@@ -111,10 +142,10 @@ const DocsFullscreen: React.FC = () => {
             <div className="docs-nav-dropdown">
               <button className="docs-nav-btn">API Reference ▼</button>
               <div className="docs-nav-menu">
-                {categories.map((cat) => (
+                {(Array.isArray(categories) ? categories : []).map((cat) => (
                   <div key={cat.id} className="docs-nav-category">
                     <div className="docs-nav-category-title">{cat.name}</div>
-                    {cat.endpoints.map((ep) => (
+                    {(Array.isArray(cat?.endpoints) ? cat.endpoints : []).map((ep) => (
                       <button
                         key={ep.id}
                         className={`docs-nav-endpoint ${selectedEndpoint?.id === ep.id ? 'active' : ''}`}

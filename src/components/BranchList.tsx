@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Edit, MapPin, X, Plus, Filter, Store, Building2, Globe } from 'lucide-react'
+import { Search, Edit, MapPin, X, Plus, Filter, Store, Building2, Globe, Upload } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -8,7 +8,9 @@ import { Select } from './ui/Select'
 import { Badge } from './ui/Badge'
 import { Loader } from './ui/Loader'
 import { branchesApi, Branch } from '../api/branches'
+import { endpointsApi } from '../api/endpoints'
 import { BranchCreateModal } from './BranchCreateModal'
+import { BranchUploadModal } from './BranchUploadModal'
 import toast from 'react-hot-toast'
 
 interface BranchListProps {
@@ -24,6 +26,8 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
   const [searchInput, setSearchInput] = useState('')
   const [page, setPage] = useState(0)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
   const limit = 25
 
   const queryClient = useQueryClient()
@@ -61,6 +65,42 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
   const hasActiveFilters = useMemo(() => {
     return Object.values(filters).some((v) => v !== '')
   }, [filters])
+
+  const importBranchesMutation = useMutation({
+    mutationFn: async () => {
+      return await endpointsApi.importBranches()
+    },
+    onSuccess: (data) => {
+      // Invalidate and refetch branches
+      queryClient.invalidateQueries({ queryKey: ['branches'] })
+      toast.success(
+        `Branches imported successfully! ${data.imported} imported, ${data.updated} updated, ${data.total} total.`,
+        { duration: 5000 }
+      )
+    },
+    onError: (error: any) => {
+      console.error('Failed to import branches:', error)
+      const errorMessage = error.response?.data?.message || 'Failed to import branches from endpoint'
+      toast.error(errorMessage)
+    },
+    onSettled: () => {
+      setIsImporting(false)
+    },
+  })
+
+  const handleImportBranches = async () => {
+    setIsImporting(true)
+    try {
+      await importBranchesMutation.mutateAsync()
+    } catch (error) {
+      // Error handling is done in onError callback
+    }
+  }
+
+  const handleUploadSuccess = () => {
+    // Refresh branches list
+    queryClient.invalidateQueries({ queryKey: ['branches'] })
+  }
 
   return (
     <div className="space-y-6">
@@ -167,15 +207,37 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
                 </p>
               </div>
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-2 shadow-md hover:shadow-lg"
-            >
-              <Plus className="w-4 h-4" />
-              Add Branch
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsUploadModalOpen(true)}
+                className="flex items-center gap-2 shadow-md hover:shadow-lg"
+              >
+                <Upload className="w-4 h-4" />
+                Upload File
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleImportBranches}
+                loading={isImporting}
+                disabled={isImporting}
+                className="flex items-center gap-2 shadow-md hover:shadow-lg"
+              >
+                <Upload className="w-4 h-4" />
+                Import from Endpoint
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsCreateModalOpen(true)}
+                className="flex items-center gap-2 shadow-md hover:shadow-lg"
+              >
+                <Plus className="w-4 h-4" />
+                Add Branch
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-6">
@@ -192,18 +254,29 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
                   <p className="text-sm text-gray-500 max-w-md mx-auto mb-6">
                     {hasActiveFilters 
                       ? 'Try adjusting your filters to see more results.'
-                      : 'Get started by importing branches from your endpoint or creating a new branch.'}
+                      : 'Get started by uploading a JSON file, importing from your endpoint, or creating a new branch.'}
                   </p>
                   {!hasActiveFilters && (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => setIsCreateModalOpen(true)}
-                      className="flex items-center gap-2 mx-auto"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Branch
-                    </Button>
+                    <div className="flex items-center justify-center gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setIsUploadModalOpen(true)}
+                        className="flex items-center gap-2"
+                      >
+                        <Upload className="w-4 h-4" />
+                        Upload File
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="flex items-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Branch
+                      </Button>
+                    </div>
                   )}
                 </div>
               ) : (
@@ -339,6 +412,13 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
       <BranchCreateModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
+      />
+
+      {/* Upload Branches Modal */}
+      <BranchUploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onSuccess={handleUploadSuccess}
       />
     </div>
   )

@@ -624,6 +624,49 @@ export default function SourcePage() {
     }
   }
 
+  const demoPassTest = () => {
+    // Generate a mock successful test result without actually testing
+    const mockEndpoint = grpcEndpoint || 'localhost:50052'
+    const mockResult: SourceGrpcTestResponse = {
+      ok: true,
+      addr: mockEndpoint,
+      totalMs: 45,
+      endpoints: {
+        health: {
+          ok: true,
+          result: {
+            status: 'SERVING'
+          },
+          ms: 23
+        },
+        locations: {
+          ok: true,
+          result: {
+            locations: [
+              { unlocode: 'USNYC', name: 'New York' },
+              { unlocode: 'GBLON', name: 'London' },
+              { unlocode: 'FRPAR', name: 'Paris' }
+            ]
+          },
+          ms: 22
+        } as any,
+        availability: null,
+        bookings: null
+      },
+      tested: ['health', 'locations']
+    }
+
+    setGrpcTestResult(mockResult)
+    
+    // Save demo test result to localStorage
+    if (user?.company?.id) {
+      localStorage.setItem(`grpcTestResult_${user.company.id}`, JSON.stringify(mockResult))
+      localStorage.setItem(`grpcEndpoint_${user.company.id}`, mockEndpoint)
+    }
+    
+    toast.success('Demo test passed! (This is a simulated successful result)')
+  }
+
   const createAgreement = async () => {
     if (!selectedAgentId || !agreementRef || !validFrom || !validTo) {
       toast.error('Please fill in all fields')
@@ -721,7 +764,7 @@ export default function SourcePage() {
         <header className="hidden lg:block bg-white border-b border-gray-200 shadow-sm">
           <div className="px-6 py-4 flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <h2 className="text-lg font-semibold text-gray-900">Car Hire - Source</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Gloria Connect - Source</h2>
             </div>
             
             <div className="flex items-center space-x-4">
@@ -871,10 +914,10 @@ export default function SourcePage() {
                           <div className="flex-1">
                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Active Agreements</p>
                             <p className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1">
-                              {agents.flatMap(a => a.agentAgreements || []).filter(a => a.status === 'ACCEPTED' || a.status === 'ACTIVE').length}
+                              {(agents || []).flatMap(a => a.agentAgreements || []).filter(a => a.status === 'ACCEPTED' || a.status === 'ACTIVE').length}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {agents.flatMap(a => a.agentAgreements || []).filter(a => a.status === 'OFFERED').length} pending
+                              {(agents || []).flatMap(a => a.agentAgreements || []).filter(a => a.status === 'OFFERED').length} pending
                             </p>
                           </div>
                           <div className="p-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-2xl shadow-lg">
@@ -1002,6 +1045,7 @@ export default function SourcePage() {
                         grpcTestResult={grpcTestResult}
                         isTestingGrpc={isTestingGrpc}
                         testSourceGrpc={testSourceGrpc}
+                        demoPassTest={demoPassTest}
                       />
                     </div>
                   )}
@@ -1294,7 +1338,7 @@ export default function SourcePage() {
                         onChange={(e) => setSelectedAgreementFilterId(e.target.value)}
                       >
                         <option value="">All locations</option>
-                        {agents.flatMap(a => a.agentAgreements || []).map(ag => (
+                        {(agents || []).flatMap(a => a.agentAgreements || []).map(ag => (
                           <option key={ag.id} value={ag.id}>{ag.agreementRef}</option>
                         ))}
                       </select>

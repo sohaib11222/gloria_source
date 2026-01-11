@@ -118,10 +118,10 @@ export default function LoginPage() {
             </div>
           </div>
           <h2 className="text-4xl font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
-            Source Portal
+            Gloria Connect
           </h2>
           <p className="mt-2 text-base text-gray-600 font-medium">
-            Sign in to access your source dashboard
+            Sign in to access your dashboard
           </p>
         </div>
         
@@ -186,7 +186,7 @@ export default function LoginPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
                 <p className="text-xs font-medium">
-                  Manage your car rental inventory and bookings
+                  Manage your inventory and bookings
                 </p>
               </div>
             </div>
@@ -195,7 +195,7 @@ export default function LoginPage() {
 
         <div className="text-center">
           <p className="text-xs text-gray-500 font-medium tracking-wide">
-            Car Hire – Source Portal
+            Gloria Connect
           </p>
         </div>
       </div>

@@ -123,6 +123,11 @@ export const endpointsApi = {
     return response.data
   },
 
+  uploadBranches: async (branchesData: any): Promise<{ message: string; imported: number; updated: number; total: number }> => {
+    const response = await api.post('/sources/upload-branches', branchesData)
+    return response.data
+  },
+
   searchLocations: async (query: string, limit = 25, cursor = ''): Promise<{ items: Location[]; next_cursor: string; has_more: boolean }> => {
     const response = await api.get('/sources/locations/search', {
       params: { query, limit, cursor },

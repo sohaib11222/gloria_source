@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
-import { Zap, CheckCircle, XCircle, Activity, Clock, Globe } from 'lucide-react'
+import { Zap, CheckCircle, XCircle, Activity, Clock, Globe, Sparkles } from 'lucide-react'
 import { SourceGrpcTestResponse } from '../api/endpoints'
 
 interface GrpcConnectionTestProps {
@@ -9,6 +9,7 @@ interface GrpcConnectionTestProps {
   grpcTestResult: SourceGrpcTestResponse | null
   isTestingGrpc: boolean
   testSourceGrpc: () => void
+  demoPassTest: () => void
 }
 
 export const GrpcConnectionTest: React.FC<GrpcConnectionTestProps> = ({
@@ -16,6 +17,7 @@ export const GrpcConnectionTest: React.FC<GrpcConnectionTestProps> = ({
   grpcTestResult,
   isTestingGrpc,
   testSourceGrpc,
+  demoPassTest,
 }) => {
   return (
     <Card className="mb-8 transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100">
@@ -32,16 +34,27 @@ export const GrpcConnectionTest: React.FC<GrpcConnectionTestProps> = ({
               </p>
             </div>
           </div>
-          <Button
-            onClick={testSourceGrpc}
-            loading={isTestingGrpc}
-            disabled={!grpcEndpoint}
-            variant="primary"
-            className="flex items-center gap-2 shadow-md hover:shadow-lg"
-          >
-            <Activity className="w-4 h-4" />
-            Test Connection
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={demoPassTest}
+              variant="secondary"
+              className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0 shadow-md hover:shadow-lg"
+              title="Demo: Simulate a successful test without actually testing"
+            >
+              <Sparkles className="w-4 h-4" />
+              Demo Pass Test
+            </Button>
+            <Button
+              onClick={testSourceGrpc}
+              loading={isTestingGrpc}
+              disabled={!grpcEndpoint}
+              variant="primary"
+              className="flex items-center gap-2 shadow-md hover:shadow-lg"
+            >
+              <Activity className="w-4 h-4" />
+              Test Connection
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="pt-6">
