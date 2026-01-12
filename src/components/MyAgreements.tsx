@@ -105,13 +105,11 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
 
   return (
     <div className="space-y-6">
-      <Card className="transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100">
-        <CardHeader className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-b border-gray-200">
+      <Card>
+        <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-white rounded-lg shadow-sm">
-                <FileText className="w-5 h-5 text-blue-600" />
-              </div>
+              <FileText className="w-5 h-5 text-gray-600" />
               <div>
                 <CardTitle className="text-xl font-bold text-gray-900">My Agreements</CardTitle>
                 <p className="text-sm text-gray-600 mt-1">Manage your agreements with agents</p>
@@ -148,7 +146,7 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
                   {statusCounts[status] > 0 && (
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
                       statusFilter === status 
-                        ? 'bg-blue-600 text-white' 
+                        ? 'bg-slate-700 text-white' 
                         : 'bg-gray-200 text-gray-700'
                     }`}>
                       {statusCounts[status]}
@@ -177,16 +175,14 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
               {filteredAgreements.map((agreement) => (
                 <Card
                   key={agreement.id}
-                  className="transform transition-all duration-300 hover:shadow-xl hover:scale-[1.01] cursor-pointer border-2 border-gray-100 hover:border-blue-200"
+                  className="hover:bg-gray-50 cursor-pointer border border-gray-200"
                   onClick={() => handleViewAgreement(agreement.id)}
                 >
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-4">
-                          <div className="p-2 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg">
-                            <FileText className="w-5 h-5 text-blue-600" />
-                          </div>
+                          <FileText className="w-5 h-5 text-gray-600" />
                           <div className="flex-1">
                             <h4 className="text-xl font-bold text-gray-900 mb-1">
                               {agreement.agreementRef}
@@ -198,7 +194,7 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                          <div className="p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+                          <div className="p-3 bg-gray-50 rounded border border-gray-200">
                             <div className="flex items-center gap-2 mb-1">
                               <Building2 className="w-4 h-4 text-blue-600" />
                               <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Agent</span>
@@ -211,7 +207,7 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
                             )}
                           </div>
                           
-                          <div className="p-3 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-100">
+                          <div className="p-3 bg-gray-50 rounded border border-gray-200">
                             <div className="flex items-center gap-2 mb-1">
                               <FileText className="w-4 h-4 text-purple-600" />
                               <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Agreement ID</span>
@@ -221,7 +217,7 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
                             </code>
                           </div>
                           
-                          <div className="p-3 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-100">
+                          <div className="p-3 bg-gray-50 rounded border border-gray-200">
                             <div className="flex items-center gap-2 mb-1">
                               <Calendar className="w-4 h-4 text-green-600" />
                               <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Valid From</span>
@@ -237,7 +233,7 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
                             </p>
                           </div>
                           
-                          <div className="p-3 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-lg border border-amber-100">
+                          <div className="p-3 bg-gray-50 rounded border border-gray-200">
                             <div className="flex items-center gap-2 mb-1">
                               <Calendar className="w-4 h-4 text-amber-600" />
                               <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Valid To</span>
@@ -268,7 +264,7 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
                           e.stopPropagation()
                           handleViewAgreement(agreement.id)
                         }}
-                        className="flex items-center gap-2 shadow-md hover:shadow-lg"
+                        className="flex items-center gap-2"
                       >
                         <Eye className="w-4 h-4" />
                         View Details

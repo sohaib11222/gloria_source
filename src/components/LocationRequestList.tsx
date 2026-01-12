@@ -63,14 +63,12 @@ export const LocationRequestList: React.FC<LocationRequestListProps> = ({ onView
   return (
     <div className="space-y-6">
       {/* Filter Card */}
-      <Card className="transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100">
-        <CardHeader className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-b border-gray-200">
+      <Card>
+        <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-white rounded-lg shadow-sm">
-              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-            </div>
+            <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
             <CardTitle className="text-xl font-bold text-gray-900">Filter Requests</CardTitle>
           </div>
         </CardHeader>
@@ -93,13 +91,11 @@ export const LocationRequestList: React.FC<LocationRequestListProps> = ({ onView
       </Card>
 
       {/* Requests List */}
-      <Card className="transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100">
-        <CardHeader className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border-b border-gray-200">
+      <Card>
+        <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-white rounded-lg shadow-sm">
-                <MapPin className="w-5 h-5 text-emerald-600" />
-              </div>
+              <MapPin className="w-5 h-5 text-gray-600" />
               <div>
                 <CardTitle className="text-xl font-bold text-gray-900">
                   My Location Requests
@@ -139,7 +135,7 @@ export const LocationRequestList: React.FC<LocationRequestListProps> = ({ onView
                 {(requestsData?.items ?? []).map((request) => (
                   <div
                     key={request.id}
-                    className="group p-5 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-lg bg-white transition-all duration-200"
+                    className="group p-4 border border-gray-200 rounded bg-white hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -295,7 +291,7 @@ export const LocationRequestList: React.FC<LocationRequestListProps> = ({ onView
         {selectedRequest && (
           <div className="space-y-6">
             {/* Status Header */}
-            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded border border-gray-200">
               <div>
                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Status</div>
                 <div className="flex items-center gap-2">

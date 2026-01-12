@@ -72,14 +72,12 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
     }
   }
   return (
-    <Card className="transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100">
-      <CardHeader className="bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 border-b border-gray-200">
+    <Card>
+      <CardHeader>
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-white rounded-lg shadow-sm">
-            <Users className="w-5 h-5 text-indigo-600" />
-          </div>
+          <Users className="w-5 h-5 text-gray-600" />
           <div>
-            <CardTitle className="text-xl font-bold text-gray-900">Available Agents</CardTitle>
+            <CardTitle className="text-xl font-semibold text-gray-900">Available Agents</CardTitle>
             <p className="text-sm text-gray-600 mt-1">
               View and manage agreements with agents
             </p>
@@ -93,7 +91,7 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
           </div>
         ) : agents.length === 0 ? (
           <div className="text-center py-16">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded mb-4">
               <Users className="w-8 h-8 text-gray-400" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No Agents Available</h3>
@@ -102,14 +100,12 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
         ) : (
           <div className="space-y-4">
             {agents.map((agent) => (
-              <Card key={agent.id} className="border-2 border-gray-100 hover:border-indigo-200 transform transition-all duration-300 hover:shadow-lg">
+              <Card key={agent.id} className="border border-gray-200 hover:bg-gray-50">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <div className="flex items-start gap-4 mb-4">
-                        <div className="p-3 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl">
-                          <Building2 className="w-6 h-6 text-indigo-600" />
-                        </div>
+                        <Building2 className="w-5 h-5 text-gray-600 mt-1" />
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <h4 className="text-xl font-bold text-gray-900">

@@ -280,47 +280,45 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
                   )}
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <div className="overflow-x-auto rounded border border-gray-200">
                   <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+                    <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           Branch Code
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           Name
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           Location
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           Status
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           UN/LOCODE
                         </th>
-                        <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           Actions
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {(branchesData?.items ?? []).map((branch) => (
-                        <tr key={branch.id} className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 cursor-pointer">
-                          <td className="px-6 py-4 whitespace-nowrap">
+                        <tr key={branch.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-2">
-                              <div className="p-1.5 bg-blue-100 rounded-lg">
-                                <Store className="w-4 h-4 text-blue-600" />
-                              </div>
-                              <span className="text-sm font-bold text-gray-900 font-mono">
+                              <Store className="w-4 h-4 text-gray-400" />
+                              <span className="text-sm font-medium text-gray-900 font-mono">
                                 {branch.branchCode}
                               </span>
                             </div>
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-semibold text-gray-900">{branch.name}</span>
+                          <td className="px-4 py-3">
+                            <span className="text-sm text-gray-900">{branch.name}</span>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-3">
                             <div className="flex items-center gap-2 text-sm text-gray-600">
                               <MapPin className="w-4 h-4 text-gray-400" />
                               <span>
@@ -330,7 +328,7 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
                               </span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <Badge
                               variant={
                                 branch.status === 'ACTIVE'
@@ -339,22 +337,20 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
                                   ? 'danger'
                                   : 'secondary'
                               }
-                              className="font-semibold"
                             >
                               {branch.status || '—'}
                             </Badge>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             {branch.natoLocode ? (
-                              <Badge variant="info" className="font-mono font-semibold">
-                                <Globe className="w-3 h-3 mr-1" />
+                              <Badge variant="info" className="font-mono">
                                 {branch.natoLocode}
                               </Badge>
                             ) : (
-                              <Badge variant="warning" className="font-semibold">Unmapped</Badge>
+                              <Badge variant="warning">Unmapped</Badge>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <td className="px-4 py-3 whitespace-nowrap text-right">
                             {onEdit && (
                               <Button
                                 variant="ghost"

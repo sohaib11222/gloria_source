@@ -22,6 +22,7 @@ import { MyAgreements } from '../components/MyAgreements'
 import { SettingsPage } from './SettingsPage'
 import { ErrorModal } from '../components/ErrorModal'
 import { Sidebar } from '../components/layout/Sidebar'
+import { Support } from '../components/Support'
 import { Badge } from '../components/ui/Badge'
 import toast from 'react-hot-toast'
 import api from '../lib/api'
@@ -37,8 +38,8 @@ export default function SourcePage() {
   const [user, setUser] = useState<any>(null)
   
   // Get active tab from URL or default to dashboard
-  const tabFromUrl = searchParams.get('tab') as 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-requests' | 'health' | 'verification' | 'docs' | 'settings' | null
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-requests' | 'health' | 'verification' | 'docs' | 'settings'>(
+  const tabFromUrl = searchParams.get('tab') as 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings' | null
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings'>(
     tabFromUrl || 'dashboard'
   )
   
@@ -135,7 +136,7 @@ export default function SourcePage() {
   }, [selectedAgreementFilterId, user?.company?.id])
   
   // Sync URL when tab changes
-  const handleTabChange = (tab: 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-requests' | 'health' | 'verification' | 'docs' | 'settings') => {
+  const handleTabChange = (tab: 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings') => {
     setActiveTab(tab)
     setSearchParams({ tab })
     // When switching to locations tab, refresh the locations data
@@ -155,7 +156,7 @@ export default function SourcePage() {
   // Sync tab when URL changes (back/forward button)
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['dashboard', 'agreements', 'locations', 'branches', 'location-requests', 'health', 'verification', 'docs', 'settings'].includes(tab)) {
+    if (tab && ['dashboard', 'agreements', 'locations', 'branches', 'location-requests', 'health', 'verification', 'support', 'docs', 'settings'].includes(tab)) {
       setActiveTab(tab as any)
     } else if (!tab) {
       // If no tab in URL, set to dashboard and update URL
@@ -749,7 +750,7 @@ export default function SourcePage() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
       <Sidebar 
         activeTab={activeTab} 
@@ -777,11 +778,11 @@ export default function SourcePage() {
               
               <button
                 onClick={() => setShowNotifications(true)}
-                className="relative p-3 text-gray-700 hover:bg-blue-50 rounded-xl transition-all duration-200 hover:shadow-md"
+                className="relative p-3 text-gray-700 hover:bg-gray-100 rounded transition-colors"
               >
                 <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-0 right-0 h-5 w-5 bg-gradient-to-br from-red-500 to-red-600 text-white text-xs font-bold rounded-full border-2 border-white flex items-center justify-center shadow-lg animate-pulse">
+                  <span className="absolute top-0 right-0 h-5 w-5 bg-red-600 text-white text-xs font-medium rounded-full border-2 border-white flex items-center justify-center">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
@@ -820,13 +821,11 @@ export default function SourcePage() {
                   {/* Header */}
                   <div className="mb-8">
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="p-3 bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl shadow-sm">
-                        <svg className="w-8 h-8 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                      </div>
+                      <svg className="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
                       <div>
-                        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                        <h1 className="text-3xl font-semibold text-gray-900">
                           Overview
                         </h1>
                         <p className="mt-2 text-gray-600 font-medium">Monitor your source health and agreements</p>
@@ -835,16 +834,14 @@ export default function SourcePage() {
                     
                     {/* Company Info Card */}
                     {user?.company && (
-                      <Card className="mb-6 transform transition-all duration-300 hover:shadow-xl border-2 border-blue-100">
+                      <Card className="mb-6">
                         <CardContent className="p-6">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-4">
-                                <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg shadow-md">
-                                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                  </svg>
-                                </div>
+                                <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                </svg>
                                 <div>
                                   <h3 className="text-lg font-bold text-gray-900">Company Information</h3>
                                   <p className="text-sm text-gray-500">Your source identification details</p>
@@ -852,12 +849,12 @@ export default function SourcePage() {
                               </div>
                               
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
-                                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 block">
+                                <div className="p-4 bg-gray-50 rounded border border-gray-200">
+                                  <label className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2 block">
                                     Company ID
                                   </label>
                                   <div className="flex items-center gap-2">
-                                    <code className="flex-1 px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-blue-700 font-mono text-sm font-bold shadow-sm">
+                                    <code className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded text-gray-900 font-mono text-sm">
                                       {user.company.id}
                                     </code>
                                     <button
@@ -865,7 +862,7 @@ export default function SourcePage() {
                                         navigator.clipboard.writeText(user.company.id)
                                         toast.success('Company ID copied!')
                                       }}
-                                      className="p-2 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors"
+                                      className="p-2 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
                                       title="Copy Company ID"
                                     >
                                       <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -875,17 +872,17 @@ export default function SourcePage() {
                                   </div>
                                 </div>
                                 
-                                <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-100">
-                                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 block">
+                                <div className="p-4 bg-gray-50 rounded border border-gray-200">
+                                  <label className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2 block">
                                     Company Type
                                   </label>
-                                  <Badge variant="info" className="text-sm font-bold px-3 py-1.5">
+                                  <Badge variant="info" className="text-sm">
                                     {user.company.type}
                                   </Badge>
                                 </div>
                               </div>
                               
-                              <div className="p-4 bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 border-l-4 border-amber-400 rounded-lg">
+                              <div className="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded">
                                 <div className="flex items-start gap-3">
                                   <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
@@ -908,12 +905,12 @@ export default function SourcePage() {
                   {/* Quick Stats */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     {/* Active Agreements Card */}
-                    <Card className="transform transition-all duration-300 hover:shadow-xl hover:scale-[1.02] border-2 border-blue-100">
+                    <Card className="border border-gray-200">
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Active Agreements</p>
-                            <p className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Active Agreements</p>
+                            <p className="text-3xl font-semibold text-gray-900 mb-1">
                               {(agents || []).flatMap(a => a.agentAgreements || []).filter(a => a.status === 'ACCEPTED' || a.status === 'ACTIVE').length}
                             </p>
                             <p className="text-xs text-gray-500">
@@ -956,10 +953,10 @@ export default function SourcePage() {
                               <p className="text-xs text-gray-500 mt-1">{health.sampleCount} samples</p>
                             )}
                           </div>
-                          <div className={`p-4 rounded-2xl shadow-lg ${
-                            health?.healthy ? 'bg-gradient-to-br from-green-100 to-emerald-100' : 
-                            health?.excludedUntil && new Date(health.excludedUntil).getTime() > Date.now() ? 'bg-gradient-to-br from-red-100 to-rose-100' : 
-                            'bg-gradient-to-br from-yellow-100 to-amber-100'
+                          <div className={`p-3 rounded ${
+                            health?.healthy ? 'bg-green-100' : 
+                            health?.excludedUntil && new Date(health.excludedUntil).getTime() > Date.now() ? 'bg-red-100' : 
+                            'bg-yellow-100'
                           }`}>
                             <svg className={`h-8 w-8 ${
                               health?.healthy ? 'text-green-600' : 
@@ -974,8 +971,8 @@ export default function SourcePage() {
                     </Card>
 
                     {/* gRPC Status Card */}
-                    <Card className={`transform transition-all duration-300 hover:shadow-xl hover:scale-[1.02] border-2 ${
-                      grpcTestResult?.ok ? 'border-green-100' : endpointConfig?.grpcEndpoint ? 'border-yellow-100' : 'border-gray-100'
+                    <Card className={`border ${
+                      grpcTestResult?.ok ? 'border-green-200' : endpointConfig?.grpcEndpoint ? 'border-yellow-200' : 'border-gray-200'
                     }`}>
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
@@ -1000,10 +997,10 @@ export default function SourcePage() {
                               <p className="text-xs text-yellow-600 mt-1">Test required</p>
                             )}
                           </div>
-                          <div className={`p-4 rounded-2xl shadow-lg ${
-                            grpcTestResult?.ok ? 'bg-gradient-to-br from-green-100 to-emerald-100' : 
-                            endpointConfig?.grpcEndpoint ? 'bg-gradient-to-br from-yellow-100 to-amber-100' : 
-                            'bg-gradient-to-br from-gray-100 to-gray-200'
+                          <div className={`p-3 rounded ${
+                            grpcTestResult?.ok ? 'bg-green-100' : 
+                            endpointConfig?.grpcEndpoint ? 'bg-yellow-100' : 
+                            'bg-gray-100'
                           }`}>
                             <svg className={`h-8 w-8 ${
                               grpcTestResult?.ok ? 'text-green-600' : 
@@ -1052,17 +1049,15 @@ export default function SourcePage() {
 
                   {/* Offer Agreement Shortcut */}
                   {user?.company.status === 'ACTIVE' && endpointConfig?.grpcEndpoint && grpcTestResult?.ok && (
-                    <Card className="mt-6 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-200 transform transition-all duration-300 hover:shadow-xl">
+                    <Card className="mt-6 bg-gray-50 border border-gray-200">
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-                              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                            </div>
+                            <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
                             <div>
-                              <h3 className="text-xl font-bold text-gray-900 mb-1">Ready to Offer an Agreement?</h3>
+                              <h3 className="text-lg font-semibold text-gray-900 mb-1">Ready to Offer an Agreement?</h3>
                               <p className="text-sm text-gray-600">
                                 Create and offer agreements to agents to start accepting bookings from them.
                               </p>
@@ -1071,7 +1066,6 @@ export default function SourcePage() {
                           <Button 
                             onClick={() => setActiveTab('agreements')} 
                             variant="primary"
-                            className="shadow-lg hover:shadow-xl transform transition-all duration-200 hover:scale-105"
                           >
                             Offer New Agreement
                           </Button>
@@ -1083,7 +1077,7 @@ export default function SourcePage() {
                   {/* Status alert */}
                   {user?.company.status === 'PENDING_VERIFICATION' && <PendingVerification />}
                   {user?.company.status === 'ACTIVE' && !endpointConfig?.grpcEndpoint && (
-                    <Card className="mt-6 border-2 border-yellow-200 bg-gradient-to-r from-yellow-50 to-amber-50">
+                    <Card className="mt-6 border border-yellow-200 bg-yellow-50">
                       <CardContent className="p-6">
                         <div className="flex items-start gap-4">
                           <div className="p-2 bg-yellow-100 rounded-lg">
@@ -1164,14 +1158,12 @@ export default function SourcePage() {
                   {/* Header */}
                   <div className="mb-8">
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl shadow-sm">
-                        <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      </div>
+                      <svg className="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
                   <div>
-                        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                        <h1 className="text-3xl font-semibold text-gray-900">
                           Locations
                         </h1>
                         <p className="mt-2 text-gray-600 font-medium">Manage your pickup and drop-off locations</p>
@@ -1181,17 +1173,15 @@ export default function SourcePage() {
 
                   <div className="mt-6 space-y-6">
                     {/* Location Sync Status */}
-                    <Card className="transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100">
-                      <CardHeader className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-b border-gray-200">
+                    <Card>
+                      <CardHeader>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="p-2 bg-white rounded-lg shadow-sm">
-                              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                              </svg>
-                            </div>
+                            <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
                             <div>
-                              <CardTitle className="text-xl font-bold text-gray-900">Location Sync Status</CardTitle>
+                              <CardTitle className="text-xl font-semibold text-gray-900">Location Sync Status</CardTitle>
                               <p className="text-sm text-gray-600 mt-1">Sync your coverage and import branches</p>
                             </div>
                           </div>
@@ -1800,6 +1790,12 @@ export default function SourcePage() {
                 </>
               )}
 
+              {activeTab === 'support' && (
+                <>
+                  <Support />
+                </>
+              )}
+
               {activeTab === 'verification' && (
                 <>
                   <div className="mb-8">
@@ -2117,11 +2113,11 @@ export default function SourcePage() {
                             return (
                               <div 
                                 key={index} 
-                                className={`p-5 rounded-xl border-2 transition-all hover:shadow-md ${
+                                className={`p-4 rounded border transition-colors ${
                                   index === 0 
                                     ? result.passed 
-                                      ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200' 
-                                      : 'bg-gradient-to-r from-red-50 to-rose-50 border-red-200'
+                                      ? 'bg-green-50 border-green-200' 
+                                      : 'bg-red-50 border-red-200'
                                     : 'bg-white border-gray-200 opacity-75'
                                 }`}
                               >
@@ -2177,7 +2173,7 @@ export default function SourcePage() {
                                       </div>
                                       
                                       {failedSteps.length > 0 && (
-                                        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
                                           <p className="text-xs font-semibold text-red-900 mb-1">Failed Steps:</p>
                                           <div className="space-y-1">
                                             {failedSteps.slice(0, 3).map((step: any, stepIndex: number) => (

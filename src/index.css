@@ -13,9 +13,9 @@ body {
   box-sizing: border-box;
 }
 
-/* Smooth transitions */
+/* Smooth transitions - minimal, no transforms */
 * {
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
 }
@@ -50,28 +50,7 @@ body {
   }
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(10px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-@keyframes slideDown {
-  from {
-    transform: translateY(-10px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
+/* Simplified animations - fade only */
 .animate-in {
   animation: fadeIn 0.2s ease-out;
 }
@@ -80,17 +59,9 @@ body {
   animation: fadeIn 0.2s ease-out;
 }
 
-.zoom-in-95 {
-  animation: slideUp 0.3s ease-out;
-}
-
-.slide-in-from-bottom-4 {
-  animation: slideUp 0.3s ease-out;
-}
-
-/* Focus visible styles */
+/* Focus visible styles - navy accent */
 *:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid #1e293b;
   outline-offset: 2px;
 }
 
@@ -105,18 +76,8 @@ body {
   animation: spin 1s linear infinite;
 }
 
-/* Skeleton loader */
-@keyframes shimmer {
-  0% {
-    background-position: -1000px 0;
-  }
-  100% {
-    background-position: 1000px 0;
-  }
-}
-
+/* Skeleton loader - simplified */
 .skeleton {
-  background: linear-gradient(to right, #f0f0f0 8%, #e0e0e0 18%, #f0f0f0 33%);
+  background: #f3f4f6;
   background-size: 1000px 100%;
-  animation: shimmer 2s infinite linear;
 }
