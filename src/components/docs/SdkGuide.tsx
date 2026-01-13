@@ -974,82 +974,162 @@ const testRes = await axios.post(
   { headers: { Authorization: \`Bearer \${token}\` } }
 );
 
+// 5. Get endpoint status
+const statusRes = await axios.get(
+  \`\${API_BASE}/endpoints/status\`,
+  { headers: { Authorization: \`Bearer \${token}\` } }
+);
+
+// 6. Get endpoint config
+const configRes = await axios.get(
+  \`\${API_BASE}/endpoints/config\`,
+  { headers: { Authorization: \`Bearer \${token}\` } }
+);
+
 // 7. List branches with filters
 const branchesRes = await axios.get(
-  \`\${API_BASE}/sources/branches?limit=25&offset=0&status=Active\`,
+  \`\${API_BASE}/sources/branches?limit=25&offset=0&status=Active&search=Airport\`,
+  { headers: { Authorization: \`Bearer \${token}\` } }
+);
+console.log('Branches:', branchesRes.data.items);
+
+// 8. Get branch details
+const branchRes = await axios.get(
+  \`\${API_BASE}/sources/branches/\${branchId}\`,
   { headers: { Authorization: \`Bearer \${token}\` } }
 );
 
-// 8. Get unmapped branches
-const unmappedRes = await axios.get(
-  \`\${API_BASE}/sources/branches/unmapped\`,
+// 9. Create a new branch
+const newBranchRes = await axios.post(
+  \`\${API_BASE}/sources/branches\`,
+  {
+    branchCode: 'BR001',
+    name: 'Manchester Airport',
+    natoLocode: 'GBMAN',
+    latitude: 53.3656,
+    longitude: -2.2729,
+    city: 'Manchester',
+    country: 'United Kingdom',
+    countryCode: 'GB'
+  },
   { headers: { Authorization: \`Bearer \${token}\` } }
 );
 
-// 9. Update branch
+// 10. Update branch
 await axios.patch(
   \`\${API_BASE}/sources/branches/\${branchId}\`,
-  { natoLocode: 'GBMAN', city: 'Manchester' },
+  { natoLocode: 'GBMAN', city: 'Manchester', country: 'United Kingdom' },
   { headers: { Authorization: \`Bearer \${token}\` } }
 );
 
-// 10. Search UN/LOCODE locations
+// 11. Get unmapped branches (branches without UN/LOCODE)
+const unmappedRes = await axios.get(
+  \`\${API_BASE}/sources/branches/unmapped?limit=25\`,
+  { headers: { Authorization: \`Bearer \${token}\` } }
+);
+
+// 12. Upload branches from JSON file
+const uploadRes = await axios.post(
+  \`\${API_BASE}/sources/upload-branches\`,
+  { branches: [/* array of branch objects */] },
+  { headers: { Authorization: \`Bearer \${token}\` } }
+);
+
+// 13. Search UN/LOCODE locations
 const locationsRes = await axios.get(
   \`\${API_BASE}/sources/locations/search?query=Manchester&limit=25\`,
   { headers: { Authorization: \`Bearer \${token}\` } }
 );
+console.log('Locations:', locationsRes.data.items);
 
-// 11. Add location to coverage
+// 12. Add location to coverage
 await axios.post(
   \`\${API_BASE}/sources/locations\`,
   { unlocode: 'GBMAN' },
   { headers: { Authorization: \`Bearer \${token}\` } }
 );
 
-// 12. Remove location from coverage
+// 13. Remove location from coverage
 await axios.delete(
   \`\${API_BASE}/sources/locations/GBMAN\`,
   { headers: { Authorization: \`Bearer \${token}\` } }
 );
 
-// 13. Sync location coverage
+// 14. Sync location coverage from gRPC adapter
 await axios.post(
   \`\${API_BASE}/coverage/source/\${companyId}/sync\`,
   {},
   { headers: { Authorization: \`Bearer \${token}\` } }
 );
 
-// 14. Create and offer agreement
+// 17. Create draft agreement
 const agreementRes = await axios.post(
   \`\${API_BASE}/agreements\`,
   {
     agent_id: 'agent_company_id',
     source_id: companyId,
-    agreement_ref: 'AG-2025-001'
+    agreement_ref: 'AG-2025-001',
+    valid_from: '2025-01-01T00:00:00Z',
+    valid_to: '2025-12-31T23:59:59Z'
   },
   { headers: { Authorization: \`Bearer \${token}\` } }
 );
+const agreementId = agreementRes.data.id;
+
+// 18. Offer agreement to agent
 await axios.post(
-  \`\${API_BASE}/agreements/\${agreementRes.data.id}/offer\`,
+  \`\${API_BASE}/agreements/\${agreementId}/offer\`,
   {},
   { headers: { Authorization: \`Bearer \${token}\` } }
 );
 
-// 15. List all agents with agreements
+// 19. List all agents with their agreements
 const agentsRes = await axios.get(
   \`\${API_BASE}/agreements/all?status=ACTIVE\`,
   { headers: { Authorization: \`Bearer \${token}\` } }
 );
 
-// 16. Get health status
+// 20. Check for duplicate agreement
+const duplicateCheck = await axios.post(
+  \`\${API_BASE}/agreements/check-duplicate\`,
+  {
+    sourceId: companyId,
+    agentId: 'agent_company_id',
+    agreementRef: 'AG-2025-001'
+  },
+  { headers: { Authorization: \`Bearer \${token}\` } }
+);
+
+// 21. Get health status (slowRate, backoffLevel, excludedUntil)
 const healthRes = await axios.get(
   \`\${API_BASE}/health/my-source\`,
   { headers: { Authorization: \`Bearer \${token}\` } }
 );
+console.log('Health:', healthRes.data);
 
-// 17. Get notifications
+// 22. Run comprehensive source verification
+await axios.post(
+  \`\${API_BASE}/verification/source/run\`,
+  {},
+  { headers: { Authorization: \`Bearer \${token}\` } }
+);
+
+// 23. Get endpoint status and health
+const statusRes = await axios.get(
+  \`\${API_BASE}/endpoints/status\`,
+  { headers: { Authorization: \`Bearer \${token}\` } }
+);
+
+// 24. Get source notifications
 const notificationsRes = await axios.get(
   \`\${API_BASE}/endpoints/notifications?limit=50&unreadOnly=true\`,
+  { headers: { Authorization: \`Bearer \${token}\` } }
+);
+
+// 25. Mark notification as read
+await axios.post(
+  \`\${API_BASE}/endpoints/notifications/\${notificationId}/read\`,
+  {},
   { headers: { Authorization: \`Bearer \${token}\` } }
 );` : `// Agent SDK examples...`}</pre>
             </div>
@@ -1166,71 +1246,93 @@ func main() {
     req.Header.Set("Content-Type", "application/json")
     client.Do(req)
     
-    // 3. Import branches
-    req, _ = http.NewRequest("POST", API_BASE+"/sources/import-branches", nil)
-    req.Header.Set("Authorization", "Bearer "+token)
-    client.Do(req)
-    
-    // 4. List branches
-    req, _ = http.NewRequest("GET", API_BASE+"/sources/branches", nil)
-    req.Header.Set("Authorization", "Bearer "+token)
-    resp, _ = client.Do(req)
-    var branchesResp map[string]interface{}
-    json.NewDecoder(resp.Body).Decode(&branchesResp)
-    fmt.Println("Branches:", branchesResp["items"])
-    
-    // 5. Test endpoints
+    // 3. Test endpoints
     testData, _ := json.Marshal(map[string]bool{"testHttp": true, "testGrpc": true})
     req, _ = http.NewRequest("POST", API_BASE+"/endpoints/test", bytes.NewBuffer(testData))
     req.Header.Set("Authorization", "Bearer "+token)
     req.Header.Set("Content-Type", "application/json")
     client.Do(req)
     
-    // 6. Import branches from supplier endpoint
+    // 4. Get endpoint status
+    req, _ = http.NewRequest("GET", API_BASE+"/endpoints/status", nil)
+    req.Header.Set("Authorization", "Bearer "+token)
+    client.Do(req)
+    
+    // 5. Import branches from supplier endpoint
     req, _ = http.NewRequest("POST", API_BASE+"/sources/import-branches", nil)
     req.Header.Set("Authorization", "Bearer "+token)
     client.Do(req)
     
-    // 7. List branches
-    req, _ = http.NewRequest("GET", API_BASE+"/sources/branches?limit=25&offset=0", nil)
+    // 6. List branches with filters
+    req, _ = http.NewRequest("GET", API_BASE+"/sources/branches?limit=25&offset=0&status=Active", nil)
     req.Header.Set("Authorization", "Bearer "+token)
     resp, _ = client.Do(req)
+    var branchesResp map[string]interface{}
     json.NewDecoder(resp.Body).Decode(&branchesResp)
+    fmt.Println("Branches:", branchesResp["items"])
     
-    // 8. Get unmapped branches
-    req, _ = http.NewRequest("GET", API_BASE+"/sources/branches/unmapped", nil)
+    // 7. Get branch details
+    req, _ = http.NewRequest("GET", API_BASE+"/sources/branches/"+branchId, nil)
     req.Header.Set("Authorization", "Bearer "+token)
     client.Do(req)
     
-    // 9. Update branch
-    patchData, _ := json.Marshal(map[string]string{"natoLocode": "GBMAN"})
-    req, _ = http.NewRequest("PATCH", API_BASE+"/sources/branches/{branchId}", bytes.NewBuffer(patchData))
+    // 8. Create a new branch
+    branchData, _ := json.Marshal(map[string]interface{}{
+        "branchCode": "BR001",
+        "name":       "Manchester Airport",
+        "natoLocode": "GBMAN",
+        "latitude":   53.3656,
+        "longitude":  -2.2729,
+        "city":       "Manchester",
+        "country":    "United Kingdom",
+        "countryCode": "GB",
+    })
+    req, _ = http.NewRequest("POST", API_BASE+"/sources/branches", bytes.NewBuffer(branchData))
     req.Header.Set("Authorization", "Bearer "+token)
     req.Header.Set("Content-Type", "application/json")
     client.Do(req)
     
-    // 10. Search UN/LOCODE locations
+    // 9. Update branch
+    patchData, _ := json.Marshal(map[string]interface{}{"natoLocode": "GBMAN", "city": "Manchester"})
+    req, _ = http.NewRequest("PATCH", API_BASE+"/sources/branches/"+branchId, bytes.NewBuffer(patchData))
+    req.Header.Set("Authorization", "Bearer "+token)
+    req.Header.Set("Content-Type", "application/json")
+    client.Do(req)
+    
+    // 10. Get unmapped branches
+    req, _ = http.NewRequest("GET", API_BASE+"/sources/branches/unmapped?limit=25", nil)
+    req.Header.Set("Authorization", "Bearer "+token)
+    client.Do(req)
+    
+    // 11. Search UN/LOCODE locations
     req, _ = http.NewRequest("GET", API_BASE+"/sources/locations/search?query=Manchester&limit=25", nil)
     req.Header.Set("Authorization", "Bearer "+token)
     client.Do(req)
     
-    // 11. Add location to coverage
+    // 12. Add location to coverage
     locData, _ := json.Marshal(map[string]string{"unlocode": "GBMAN"})
     req, _ = http.NewRequest("POST", API_BASE+"/sources/locations", bytes.NewBuffer(locData))
     req.Header.Set("Authorization", "Bearer "+token)
     req.Header.Set("Content-Type", "application/json")
     client.Do(req)
     
-    // 12. Sync location coverage
+    // 13. Remove location from coverage
+    req, _ = http.NewRequest("DELETE", API_BASE+"/sources/locations/GBMAN", nil)
+    req.Header.Set("Authorization", "Bearer "+token)
+    client.Do(req)
+    
+    // 14. Sync location coverage
     req, _ = http.NewRequest("POST", API_BASE+"/coverage/source/"+companyId+"/sync", nil)
     req.Header.Set("Authorization", "Bearer "+token)
     client.Do(req)
     
-    // 13. Create agreement
+    // 15. Create agreement
     agreementData := map[string]interface{}{
-        "agent_id":      "agent_company_id",
-        "source_id":     companyId,
-        "agreement_ref": "AG-2025-001",
+        "agent_id":       "agent_company_id",
+        "source_id":      companyId,
+        "agreement_ref":  "AG-2025-001",
+        "valid_from":     "2025-01-01T00:00:00Z",
+        "valid_to":       "2025-12-31T23:59:59Z",
     }
     agreementJson, _ := json.Marshal(agreementData)
     req, _ = http.NewRequest("POST", API_BASE+"/agreements", bytes.NewBuffer(agreementJson))
@@ -1241,8 +1343,47 @@ func main() {
     json.NewDecoder(resp.Body).Decode(&agreementResp)
     agreementId := agreementResp["id"].(string)
     
-    // 7. Offer agreement
+    // 16. Offer agreement
     req, _ = http.NewRequest("POST", API_BASE+"/agreements/"+agreementId+"/offer", nil)
+    req.Header.Set("Authorization", "Bearer "+token)
+    client.Do(req)
+    
+    // 17. List all agents with agreements
+    req, _ = http.NewRequest("GET", API_BASE+"/agreements/all?status=ACTIVE", nil)
+    req.Header.Set("Authorization", "Bearer "+token)
+    client.Do(req)
+    
+    // 18. Check for duplicate agreement
+    duplicateData, _ := json.Marshal(map[string]string{
+        "sourceId":      companyId,
+        "agentId":       "agent_company_id",
+        "agreementRef":  "AG-2025-001",
+    })
+    req, _ = http.NewRequest("POST", API_BASE+"/agreements/check-duplicate", bytes.NewBuffer(duplicateData))
+    req.Header.Set("Authorization", "Bearer "+token)
+    req.Header.Set("Content-Type", "application/json")
+    client.Do(req)
+    
+    // 19. Get health status
+    req, _ = http.NewRequest("GET", API_BASE+"/health/my-source", nil)
+    req.Header.Set("Authorization", "Bearer "+token)
+    resp, _ = client.Do(req)
+    var healthResp map[string]interface{}
+    json.NewDecoder(resp.Body).Decode(&healthResp)
+    fmt.Println("Health:", healthResp)
+    
+    // 20. Run verification
+    req, _ = http.NewRequest("POST", API_BASE+"/verification/source/run", nil)
+    req.Header.Set("Authorization", "Bearer "+token)
+    client.Do(req)
+    
+    // 21. Get notifications
+    req, _ = http.NewRequest("GET", API_BASE+"/endpoints/notifications?limit=50&unreadOnly=true", nil)
+    req.Header.Set("Authorization", "Bearer "+token)
+    client.Do(req)
+    
+    // 22. Mark notification as read
+    req, _ = http.NewRequest("POST", API_BASE+"/endpoints/notifications/"+notificationId+"/read", nil)
     req.Header.Set("Authorization", "Bearer "+token)
     client.Do(req)
 }`}</pre>
@@ -1365,28 +1506,90 @@ apiRequest('PUT', '/endpoints/config', [
     'adapterType' => 'grpc'
 ]);
 
-// 3. Import branches
+// 3. Test endpoints
+apiRequest('POST', '/endpoints/test', ['testHttp' => true, 'testGrpc' => true]);
+
+// 4. Get endpoint status
+$status = apiRequest('GET', '/endpoints/status');
+
+// 5. Import branches from supplier endpoint
 apiRequest('POST', '/sources/import-branches');
 
-// 4. List branches
-$branches = apiRequest('GET', '/sources/branches');
-echo "Branches: " . count($branches['items']) . "\\n";
+// 6. List branches with filters
+$branches = apiRequest('GET', '/sources/branches?limit=25&offset=0&status=Active');
+echo "Found " . count($branches['items']) . " branches\\n";
 
-// 5. Add location to coverage
+// 7. Get branch details
+$branch = apiRequest('GET', '/sources/branches/' . $branchId);
+
+// 8. Create a new branch
+apiRequest('POST', '/sources/branches', [
+    'branchCode' => 'BR001',
+    'name' => 'Manchester Airport',
+    'natoLocode' => 'GBMAN',
+    'latitude' => 53.3656,
+    'longitude' => -2.2729,
+    'city' => 'Manchester',
+    'country' => 'United Kingdom',
+    'countryCode' => 'GB'
+]);
+
+// 9. Update branch
+apiRequest('PATCH', '/sources/branches/' . $branchId, [
+    'natoLocode' => 'GBMAN',
+    'city' => 'Manchester'
+]);
+
+// 10. Get unmapped branches
+$unmapped = apiRequest('GET', '/sources/branches/unmapped?limit=25');
+
+// 11. Search UN/LOCODE locations
+$locations = apiRequest('GET', '/sources/locations/search?query=Manchester&limit=25');
+echo "Found " . count($locations['items']) . " locations\\n";
+
+// 12. Add location to coverage
 apiRequest('POST', '/sources/locations', ['unlocode' => 'GBMAN']);
 
-// 6. Sync location coverage
+// 13. Remove location from coverage
+apiRequest('DELETE', '/sources/locations/GBMAN');
+
+// 14. Sync location coverage
 apiRequest('POST', '/coverage/source/' . $companyId . '/sync');
 
-// 7. Create agreement
+// 15. Create agreement
 $agreement = apiRequest('POST', '/agreements', [
     'agent_id' => 'agent_company_id',
     'source_id' => $companyId,
-    'agreement_ref' => 'AG-2025-001'
+    'agreement_ref' => 'AG-2025-001',
+    'valid_from' => '2025-01-01T00:00:00Z',
+    'valid_to' => '2025-12-31T23:59:59Z'
 ]);
 
-// 8. Offer agreement
-apiRequest('POST', '/agreements/' . $agreement['id'] . '/offer');`}</pre>
+// 16. Offer agreement
+apiRequest('POST', '/agreements/' . $agreement['id'] . '/offer');
+
+// 17. List all agents with agreements
+$agents = apiRequest('GET', '/agreements/all?status=ACTIVE');
+
+// 18. Check for duplicate agreement
+apiRequest('POST', '/agreements/check-duplicate', [
+    'sourceId' => $companyId,
+    'agentId' => 'agent_company_id',
+    'agreementRef' => 'AG-2025-001'
+]);
+
+// 19. Get health status
+$health = apiRequest('GET', '/health/my-source');
+echo "Health: " . json_encode($health) . "\\n";
+
+// 20. Run verification
+apiRequest('POST', '/verification/source/run');
+
+// 21. Get notifications
+$notifications = apiRequest('GET', '/endpoints/notifications?limit=50&unreadOnly=true');
+
+// 22. Mark notification as read
+apiRequest('POST', '/endpoints/notifications/' . $notificationId . '/read');`}</pre>
           </div>
         </section>
 
@@ -1541,32 +1744,90 @@ api_request('PUT', '/endpoints/config', {
     'adapterType': 'grpc'
 })
 
-# 3. Import branches
+# 3. Test endpoints
+api_request('POST', '/endpoints/test', {'testHttp': True, 'testGrpc': True})
+
+# 4. Get endpoint status
+status = api_request('GET', '/endpoints/status')
+
+# 5. Import branches from supplier endpoint
 api_request('POST', '/sources/import-branches')
 
-# 4. List branches
-branches = api_request('GET', '/sources/branches')
+# 6. List branches with filters
+branches = api_request('GET', '/sources/branches?limit=25&offset=0&status=Active')
 print(f"Found {len(branches['items'])} branches")
 
-# 5. Add location to coverage
+# 7. Get branch details
+branch = api_request('GET', f'/sources/branches/{branch_id}')
+
+# 8. Create a new branch
+api_request('POST', '/sources/branches', {
+    'branchCode': 'BR001',
+    'name': 'Manchester Airport',
+    'natoLocode': 'GBMAN',
+    'latitude': 53.3656,
+    'longitude': -2.2729,
+    'city': 'Manchester',
+    'country': 'United Kingdom',
+    'countryCode': 'GB'
+})
+
+# 9. Update branch
+api_request('PATCH', f'/sources/branches/{branch_id}', {
+    'natoLocode': 'GBMAN',
+    'city': 'Manchester'
+})
+
+# 10. Get unmapped branches
+unmapped = api_request('GET', '/sources/branches/unmapped?limit=25')
+
+# 11. Search UN/LOCODE locations
+locations = api_request('GET', '/sources/locations/search?query=Manchester&limit=25')
+print(f"Found {len(locations['items'])} locations")
+
+# 12. Add location to coverage
 api_request('POST', '/sources/locations', {'unlocode': 'GBMAN'})
 
-# 6. Sync location coverage
+# 13. Remove location from coverage
+api_request('DELETE', '/sources/locations/GBMAN')
+
+# 14. Sync location coverage
 api_request('POST', f'/coverage/source/{company_id}/sync')
 
-# 7. Create agreement
+# 15. Create agreement
 agreement = api_request('POST', '/agreements', {
     'agent_id': 'agent_company_id',
     'source_id': company_id,
-    'agreement_ref': 'AG-2025-001'
+    'agreement_ref': 'AG-2025-001',
+    'valid_from': '2025-01-01T00:00:00Z',
+    'valid_to': '2025-12-31T23:59:59Z'
 })
 
-# 8. Offer agreement
+# 16. Offer agreement
 api_request('POST', f"/agreements/{agreement['id']}/offer")
 
-# 9. Check health
+# 17. List all agents with agreements
+agents = api_request('GET', '/agreements/all?status=ACTIVE')
+
+# 18. Check for duplicate agreement
+api_request('POST', '/agreements/check-duplicate', {
+    'sourceId': company_id,
+    'agentId': 'agent_company_id',
+    'agreementRef': 'AG-2025-001'
+})
+
+# 19. Get health status
 health = api_request('GET', '/health/my-source')
-print(f"Health: {health}")`}</pre>
+print(f"Health: {health}")
+
+# 20. Run verification
+api_request('POST', '/verification/source/run')
+
+# 21. Get notifications
+notifications = api_request('GET', '/endpoints/notifications?limit=50&unreadOnly=true')
+
+# 22. Mark notification as read
+api_request('POST', f'/endpoints/notifications/{notification_id}/read')`}</pre>
           </div>
         </section>
 
@@ -1635,7 +1896,25 @@ HttpRequest configReq = HttpRequest.newBuilder()
     .build();
 client.send(configReq, HttpResponse.BodyHandlers.ofString());
 
-// 3. Import branches
+// 3. Test endpoints
+Map<String, Boolean> testData = Map.of("testHttp", true, "testGrpc", true);
+HttpRequest testReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/endpoints/test"))
+    .header("Authorization", "Bearer " + token)
+    .header("Content-Type", "application/json")
+    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(testData)))
+    .build();
+client.send(testReq, HttpResponse.BodyHandlers.ofString());
+
+// 4. Get endpoint status
+HttpRequest statusReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/endpoints/status"))
+    .header("Authorization", "Bearer " + token)
+    .GET()
+    .build();
+client.send(statusReq, HttpResponse.BodyHandlers.ofString());
+
+// 5. Import branches
 HttpRequest importReq = HttpRequest.newBuilder()
     .uri(URI.create(API_BASE + "/sources/import-branches"))
     .header("Authorization", "Bearer " + token)
@@ -1643,15 +1922,174 @@ HttpRequest importReq = HttpRequest.newBuilder()
     .build();
 client.send(importReq, HttpResponse.BodyHandlers.ofString());
 
-// 4. List branches
+// 6. List branches with filters
 HttpRequest branchesReq = HttpRequest.newBuilder()
-    .uri(URI.create(API_BASE + "/sources/branches"))
+    .uri(URI.create(API_BASE + "/sources/branches?limit=25&offset=0&status=Active"))
     .header("Authorization", "Bearer " + token)
     .GET()
     .build();
 HttpResponse<String> branchesResp = client.send(branchesReq, HttpResponse.BodyHandlers.ofString());
 Map<String, Object> branches = mapper.readValue(branchesResp.body(), Map.class);
-System.out.println("Branches: " + branches.get("items"));`}</pre>
+System.out.println("Branches: " + branches.get("items"));
+
+// 7. Get branch details
+HttpRequest branchReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/sources/branches/" + branchId))
+    .header("Authorization", "Bearer " + token)
+    .GET()
+    .build();
+client.send(branchReq, HttpResponse.BodyHandlers.ofString());
+
+// 8. Create branch
+Map<String, Object> branchData = Map.of(
+    "branchCode", "BR001",
+    "name", "Manchester Airport",
+    "natoLocode", "GBMAN",
+    "latitude", 53.3656,
+    "longitude", -2.2729,
+    "city", "Manchester",
+    "country", "United Kingdom",
+    "countryCode", "GB"
+);
+HttpRequest createBranchReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/sources/branches"))
+    .header("Authorization", "Bearer " + token)
+    .header("Content-Type", "application/json")
+    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(branchData)))
+    .build();
+client.send(createBranchReq, HttpResponse.BodyHandlers.ofString());
+
+// 9. Update branch
+Map<String, String> patchData = Map.of("natoLocode", "GBMAN", "city", "Manchester");
+HttpRequest updateReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/sources/branches/" + branchId))
+    .header("Authorization", "Bearer " + token)
+    .header("Content-Type", "application/json")
+    .method("PATCH", HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(patchData)))
+    .build();
+client.send(updateReq, HttpResponse.BodyHandlers.ofString());
+
+// 10. Get unmapped branches
+HttpRequest unmappedReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/sources/branches/unmapped?limit=25"))
+    .header("Authorization", "Bearer " + token)
+    .GET()
+    .build();
+client.send(unmappedReq, HttpResponse.BodyHandlers.ofString());
+
+// 11. Search locations
+HttpRequest locationsReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/sources/locations/search?query=Manchester&limit=25"))
+    .header("Authorization", "Bearer " + token)
+    .GET()
+    .build();
+client.send(locationsReq, HttpResponse.BodyHandlers.ofString());
+
+// 12. Add location to coverage
+Map<String, String> locData = Map.of("unlocode", "GBMAN");
+HttpRequest addLocReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/sources/locations"))
+    .header("Authorization", "Bearer " + token)
+    .header("Content-Type", "application/json")
+    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(locData)))
+    .build();
+client.send(addLocReq, HttpResponse.BodyHandlers.ofString());
+
+// 13. Remove location
+HttpRequest removeLocReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/sources/locations/GBMAN"))
+    .header("Authorization", "Bearer " + token)
+    .DELETE()
+    .build();
+client.send(removeLocReq, HttpResponse.BodyHandlers.ofString());
+
+// 14. Sync location coverage
+HttpRequest syncReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/coverage/source/" + companyId + "/sync"))
+    .header("Authorization", "Bearer " + token)
+    .POST(HttpRequest.BodyPublishers.noBody())
+    .build();
+client.send(syncReq, HttpResponse.BodyHandlers.ofString());
+
+// 15. Create agreement
+Map<String, Object> agreementData = new HashMap<>();
+agreementData.put("agent_id", "agent_company_id");
+agreementData.put("source_id", companyId);
+agreementData.put("agreement_ref", "AG-2025-001");
+agreementData.put("valid_from", "2025-01-01T00:00:00Z");
+agreementData.put("valid_to", "2025-12-31T23:59:59Z");
+HttpRequest createAgreementReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/agreements"))
+    .header("Authorization", "Bearer " + token)
+    .header("Content-Type", "application/json")
+    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(agreementData)))
+    .build();
+HttpResponse<String> agreementResp = client.send(createAgreementReq, HttpResponse.BodyHandlers.ofString());
+Map<String, Object> agreement = mapper.readValue(agreementResp.body(), Map.class);
+String agreementId = (String) agreement.get("id");
+
+// 16. Offer agreement
+HttpRequest offerReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/agreements/" + agreementId + "/offer"))
+    .header("Authorization", "Bearer " + token)
+    .POST(HttpRequest.BodyPublishers.noBody())
+    .build();
+client.send(offerReq, HttpResponse.BodyHandlers.ofString());
+
+// 17. List agreements
+HttpRequest listAgreementsReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/agreements/all?status=ACTIVE"))
+    .header("Authorization", "Bearer " + token)
+    .GET()
+    .build();
+client.send(listAgreementsReq, HttpResponse.BodyHandlers.ofString());
+
+// 18. Check duplicate
+Map<String, String> duplicateData = Map.of(
+    "sourceId", companyId,
+    "agentId", "agent_company_id",
+    "agreementRef", "AG-2025-001"
+);
+HttpRequest duplicateReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/agreements/check-duplicate"))
+    .header("Authorization", "Bearer " + token)
+    .header("Content-Type", "application/json")
+    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(duplicateData)))
+    .build();
+client.send(duplicateReq, HttpResponse.BodyHandlers.ofString());
+
+// 19. Get health
+HttpRequest healthReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/health/my-source"))
+    .header("Authorization", "Bearer " + token)
+    .GET()
+    .build();
+HttpResponse<String> healthResp = client.send(healthReq, HttpResponse.BodyHandlers.ofString());
+System.out.println("Health: " + healthResp.body());
+
+// 20. Run verification
+HttpRequest verifyReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/verification/source/run"))
+    .header("Authorization", "Bearer " + token)
+    .POST(HttpRequest.BodyPublishers.noBody())
+    .build();
+client.send(verifyReq, HttpResponse.BodyHandlers.ofString());
+
+// 21. Get notifications
+HttpRequest notificationsReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/endpoints/notifications?limit=50&unreadOnly=true"))
+    .header("Authorization", "Bearer " + token)
+    .GET()
+    .build();
+client.send(notificationsReq, HttpResponse.BodyHandlers.ofString());
+
+// 22. Mark notification as read
+HttpRequest readReq = HttpRequest.newBuilder()
+    .uri(URI.create(API_BASE + "/endpoints/notifications/" + notificationId + "/read"))
+    .header("Authorization", "Bearer " + token)
+    .POST(HttpRequest.BodyPublishers.noBody())
+    .build();
+client.send(readReq, HttpResponse.BodyHandlers.ofString());`}</pre>
           </div>
         </section>
 
@@ -1734,25 +2172,93 @@ api_request('PUT', '/endpoints/config', {
     adapterType => 'grpc'
 });
 
-# 3. Import branches
+# 3. Test endpoints
+api_request('POST', '/endpoints/test', {
+    testHttp => 1,
+    testGrpc => 1
+});
+
+# 4. Get endpoint status
+my $status = api_request('GET', '/endpoints/status');
+
+# 5. Import branches from supplier endpoint
 api_request('POST', '/sources/import-branches');
 
-# 4. List branches
-my $branches = api_request('GET', '/sources/branches');
+# 6. List branches with filters
+my $branches = api_request('GET', '/sources/branches?limit=25&offset=0&status=Active');
 print "Found " . scalar(@{$branches->{items}}) . " branches\\n";
 
-# 5. Sync location coverage
+# 7. Get branch details
+my $branch = api_request('GET', "/sources/branches/$branch_id");
+
+# 8. Create a new branch
+api_request('POST', '/sources/branches', {
+    branchCode => 'BR001',
+    name => 'Manchester Airport',
+    natoLocode => 'GBMAN',
+    latitude => 53.3656,
+    longitude => -2.2729,
+    city => 'Manchester',
+    country => 'United Kingdom',
+    countryCode => 'GB'
+});
+
+# 9. Update branch
+api_request('PATCH', "/sources/branches/$branch_id", {
+    natoLocode => 'GBMAN',
+    city => 'Manchester'
+});
+
+# 10. Get unmapped branches
+my $unmapped = api_request('GET', '/sources/branches/unmapped?limit=25');
+
+# 11. Search UN/LOCODE locations
+my $locations = api_request('GET', '/sources/locations/search?query=Manchester&limit=25');
+print "Found " . scalar(@{$locations->{items}}) . " locations\\n";
+
+# 12. Add location to coverage
+api_request('POST', '/sources/locations', { unlocode => 'GBMAN' });
+
+# 13. Remove location from coverage
+api_request('DELETE', '/sources/locations/GBMAN');
+
+# 14. Sync location coverage
 api_request('POST', "/coverage/source/$company_id/sync");
 
-# 6. Create agreement
+# 15. Create agreement
 my $agreement = api_request('POST', '/agreements', {
     agent_id => 'agent_company_id',
     source_id => $company_id,
-    agreement_ref => 'AG-2025-001'
+    agreement_ref => 'AG-2025-001',
+    valid_from => '2025-01-01T00:00:00Z',
+    valid_to => '2025-12-31T23:59:59Z'
 });
 
-# 7. Offer agreement
-api_request('POST', "/agreements/$agreement->{id}/offer");`}</pre>
+# 16. Offer agreement
+api_request('POST', "/agreements/$agreement->{id}/offer");
+
+# 17. List all agents with agreements
+my $agents = api_request('GET', '/agreements/all?status=ACTIVE');
+
+# 18. Check for duplicate agreement
+api_request('POST', '/agreements/check-duplicate', {
+    sourceId => $company_id,
+    agentId => 'agent_company_id',
+    agreementRef => 'AG-2025-001'
+});
+
+# 19. Get health status
+my $health = api_request('GET', '/health/my-source');
+print "Health: " . $json->encode($health) . "\\n";
+
+# 20. Run verification
+api_request('POST', '/verification/source/run');
+
+# 21. Get notifications
+my $notifications = api_request('GET', '/endpoints/notifications?limit=50&unreadOnly=true');
+
+# 22. Mark notification as read
+api_request('POST', "/endpoints/notifications/$notification_id/read");`}</pre>
           </div>
         </section>
 
