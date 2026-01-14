@@ -2,10 +2,11 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Badge } from './ui/Badge'
 import { Copy } from './ui/Copy'
 import { getStatusColor } from '../lib/utils'
-import { User, Building2, Mail, Shield, CheckCircle } from 'lucide-react'
+import { User as UserIcon, Building2, Mail, Shield, CheckCircle } from 'lucide-react'
+import { User } from '../types/api'
 
 interface SourceInformationProps {
-  user: any
+  user: User
 }
 
 export const SourceInformation: React.FC<SourceInformationProps> = ({ user }) => {
@@ -80,29 +81,6 @@ export const SourceInformation: React.FC<SourceInformationProps> = ({ user }) =>
               >
                 {user.company.status}
               </span>
-            </div>
-          </div>
-        </div>
-        
-        {/* Access Token for Testing */}
-        <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <Shield className="w-4 h-4 text-gray-600" />
-                <h4 className="text-sm font-medium text-gray-900">Access Token (Testing Purpose)</h4>
-              </div>
-              <p className="text-xs text-gray-600 mb-3">
-                This token is shown for testing purposes only. Keep it secure.
-              </p>
-              <div className="p-3 bg-white border border-gray-300 rounded">
-                <code className="text-xs text-gray-900 break-all block whitespace-pre-wrap font-mono">
-                  {localStorage.getItem('token') || 'No token found'}
-                </code>
-              </div>
-            </div>
-            <div className="flex-shrink-0">
-              <Copy text={localStorage.getItem('token') || ''} />
             </div>
           </div>
         </div>

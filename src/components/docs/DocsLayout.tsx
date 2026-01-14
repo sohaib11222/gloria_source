@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../../lib/api';
 import SdkGuide from './SdkGuide';
 import GettingStartedGuide from './GettingStartedGuide';
+import SourceApiReference from './SourceApiReference';
 import './docs.css';
 
 type DocCodeSample = {
@@ -44,6 +45,7 @@ const DocsLayout: React.FC = () => {
   const [activeCode, setActiveCode] = useState<string>('curl');
   const [showSdkGuide, setShowSdkGuide] = useState<boolean>(false);
   const [showGettingStarted, setShowGettingStarted] = useState<boolean>(false);
+  const [showApiReference, setShowApiReference] = useState<boolean>(false);
   const [companyId, setCompanyId] = useState<string>('YOUR_COMPANY_ID');
   const [companyType, setCompanyType] = useState<string>('SOURCE');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -164,6 +166,7 @@ const DocsLayout: React.FC = () => {
             onClick={() => {
               setShowGettingStarted(true);
               setShowSdkGuide(false);
+              setShowApiReference(false);
               setSelectedEndpoint(null);
               setSearchQuery('');
             }}
@@ -173,10 +176,25 @@ const DocsLayout: React.FC = () => {
             <span style={{ fontWeight: 600 }}>Getting Started</span>
           </button>
           <button
+            className={`docs-endpoint-btn ${showApiReference ? 'active' : ''}`}
+            onClick={() => {
+              setShowApiReference(true);
+              setShowSdkGuide(false);
+              setShowGettingStarted(false);
+              setSelectedEndpoint(null);
+              setSearchQuery('');
+            }}
+            style={{ width: '100%', justifyContent: 'flex-start', padding: '0.5rem', marginBottom: '0.5rem' }}
+          >
+            <span style={{ fontSize: '1rem', marginRight: '0.5rem' }}>📖</span>
+            <span style={{ fontWeight: 600 }}>API Reference</span>
+          </button>
+          <button
             className={`docs-endpoint-btn ${showSdkGuide ? 'active' : ''}`}
             onClick={() => {
               setShowSdkGuide(true);
               setShowGettingStarted(false);
+              setShowApiReference(false);
               setSelectedEndpoint(null);
               setSearchQuery('');
             }}
@@ -203,6 +221,7 @@ const DocsLayout: React.FC = () => {
                   setActiveCode(ep.codeSamples?.[0]?.lang ?? 'curl');
                   setShowSdkGuide(false);
                   setShowGettingStarted(false);
+                  setShowApiReference(false);
                 }}
               >
                 <span className="method" style={{ background: METHOD_COLORS[ep.method] || '#6b7280' }}>
@@ -218,6 +237,8 @@ const DocsLayout: React.FC = () => {
       <main className="docs-main">
         {showGettingStarted ? (
           <GettingStartedGuide />
+        ) : showApiReference ? (
+          <SourceApiReference />
         ) : showSdkGuide ? (
           <SdkGuide role="source" />
         ) : selectedEndpoint && (
@@ -489,7 +510,7 @@ const DocsLayout: React.FC = () => {
             </aside>
           </div>
         )}
-        {!showGettingStarted && !showSdkGuide && !selectedEndpoint && (
+        {!showGettingStarted && !showApiReference && !showSdkGuide && !selectedEndpoint && (
           <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
             <p>Select an endpoint from the sidebar to view documentation</p>
           </div>

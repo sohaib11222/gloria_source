@@ -13,11 +13,12 @@ import {
   LogOut,
   MessageCircle
 } from 'lucide-react'
+import { User } from '../../types/api'
 
 interface SidebarProps {
   activeTab: string
   onTabChange: (tab: string) => void
-  user: any
+  user: User
   onLogout: () => void
 }
 

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import SdkGuide from '../components/docs/SdkGuide';
 import GettingStartedGuide from '../components/docs/GettingStartedGuide';
+import SourceApiReference from '../components/docs/SourceApiReference';
 import { ErrorDisplay } from '../components/ui/ErrorDisplay';
 import { Loader } from '../components/ui/Loader';
 import './DocsFullscreen.css';
@@ -62,6 +63,7 @@ const DocsFullscreen: React.FC = () => {
   const [activeCode, setActiveCode] = useState<string>('curl');
   // Default to "Getting Started" if no view or endpointId specified
   const [showSdkGuide, setShowSdkGuide] = useState<boolean>(view === 'sdk');
+  const [showApiReference, setShowApiReference] = useState<boolean>(view === 'api-reference');
   const [showGettingStarted, setShowGettingStarted] = useState<boolean>(
     view === 'getting-started' || (!view && !endpointId)
   );
@@ -129,9 +131,22 @@ const DocsFullscreen: React.FC = () => {
               Getting Started
             </button>
             <button
+              className={`docs-nav-btn ${showApiReference ? 'active' : ''}`}
+              onClick={() => {
+                setShowApiReference(true);
+                setShowSdkGuide(false);
+                setShowGettingStarted(false);
+                setSelectedEndpoint(null);
+                navigate('/docs-fullscreen/api-reference', { replace: true });
+              }}
+            >
+              API Reference
+            </button>
+            <button
               className={`docs-nav-btn ${showSdkGuide ? 'active' : ''}`}
               onClick={() => {
                 setShowSdkGuide(true);
+                setShowApiReference(false);
                 setShowGettingStarted(false);
                 setSelectedEndpoint(null);
                 navigate('/docs-fullscreen/sdk', { replace: true });
@@ -153,6 +168,7 @@ const DocsFullscreen: React.FC = () => {
                           setSelectedEndpoint(ep);
                           setActiveCode(ep.codeSamples?.[0]?.lang ?? 'curl');
                           setShowSdkGuide(false);
+                          setShowApiReference(false);
                           setShowGettingStarted(false);
                           navigate(`/docs-fullscreen/${ep.id}`, { replace: true });
                         }}
@@ -185,6 +201,8 @@ const DocsFullscreen: React.FC = () => {
           </div>
         ) : showGettingStarted ? (
           <GettingStartedGuide />
+        ) : showApiReference ? (
+          <SourceApiReference />
         ) : showSdkGuide ? (
           <SdkGuide role="source" />
         ) : selectedEndpoint ? (

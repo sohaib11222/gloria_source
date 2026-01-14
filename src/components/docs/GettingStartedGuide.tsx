@@ -28,6 +28,7 @@ const GettingStartedGuide: React.FC = () => {
         'step-5',
         'step-6',
         'step-7',
+        'step-8',
         'best-practices',
         'next-steps',
         'support'
@@ -63,11 +64,12 @@ const GettingStartedGuide: React.FC = () => {
     { id: 'overview', label: 'Overview', icon: '📋' },
     { id: 'step-1', label: 'Account Setup & Configuration', icon: '1️⃣' },
     { id: 'step-2', label: 'Manage Your Branches', icon: '2️⃣' },
-    { id: 'step-3', label: 'Sync Location Coverage', icon: '3️⃣' },
-    { id: 'step-4', label: 'Request New Locations', icon: '4️⃣' },
-    { id: 'step-5', label: 'Create & Offer Agreements', icon: '5️⃣' },
-    { id: 'step-6', label: 'Run Verification', icon: '6️⃣' },
-    { id: 'step-7', label: 'Monitor Health & Performance', icon: '7️⃣' },
+    { id: 'step-3', label: 'Implement Your gRPC API', icon: '3️⃣' },
+    { id: 'step-4', label: 'Sync Location Coverage', icon: '4️⃣' },
+    { id: 'step-5', label: 'Request New Locations', icon: '5️⃣' },
+    { id: 'step-6', label: 'Create & Offer Agreements', icon: '6️⃣' },
+    { id: 'step-7', label: 'Run Verification', icon: '7️⃣' },
+    { id: 'step-8', label: 'Monitor Health & Performance', icon: '8️⃣' },
     { id: 'best-practices', label: 'Best Practices', icon: '✨' },
     { id: 'next-steps', label: 'Next Steps', icon: '🚀' },
     { id: 'support', label: 'Need Help?', icon: '💬' },
@@ -485,7 +487,7 @@ const GettingStartedGuide: React.FC = () => {
           </div>
         </section>
 
-        {/* Step 3 */}
+        {/* Step 3 - Implement gRPC API */}
         <section id="step-3" style={{ marginBottom: '2rem', scrollMarginTop: '100px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
             <div style={{ 
@@ -501,6 +503,156 @@ const GettingStartedGuide: React.FC = () => {
               fontWeight: 'bold' 
             }}>
               3
+            </div>
+            <h2 style={{ margin: 0 }}>Implement Your gRPC API</h2>
+          </div>
+          
+          <div style={{ paddingLeft: '4rem' }}>
+            <h3>Understanding the gRPC Service</h3>
+            <p>
+              The middleware calls your gRPC server to get availability, handle bookings, and check health.
+              You must implement the <code>SourceProviderService</code> interface defined in the proto file.
+            </p>
+
+            <h3>How the Middleware Calls Your API</h3>
+            <ol style={{ lineHeight: '1.8' }}>
+              <li>Agent searches for availability → Middleware calls your <code>GetAvailability</code> method</li>
+              <li>Agent creates booking → Middleware calls your <code>CreateBooking</code> method</li>
+              <li>Health checks → Middleware calls your <code>GetHealth</code> method periodically</li>
+              <li>Location sync → Middleware calls your <code>GetLocations</code> method</li>
+            </ol>
+
+            <h3>Required Proto File</h3>
+            <p>
+              You need to download the <code>source_provider.proto</code> file to generate your gRPC server code.
+            </p>
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f0f9ff', border: '1px solid #3b82f6', borderRadius: '0.5rem' }}>
+              <strong>📥 Download Proto File:</strong>
+              <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <a 
+                  href="/docs/proto/source_provider.proto" 
+                  download="source_provider.proto"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.625rem 1.25rem',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    textDecoration: 'none',
+                    borderRadius: '0.375rem',
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
+                >
+                  <span>⬇️</span>
+                  <span>Download source_provider.proto</span>
+                </a>
+                <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                  Or use: <code style={{ backgroundColor: '#f3f4f6', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>GET /docs/proto/source_provider.proto</code>
+                </span>
+              </div>
+            </div>
+            <p style={{ marginTop: '1rem' }}>
+              You must implement these 7 methods:
+            </p>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li><code>GetHealth</code> - Health check (returns status)</li>
+              <li><code>GetLocations</code> - Return all supported UN/LOCODEs</li>
+              <li><code>GetAvailability</code> - Return vehicle availability for search criteria</li>
+              <li><code>CreateBooking</code> - Create a new booking</li>
+              <li><code>ModifyBooking</code> - Modify an existing booking</li>
+              <li><code>CancelBooking</code> - Cancel an existing booking</li>
+              <li><code>CheckBooking</code> - Retrieve booking status</li>
+            </ul>
+
+            <h3>Critical: agreement_ref Requirement</h3>
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '0.5rem' }}>
+              <strong>⚠️ REQUIRED:</strong> Every request from the middleware includes an <code>agreement_ref</code> parameter.
+              This identifies which agreement (contract) between you and the Agent is being used.
+            </div>
+            <ul style={{ lineHeight: '1.8', marginTop: '1rem' }}>
+              <li><strong>Availability requests:</strong> Include <code>agreement_ref</code> in <code>AvailabilityRequest</code></li>
+              <li><strong>Booking requests:</strong> Include <code>agreement_ref</code> in all booking operations</li>
+              <li><strong>Use it to:</strong> Determine pricing, availability rules, location coverage for that specific agreement</li>
+            </ul>
+
+            <h3>Data Formats</h3>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li><strong>UN/LOCODE:</strong> Format <code>[CountryCode][LocationCode]</code> (e.g., <code>GBMAN</code>, <code>USNYC</code>)</li>
+              <li><strong>ISO 8601 Dates:</strong> Format <code>YYYY-MM-DDTHH:mm:ssZ</code> (e.g., <code>2024-06-15T10:00:00Z</code>)</li>
+              <li><strong>Vehicle Classes:</strong> OTA standard codes (e.g., <code>CDMR</code>, <code>FDAR</code>)</li>
+              <li><strong>Currency:</strong> ISO 4217 codes (e.g., <code>GBP</code>, <code>USD</code>)</li>
+            </ul>
+
+            <h3>Response Time Requirements</h3>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li><strong>Target:</strong> Under 3 seconds for most requests</li>
+              <li><strong>Timeout:</strong> 120 seconds maximum</li>
+              <li><strong>Slow Requests:</strong> Requests over 3 seconds trigger health monitoring</li>
+              <li><strong>Strikes:</strong> 3 slow requests = automatic backoff (15 min, 30 min, 1 hour, 2 hours, 4 hours)</li>
+            </ul>
+
+            <h3>Implementation Steps</h3>
+            <ol style={{ lineHeight: '1.8' }}>
+              <li>
+                <strong>Download the Proto File:</strong> 
+                <ul style={{ marginTop: '0.5rem' }}>
+                  <li>Click the download button above, or</li>
+                  <li>Use the API endpoint: <code>GET /docs/proto/source_provider.proto</code></li>
+                  <li>Save the file as <code>source_provider.proto</code> in your project</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Generate Code:</strong> Use your language's gRPC tools to generate client/server code from the proto file
+              </li>
+              <li>
+                <strong>Implement Methods:</strong> Implement all 7 required methods in your gRPC server
+              </li>
+              <li>
+                <strong>Handle agreement_ref:</strong> Ensure every method that receives <code>agreement_ref</code> uses it correctly
+              </li>
+              <li>
+                <strong>Test Locally:</strong> Test your gRPC server before configuring the endpoint in the UI
+              </li>
+              <li>
+                <strong>Configure Endpoint:</strong> Set your gRPC endpoint in the Dashboard (e.g., <code>localhost:51061</code>)
+              </li>
+              <li>
+                <strong>Test Connection:</strong> Use the "Test Connection" button in the Dashboard to verify connectivity
+              </li>
+            </ol>
+
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#dbeafe', border: '1px solid #3b82f6', borderRadius: '0.5rem' }}>
+              <strong>📖 Next Steps:</strong>
+              <ul style={{ marginTop: '0.5rem', marginBottom: 0, lineHeight: '1.8' }}>
+                <li>See the <strong>API Reference</strong> guide for complete endpoint specifications</li>
+                <li>See the <strong>SDK Guide</strong> for code examples in your preferred language</li>
+                <li>Test your implementation using the gRPC connection test in the Dashboard</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* Step 4 */}
+        <section id="step-4" style={{ marginBottom: '2rem', scrollMarginTop: '100px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+            <div style={{ 
+              width: '3rem', 
+              height: '3rem', 
+              borderRadius: '50%', 
+              backgroundColor: '#8b5cf6', 
+              color: 'white', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              fontSize: '1.5rem', 
+              fontWeight: 'bold' 
+            }}>
+              4
             </div>
             <h2 style={{ margin: 0 }}>Sync Location Coverage</h2>
           </div>
@@ -534,8 +686,8 @@ const GettingStartedGuide: React.FC = () => {
           </div>
         </section>
 
-        {/* Step 4 */}
-        <section id="step-4" style={{ marginBottom: '2rem', scrollMarginTop: '100px' }}>
+        {/* Step 5 */}
+        <section id="step-5" style={{ marginBottom: '2rem', scrollMarginTop: '100px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
             <div style={{ 
               width: '3rem', 
@@ -549,7 +701,7 @@ const GettingStartedGuide: React.FC = () => {
               fontSize: '1.5rem', 
               fontWeight: 'bold' 
             }}>
-              4
+              5
             </div>
             <h2 style={{ margin: 0 }}>Request New Locations</h2>
           </div>
@@ -590,8 +742,8 @@ const GettingStartedGuide: React.FC = () => {
           </div>
         </section>
 
-        {/* Step 5 */}
-        <section id="step-5" style={{ marginBottom: '2rem', scrollMarginTop: '100px' }}>
+        {/* Step 6 */}
+        <section id="step-6" style={{ marginBottom: '2rem', scrollMarginTop: '100px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
             <div style={{ 
               width: '3rem', 
@@ -605,7 +757,7 @@ const GettingStartedGuide: React.FC = () => {
               fontSize: '1.5rem', 
               fontWeight: 'bold' 
             }}>
-              5
+              6
             </div>
             <h2 style={{ margin: 0 }}>Create & Offer Agreements</h2>
           </div>
@@ -651,8 +803,8 @@ const GettingStartedGuide: React.FC = () => {
           </div>
         </section>
 
-        {/* Step 6 */}
-        <section id="step-6" style={{ marginBottom: '2rem', scrollMarginTop: '100px' }}>
+        {/* Step 7 */}
+        <section id="step-7" style={{ marginBottom: '2rem', scrollMarginTop: '100px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
             <div style={{ 
               width: '3rem', 
@@ -666,7 +818,7 @@ const GettingStartedGuide: React.FC = () => {
               fontSize: '1.5rem', 
               fontWeight: 'bold' 
             }}>
-              6
+              7
             </div>
             <h2 style={{ margin: 0 }}>Run Verification</h2>
           </div>
@@ -710,8 +862,8 @@ const GettingStartedGuide: React.FC = () => {
           </div>
         </section>
 
-        {/* Step 7 */}
-        <section id="step-7" style={{ marginBottom: '2rem', scrollMarginTop: '100px' }}>
+        {/* Step 8 */}
+        <section id="step-8" style={{ marginBottom: '2rem', scrollMarginTop: '100px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
             <div style={{ 
               width: '3rem', 
@@ -725,7 +877,7 @@ const GettingStartedGuide: React.FC = () => {
               fontSize: '1.5rem', 
               fontWeight: 'bold' 
             }}>
-              7
+              8
             </div>
             <h2 style={{ margin: 0 }}>Monitor Health & Performance</h2>
           </div>

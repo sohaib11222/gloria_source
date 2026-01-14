@@ -31,6 +31,7 @@ import { verificationApi, VerificationResult } from '../api/verification'
 import { useQuery } from '@tanstack/react-query'
 import { Bell } from 'lucide-react'
 import { NotificationsDrawer } from '../components/NotificationsDrawer'
+import { SourceHealth } from '../types/api'
 
 export default function SourcePage() {
   const navigate = useNavigate()
@@ -84,7 +85,6 @@ export default function SourcePage() {
     } catch (error: any) {
       console.error('Failed to load synced locations:', error)
       // Don't show error toast on auto-load, only on manual sync
-      // Just log to console for debugging
     } finally {
       setIsLoadingLocations(false)
     }
@@ -216,13 +216,13 @@ export default function SourcePage() {
 
   // Health state
   const [healthLoading, setHealthLoading] = useState(false)
-  const [health, setHealth] = useState<any | null>(null)
+  const [health, setHealth] = useState<SourceHealth | null>(null)
 
   // Verification re-run state
   const [verificationStatus, setVerificationStatus] = useState<'IDLE' | 'PENDING' | 'RUNNING' | 'PASSED' | 'FAILED'>('IDLE')
   const [verificationLoading, setVerificationLoading] = useState(false)
-  const [verificationResult, setVerificationResult] = useState<any>(null)
-  const [verificationHistory, setVerificationHistory] = useState<any[]>([])
+  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null)
+  const [verificationHistory, setVerificationHistory] = useState<VerificationResult[]>([])
   
   // Notification state
   const [showNotifications, setShowNotifications] = useState(false)
@@ -300,8 +300,6 @@ export default function SourcePage() {
       if (result) {
         setVerificationResult(result)
         setVerificationStatus(result.passed ? 'PASSED' : 'FAILED')
-        // For now, we only have the latest result
-        // In the future, we can add an endpoint to get history
         setVerificationHistory([result])
       }
     } catch (error) {
@@ -623,49 +621,6 @@ export default function SourcePage() {
     } finally {
       setIsTestingGrpc(false)
     }
-  }
-
-  const demoPassTest = () => {
-    // Generate a mock successful test result without actually testing
-    const mockEndpoint = grpcEndpoint || 'localhost:50052'
-    const mockResult: SourceGrpcTestResponse = {
-      ok: true,
-      addr: mockEndpoint,
-      totalMs: 45,
-      endpoints: {
-        health: {
-          ok: true,
-          result: {
-            status: 'SERVING'
-          },
-          ms: 23
-        },
-        locations: {
-          ok: true,
-          result: {
-            locations: [
-              { unlocode: 'USNYC', name: 'New York' },
-              { unlocode: 'GBLON', name: 'London' },
-              { unlocode: 'FRPAR', name: 'Paris' }
-            ]
-          },
-          ms: 22
-        } as any,
-        availability: null,
-        bookings: null
-      },
-      tested: ['health', 'locations']
-    }
-
-    setGrpcTestResult(mockResult)
-    
-    // Save demo test result to localStorage
-    if (user?.company?.id) {
-      localStorage.setItem(`grpcTestResult_${user.company.id}`, JSON.stringify(mockResult))
-      localStorage.setItem(`grpcEndpoint_${user.company.id}`, mockEndpoint)
-    }
-    
-    toast.success('Demo test passed! (This is a simulated successful result)')
   }
 
   const createAgreement = async () => {
@@ -1042,7 +997,6 @@ export default function SourcePage() {
                         grpcTestResult={grpcTestResult}
                         isTestingGrpc={isTestingGrpc}
                         testSourceGrpc={testSourceGrpc}
-                        demoPassTest={demoPassTest}
                       />
                     </div>
                   )}
