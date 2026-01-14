@@ -6,6 +6,7 @@ import { ProtectedRoute } from './ProtectedRoute'
 import LoginPage from '../pages/LoginPage'
 import RegisterPage from '../pages/RegisterPage'
 import VerifyEmailPage from '../pages/VerifyEmailPage'
+import ForgotPasswordPage from '../pages/ForgotPasswordPage'
 import SourcePage from '../pages/SourcePage'
 import DocsFullscreen from '../pages/DocsFullscreen'
 import NotFound from '../pages/NotFound'
@@ -16,6 +17,7 @@ export const AppRoutes: React.FC = () => {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       
       {/* Fullscreen docs route (no sidebar) */}
       <Route path="/docs-fullscreen/:endpointId" element={<DocsFullscreen />} />

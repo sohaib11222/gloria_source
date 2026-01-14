@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { endpointsApi, Location } from '../api/endpoints'
 import toast from 'react-hot-toast'
@@ -19,23 +18,12 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
 
   const queryClient = useQueryClient()
 
-  // Debounced search
-  useEffect(() => {
-    if (!searchQuery.trim()) {
+  const performSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
       setSearchResults([])
       setShowResults(false)
       return
     }
-
-    const timeoutId = setTimeout(() => {
-      performSearch(searchQuery)
-    }, 300)
-
-    return () => clearTimeout(timeoutId)
-  }, [searchQuery])
-
-  const performSearch = async (query: string) => {
-    if (!query.trim()) return
 
     setIsSearching(true)
     try {
@@ -50,7 +38,22 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
     } finally {
       setIsSearching(false)
     }
-  }
+  }, [])
+
+  // Debounced search
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([])
+      setShowResults(false)
+      return
+    }
+
+    const timeoutId = setTimeout(() => {
+      performSearch(searchQuery)
+    }, 300)
+
+    return () => clearTimeout(timeoutId)
+  }, [searchQuery, performSearch])
 
   const addLocationMutation = useMutation({
     mutationFn: (unlocode: string) => endpointsApi.addLocation(unlocode),
@@ -85,14 +88,20 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
     setShowResults(false)
   }
 
-  const handleAddLocation = () => {
+  const handleAddLocation = useCallback(() => {
     if (!selectedLocation) {
       toast.error('Please select a location first')
       return
     }
 
-    addLocationMutation.mutate(selectedLocation.unlocode)
-  }
+    console.log('handleAddLocation called with:', selectedLocation.unlocode)
+    try {
+      addLocationMutation.mutate(selectedLocation.unlocode)
+    } catch (error) {
+      console.error('Error in handleAddLocation:', error)
+      toast.error('Failed to add location')
+    }
+  }, [selectedLocation, addLocationMutation])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -101,9 +110,9 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
   }
 
   return (
-    <div>
+    <div className="relative z-0">
       <div className="space-y-4">
-          <div className="relative">
+          <div className="relative z-10">
             <Input
               label="Search Location"
               value={searchQuery}
@@ -123,8 +132,12 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
                   <button
                     key={location.unlocode}
                     type="button"
-                    onClick={() => handleSelectLocation(location)}
-                    className="w-full text-left px-4 py-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none border-b border-gray-100 last:border-b-0"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleSelectLocation(location)
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none border-b border-gray-100 last:border-b-0 transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
@@ -157,32 +170,74 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
           </div>
 
           {selectedLocation && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <code className="text-sm font-mono text-blue-600 font-semibold">
+            <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg relative">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <code className="text-sm font-mono text-blue-600 font-semibold bg-white px-2 py-1 rounded">
                       {selectedLocation.unlocode}
                     </code>
                     {selectedLocation.iata_code && (
-                      <span className="text-xs text-gray-600">({selectedLocation.iata_code})</span>
+                      <span className="text-xs text-gray-600 bg-white px-2 py-1 rounded">({selectedLocation.iata_code})</span>
                     )}
                   </div>
-                  <div className="text-sm font-medium text-gray-900 mt-0.5">
+                  <div className="text-sm font-medium text-gray-900">
                     {selectedLocation.place}
                   </div>
                   <div className="text-xs text-gray-600">
                     {selectedLocation.country}
                   </div>
                 </div>
-                <Button
-                  onClick={handleAddLocation}
-                  loading={addLocationMutation.isPending}
-                  variant="primary"
-                  size="sm"
+                <div 
+                  className="flex-shrink-0"
+                  style={{ position: 'relative', zIndex: 100 }}
                 >
-                  Add Location
-                </Button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      console.log('Add Location button clicked')
+                      console.log('selectedLocation:', selectedLocation)
+                      console.log('isPending:', addLocationMutation.isPending)
+                      
+                      if (!selectedLocation) {
+                        toast.error('Please select a location first')
+                        return
+                      }
+                      
+                      if (addLocationMutation.isPending) {
+                        console.log('Mutation already in progress, ignoring click')
+                        return
+                      }
+                      
+                      console.log('Calling handleAddLocation with:', selectedLocation.unlocode)
+                      handleAddLocation()
+                    }}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }}
+                    disabled={addLocationMutation.isPending}
+                    className="inline-flex items-center justify-center font-medium rounded transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-slate-700 text-white hover:bg-slate-800 focus:ring-slate-500 border border-slate-700 px-3 py-1.5 text-sm shadow-md hover:shadow-lg cursor-pointer"
+                    style={{ 
+                      pointerEvents: addLocationMutation.isPending ? 'none' : 'auto',
+                      position: 'relative',
+                      zIndex: 100
+                    }}
+                  >
+                    {addLocationMutation.isPending && (
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    )}
+                    <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    {addLocationMutation.isPending ? 'Adding...' : 'Add Location'}
+                  </button>
+                </div>
               </div>
             </div>
           )}

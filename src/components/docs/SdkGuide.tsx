@@ -1,12 +1,78 @@
 import React, { useState, useEffect } from 'react';
 import './docs.css';
+import { Copy, Check, Download } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { API_BASE_URL } from '../../lib/apiConfig';
 
 type SdkType = 'javascript' | 'typescript' | 'go' | 'php' | 'python' | 'java' | 'perl';
+
+// Helper component for code blocks with copy button
+const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, language }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      toast.success('Code copied to clipboard!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast.error('Failed to copy code');
+    }
+  };
+
+  return (
+    <div style={{ position: 'relative', marginTop: '1rem' }}>
+      <div style={{ 
+        backgroundColor: '#1f2937', 
+        color: '#f9fafb', 
+        padding: '1.5rem', 
+        borderRadius: '0.25rem',
+        position: 'relative'
+      }}>
+        <button
+          onClick={handleCopy}
+          style={{
+            position: 'absolute',
+            top: '0.75rem',
+            right: '0.75rem',
+            background: copied ? '#10b981' : '#374151',
+            border: 'none',
+            borderRadius: '0.25rem',
+            padding: '0.5rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            color: 'white',
+            fontSize: '0.75rem',
+            transition: 'background 0.2s',
+          }}
+          title="Copy code"
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          <span style={{ marginLeft: '0.25rem' }}>{copied ? 'Copied!' : 'Copy'}</span>
+        </button>
+        <pre style={{ 
+          margin: 0, 
+          fontSize: '0.875rem', 
+          lineHeight: '1.5', 
+          fontFamily: 'Monaco, Menlo, monospace', 
+          whiteSpace: 'pre-wrap',
+          paddingRight: '4rem'
+        }}>
+          {code}
+        </pre>
+      </div>
+    </div>
+  );
+};
 
 const SdkGuide: React.FC<{ role?: 'agent' | 'source' | 'admin' }> = ({ role = 'source' }) => {
   const [companyId, setCompanyId] = useState<string>('YOUR_COMPANY_ID');
   const [companyType, setCompanyType] = useState<string>('SOURCE');
   const [activeSdk, setActiveSdk] = useState<SdkType>('typescript');
+  const [downloadingProto, setDownloadingProto] = useState(false);
 
   useEffect(() => {
     // Load user info for SDK examples
@@ -25,6 +91,35 @@ const SdkGuide: React.FC<{ role?: 'agent' | 'source' | 'admin' }> = ({ role = 's
       }
     }
   }, []);
+
+  const handleDownloadProto = async () => {
+    setDownloadingProto(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/docs/proto/source_provider.proto`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to download proto file');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'source_provider.proto';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success('Proto file downloaded!');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to download proto file');
+    } finally {
+      setDownloadingProto(false);
+    }
+  };
 
   const prefaceText = {
     agent: 'Start here: login → approve agreement → availability → booking',
@@ -434,8 +529,42 @@ const SdkGuide: React.FC<{ role?: 'agent' | 'source' | 'admin' }> = ({ role = 's
               </p>
             </div>
           )}
-        <div style={{ backgroundColor: '#1f2937', color: '#f9fafb', padding: '1.5rem', borderRadius: '0.25rem', marginTop: '1rem' }}>
-          <pre style={{ margin: 0, fontSize: '0.875rem', lineHeight: '1.5', fontFamily: 'Monaco, Menlo, monospace', whiteSpace: 'pre-wrap' }}>{role === 'source' ? `import axios from 'axios';
+        {role === 'source' && (
+          <div style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#eff6ff', border: '1px solid #3b82f6', borderRadius: '0.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#1e40af', fontWeight: 600 }}>
+                  📥 Need the gRPC Proto File?
+                </p>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: '#1e3a8a' }}>
+                  Download the source_provider.proto file to implement your gRPC server
+                </p>
+              </div>
+              <button
+                onClick={handleDownloadProto}
+                disabled={downloadingProto}
+                style={{
+                  background: downloadingProto ? '#9ca3af' : '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.25rem',
+                  padding: '0.5rem 1rem',
+                  cursor: downloadingProto ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  transition: 'background 0.2s',
+                }}
+              >
+                <Download size={16} />
+                {downloadingProto ? 'Downloading...' : 'Download Proto'}
+              </button>
+            </div>
+          </div>
+        )}
+        <CodeBlock code={role === 'source' ? `import axios from 'axios';
 
 const API_BASE = 'http://localhost:8080';
 let token = '';
@@ -598,8 +727,7 @@ const duplicateCheck = await axios.post(
     agreementRef: 'AG-2025-001'
   },
   { headers: { Authorization: \`Bearer \${token}\` } }
-);` : `// Agent SDK examples...`}</pre>
-        </div>
+);` : `// Agent SDK examples...`} />
         <div style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#6b7280' }}>
           <p>
             <strong>Full Documentation:</strong>{' '}
@@ -612,6 +740,272 @@ const duplicateCheck = await axios.post(
             </a>
           </p>
         </div>
+
+        {role === 'source' && (
+          <section style={{ marginTop: '3rem' }}>
+            <h2>gRPC Server Implementation</h2>
+            <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
+              As a source, you must implement a gRPC server that implements the <code>SourceProviderService</code> interface. 
+              The middleware will call your gRPC server to get availability, create bookings, and manage locations.
+            </p>
+
+            <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '0.25rem' }}>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#92400e', fontWeight: 500 }}>
+                ⚠️ <strong>Important:</strong> Your gRPC server must be accessible at the endpoint you configure in the middleware. 
+                Make sure your server is running and reachable before testing.
+              </p>
+            </div>
+
+            <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#1f2937', marginTop: '2rem', marginBottom: '1rem' }}>Required gRPC Methods</h3>
+            
+            <div style={{ marginBottom: '2rem' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>1. GetHealth</h4>
+              <p style={{ color: '#6b7280', marginBottom: '0.5rem' }}>
+                Health check endpoint. Return <code>{`{ ok: true, note: "Service is healthy" }`}</code> if your service is ready.
+              </p>
+              <CodeBlock code={`// Node.js example
+GetHealth: (call, callback) => {
+  callback(null, {
+    ok: true,
+    note: 'Service is healthy'
+  });
+}`} />
+            </div>
+
+            <div style={{ marginBottom: '2rem' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>2. GetLocations</h4>
+              <p style={{ color: '#6b7280', marginBottom: '0.5rem' }}>
+                Return all locations (UN/LOCODEs) that your source supports. Used for location sync.
+              </p>
+              <CodeBlock code={`// Node.js example
+GetLocations: (call, callback) => {
+  const locations = [
+    { unlocode: 'GBMAN', name: 'Manchester Airport' },
+    { unlocode: 'GBGLA', name: 'Glasgow Airport' },
+    { unlocode: 'GBLHR', name: 'London Heathrow' }
+  ];
+  callback(null, { locations });
+}`} />
+            </div>
+
+            <div style={{ marginBottom: '2rem' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>3. GetAvailability</h4>
+              <p style={{ color: '#6b7280', marginBottom: '0.5rem' }}>
+                Return vehicle availability offers for the given criteria. This is called when an agent searches for availability.
+              </p>
+              <CodeBlock code={`// Node.js example
+GetAvailability: (call, callback) => {
+  const { 
+    agreement_ref, 
+    pickup_unlocode, 
+    dropoff_unlocode, 
+    pickup_iso, 
+    dropoff_iso,
+    driver_age,
+    residency_country,
+    vehicle_classes 
+  } = call.request;
+
+  // Query your inventory system
+  const vehicles = [
+    {
+      supplier_offer_ref: \`OFFER-\${Date.now()}-1\`,
+      vehicle_class: 'ECMN',
+      make_model: 'Toyota Yaris',
+      currency: 'USD',
+      total_price: 45.99,
+      availability_status: 'AVAILABLE'
+    },
+    {
+      supplier_offer_ref: \`OFFER-\${Date.now()}-2\`,
+      vehicle_class: 'CDMR',
+      make_model: 'VW Golf',
+      currency: 'USD',
+      total_price: 67.50,
+      availability_status: 'AVAILABLE'
+    }
+  ];
+
+  callback(null, { vehicles });
+}`} />
+            </div>
+
+            <div style={{ marginBottom: '2rem' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>4. CreateBooking</h4>
+              <p style={{ color: '#6b7280', marginBottom: '0.5rem' }}>
+                Create a booking. Use the idempotency_key to prevent duplicate bookings. Return your booking reference and status.
+              </p>
+              <CodeBlock code={`// Node.js example
+CreateBooking: (call, callback) => {
+  const { 
+    agreement_ref, 
+    supplier_offer_ref, 
+    agent_booking_ref, 
+    idempotency_key 
+  } = call.request;
+
+  // Check idempotency - if booking with this key exists, return existing booking
+  // Otherwise, create new booking in your system
+  
+  const supplierBookingRef = \`BKG-\${Date.now()}\`;
+  
+  callback(null, {
+    supplier_booking_ref: supplierBookingRef,
+    status: 'CONFIRMED' // or 'REQUESTED', 'FAILED'
+  });
+}`} />
+            </div>
+
+            <div style={{ marginBottom: '2rem' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>5. ModifyBooking</h4>
+              <p style={{ color: '#6b7280', marginBottom: '0.5rem' }}>
+                Modify an existing booking. Return updated booking status.
+              </p>
+              <CodeBlock code={`// Node.js example
+ModifyBooking: (call, callback) => {
+  const { agreement_ref, supplier_booking_ref } = call.request;
+  
+  // Update booking in your system
+  
+  callback(null, {
+    supplier_booking_ref: supplier_booking_ref,
+    status: 'CONFIRMED'
+  });
+}`} />
+            </div>
+
+            <div style={{ marginBottom: '2rem' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>6. CancelBooking</h4>
+              <p style={{ color: '#6b7280', marginBottom: '0.5rem' }}>
+                Cancel an existing booking. Return cancelled booking status.
+              </p>
+              <CodeBlock code={`// Node.js example
+CancelBooking: (call, callback) => {
+  const { agreement_ref, supplier_booking_ref } = call.request;
+  
+  // Cancel booking in your system
+  
+  callback(null, {
+    supplier_booking_ref: supplier_booking_ref,
+    status: 'CANCELLED'
+  });
+}`} />
+            </div>
+
+            <div style={{ marginBottom: '2rem' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>7. CheckBooking</h4>
+              <p style={{ color: '#6b7280', marginBottom: '0.5rem' }}>
+                Check the status of an existing booking.
+              </p>
+              <CodeBlock code={`// Node.js example
+CheckBooking: (call, callback) => {
+  const { agreement_ref, supplier_booking_ref } = call.request;
+  
+  // Query booking status from your system
+  
+  callback(null, {
+    supplier_booking_ref: supplier_booking_ref,
+    status: 'CONFIRMED' // or 'CANCELLED', 'FAILED', etc.
+  });
+}`} />
+            </div>
+
+            <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#1f2937', marginTop: '2rem', marginBottom: '1rem' }}>Complete Node.js gRPC Server Example</h3>
+            <CodeBlock code={`const grpc = require('@grpc/grpc-js');
+const protoLoader = require('@grpc/proto-loader');
+
+// Load proto file
+const packageDefinition = protoLoader.loadSync('source_provider.proto', {
+  keepCase: true,
+  longs: String,
+  enums: String,
+  defaults: true,
+  oneofs: true
+});
+
+const sourceProviderProto = grpc.loadPackageDefinition(packageDefinition).source_provider;
+
+// Implement service
+const server = new grpc.Server();
+
+server.addService(sourceProviderProto.SourceProviderService.service, {
+  GetHealth: (call, callback) => {
+    callback(null, { ok: true, note: 'Service is healthy' });
+  },
+  
+  GetLocations: (call, callback) => {
+    callback(null, {
+      locations: [
+        { unlocode: 'GBMAN', name: 'Manchester Airport' },
+        { unlocode: 'GBGLA', name: 'Glasgow Airport' }
+      ]
+    });
+  },
+  
+  GetAvailability: (call, callback) => {
+    const vehicles = [
+      {
+        supplier_offer_ref: \`OFFER-\${Date.now()}-1\`,
+        vehicle_class: 'ECMN',
+        make_model: 'Toyota Yaris',
+        currency: 'USD',
+        total_price: 45.99,
+        availability_status: 'AVAILABLE'
+      }
+    ];
+    callback(null, { vehicles });
+  },
+  
+  CreateBooking: (call, callback) => {
+    const supplierBookingRef = \`BKG-\${Date.now()}\`;
+    callback(null, {
+      supplier_booking_ref: supplierBookingRef,
+      status: 'CONFIRMED'
+    });
+  },
+  
+  ModifyBooking: (call, callback) => {
+    callback(null, {
+      supplier_booking_ref: call.request.supplier_booking_ref,
+      status: 'CONFIRMED'
+    });
+  },
+  
+  CancelBooking: (call, callback) => {
+    callback(null, {
+      supplier_booking_ref: call.request.supplier_booking_ref,
+      status: 'CANCELLED'
+    });
+  },
+  
+  CheckBooking: (call, callback) => {
+    callback(null, {
+      supplier_booking_ref: call.request.supplier_booking_ref,
+      status: 'CONFIRMED'
+    });
+  }
+});
+
+// Start server
+const port = '0.0.0.0:51061';
+server.bindAsync(port, grpc.ServerCredentials.createInsecure(), (error, port) => {
+  if (error) {
+    console.error('Failed to start server:', error);
+    return;
+  }
+  server.start();
+  console.log(\`gRPC server listening on \${port}\`);
+});`} />
+
+            <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#f0fdf4', border: '1px solid #10b981', borderRadius: '0.25rem' }}>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#065f46', fontWeight: 500 }}>
+                💡 <strong>Tip:</strong> Download the proto file using the button above, then use it to generate client/server code for your language. 
+                Most gRPC libraries can generate code from proto files automatically.
+              </p>
+            </div>
+          </section>
+        )}
+
         <section>
           <h2>Complete Source API Reference</h2>
           <div style={{ marginTop: '1rem', marginBottom: '2rem' }}>

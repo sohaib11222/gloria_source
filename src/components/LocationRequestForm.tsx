@@ -47,7 +47,13 @@ export const LocationRequestForm: React.FC<LocationRequestFormProps> = ({ onSucc
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.locationName || !formData.country) {
-      toast.error('Please fill in required fields')
+      toast.error('Please fill in required fields (Location Name and Country Code)')
+      return
+    }
+    // Validate country code format (2-letter ISO 3166-1 alpha-2)
+    const countryCodeRegex = /^[A-Z]{2}$/;
+    if (!countryCodeRegex.test(formData.country)) {
+      toast.error('Country code must be a 2-letter ISO 3166-1 alpha-2 code (e.g., GB, US, FR)')
       return
     }
     createMutation.mutate(formData)
@@ -80,11 +86,17 @@ export const LocationRequestForm: React.FC<LocationRequestFormProps> = ({ onSucc
             </div>
             <div>
               <Input
-                label="Country *"
+                label="Country Code *"
                 value={formData.country}
-                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value.toUpperCase().slice(0, 2);
+                  setFormData({ ...formData, country: value });
+                }}
                 required
-                placeholder="e.g., United Kingdom"
+                placeholder="e.g., GB, US, FR"
+                maxLength={2}
+                className="font-mono"
+                helperText="2-letter ISO 3166-1 alpha-2 country code (e.g., GB for United Kingdom, US for United States)"
               />
             </div>
             <div>

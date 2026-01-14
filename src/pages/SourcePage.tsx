@@ -258,38 +258,48 @@ export default function SourcePage() {
     // Load user data from localStorage
     const userData = localStorage.getItem('user')
     if (userData) {
-      const parsedUser = JSON.parse(userData)
-      setUser(parsedUser)
-      
-      // Load persisted gRPC test result
-      const savedGrpcTest = localStorage.getItem(`grpcTestResult_${parsedUser.company.id}`)
-      if (savedGrpcTest) {
-        try {
-          const parsed = JSON.parse(savedGrpcTest)
-          // Check if the test result is still valid (same endpoint)
-          const savedEndpoint = localStorage.getItem(`grpcEndpoint_${parsedUser.company.id}`)
-          if (savedEndpoint && parsed.addr === savedEndpoint) {
-            setGrpcTestResult(parsed)
-          }
-        } catch (e) {
-          console.error('Failed to parse saved gRPC test result:', e)
+      try {
+        const parsedUser = JSON.parse(userData)
+        setUser(parsedUser)
+        
+        // Check if company exists before accessing its properties
+        if (!parsedUser?.company?.id) {
+          console.warn('User data missing company information')
+          return
         }
-      }
-      
-      // Load persisted last sync time
-      const savedSyncTime = localStorage.getItem(`lastSyncTime_${parsedUser.company.id}`)
-      if (savedSyncTime) {
-        setLastSyncTime(savedSyncTime)
-      }
-      
-      // Only load agents and endpoints if company status is ACTIVE
-      if (parsedUser.company.status === 'ACTIVE') {
-        loadAgents()
-        loadEndpointConfig()
-        // Preload health
-        loadHealth()
-        // Load verification status
-        loadVerificationStatus()
+        
+        // Load persisted gRPC test result
+        const savedGrpcTest = localStorage.getItem(`grpcTestResult_${parsedUser.company.id}`)
+        if (savedGrpcTest) {
+          try {
+            const parsed = JSON.parse(savedGrpcTest)
+            // Check if the test result is still valid (same endpoint)
+            const savedEndpoint = localStorage.getItem(`grpcEndpoint_${parsedUser.company.id}`)
+            if (savedEndpoint && parsed.addr === savedEndpoint) {
+              setGrpcTestResult(parsed)
+            }
+          } catch (e) {
+            console.error('Failed to parse saved gRPC test result:', e)
+          }
+        }
+        
+        // Load persisted last sync time
+        const savedSyncTime = localStorage.getItem(`lastSyncTime_${parsedUser.company.id}`)
+        if (savedSyncTime) {
+          setLastSyncTime(savedSyncTime)
+        }
+        
+        // Only load agents and endpoints if company status is ACTIVE
+        if (parsedUser.company?.status === 'ACTIVE') {
+          loadAgents()
+          loadEndpointConfig()
+          // Preload health
+          loadHealth()
+          // Load verification status
+          loadVerificationStatus()
+        }
+      } catch (error) {
+        console.error('Failed to parse user data from localStorage:', error)
       }
     }
   }, [])
@@ -1129,7 +1139,7 @@ export default function SourcePage() {
                     {/* Location Sync Status */}
                     <Card>
                       <CardHeader>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between w-full">
                           <div className="flex items-center gap-3">
                             <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1139,33 +1149,41 @@ export default function SourcePage() {
                               <p className="text-sm text-gray-600 mt-1">Sync your coverage and import branches</p>
                             </div>
                           </div>
-                        <div className="flex items-center gap-3">
-                          <Button 
-                            onClick={syncLocations} 
-                            loading={isSyncingLocations}
-                            variant="primary"
-                            size="sm"
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <Button 
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                syncLocations()
+                              }} 
+                              loading={isSyncingLocations}
+                              variant="primary"
+                              size="sm"
                               className="shadow-md hover:shadow-lg"
-                          >
+                            >
                               <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                               </svg>
-                            Sync Locations
-                          </Button>
-                          <Button 
-                            onClick={importBranches} 
-                            loading={isImportingBranches}
-                            variant="secondary"
-                            size="sm"
+                              Sync Locations
+                            </Button>
+                            <Button 
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                importBranches()
+                              }} 
+                              loading={isImportingBranches}
+                              variant="secondary"
+                              size="sm"
                               className="shadow-md hover:shadow-lg"
-                          >
+                            >
                               <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                               </svg>
-                            Import Branches
-                          </Button>
+                              Import Branches
+                            </Button>
+                          </div>
                         </div>
-                      </div>
                       </CardHeader>
                       <CardContent className="pt-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1289,7 +1307,11 @@ export default function SourcePage() {
                     </div>
                           <div className="flex items-end">
                             <Button 
-                              onClick={() => loadLocations(true)} 
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                loadLocations(true)
+                              }} 
                               size="sm" 
                               variant="primary"
                               className="shadow-md hover:shadow-lg"
