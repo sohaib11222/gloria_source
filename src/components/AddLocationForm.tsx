@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Input } from './ui/Input'
 import { endpointsApi, Location } from '../api/endpoints'
@@ -15,6 +15,7 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
   const [isSearching, setIsSearching] = useState(false)
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null)
   const [showResults, setShowResults] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
 
   const queryClient = useQueryClient()
 
@@ -56,8 +57,12 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
   }, [searchQuery, performSearch])
 
   const addLocationMutation = useMutation({
-    mutationFn: (unlocode: string) => endpointsApi.addLocation(unlocode),
+    mutationFn: (unlocode: string) => {
+      console.log('Mutation function called with unlocode:', unlocode)
+      return endpointsApi.addLocation(unlocode)
+    },
     onSuccess: (data) => {
+      console.log('Mutation onSuccess:', data)
       toast.success(`Location ${data.location.unlocode} added successfully!`)
       queryClient.invalidateQueries({ queryKey: ['locations'] })
       queryClient.invalidateQueries({ queryKey: ['syncedLocations'] })
@@ -69,6 +74,7 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
       onSuccess?.()
     },
     onError: (error: any) => {
+      console.error('Mutation onError:', error)
       const errorMessage = error.response?.data?.message || 'Failed to add location'
       const errorCode = error.response?.data?.error
       
@@ -88,32 +94,59 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
     setShowResults(false)
   }
 
-  const handleAddLocation = useCallback(() => {
+  const handleAddLocation = () => {
+    console.log('handleAddLocation called', { 
+      selectedLocation, 
+      isPending: addLocationMutation.isPending,
+      hasUnlocode: !!selectedLocation?.unlocode 
+    })
+    
     if (!selectedLocation) {
+      console.warn('No location selected')
       toast.error('Please select a location first')
       return
     }
 
-    console.log('handleAddLocation called with:', selectedLocation.unlocode)
+    if (addLocationMutation.isPending) {
+      console.warn('Mutation already pending, skipping')
+      return
+    }
+
+    const unlocode = selectedLocation.unlocode
+    console.log('Calling mutation.mutate with unlocode:', unlocode)
+    
     try {
-      addLocationMutation.mutate(selectedLocation.unlocode)
+      addLocationMutation.mutate(unlocode)
     } catch (error) {
-      console.error('Error in handleAddLocation:', error)
+      console.error('Error calling mutate:', error)
       toast.error('Failed to add location')
     }
-  }, [selectedLocation, addLocationMutation])
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       setShowResults(false)
+    } else if (e.key === 'Enter' && selectedLocation && !addLocationMutation.isPending) {
+      e.preventDefault()
+      e.stopPropagation()
+      console.log('Enter key pressed, calling handleAddLocation')
+      handleAddLocation()
     }
   }
+
+  // Add useEffect to test button programmatically
+  useEffect(() => {
+    if (buttonRef.current && selectedLocation) {
+      console.log('Button ref available, selectedLocation:', selectedLocation.unlocode)
+    }
+  }, [selectedLocation])
 
   return (
     <div className="relative z-0">
       <div className="space-y-4">
           <div className="relative z-10">
             <Input
+              id="add-location-search-input"
               label="Search Location"
               value={searchQuery}
               onChange={(e) => {
@@ -170,7 +203,7 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
           </div>
 
           {selectedLocation && (
-            <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg relative">
+            <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg relative" style={{ zIndex: 1 }}>
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -189,41 +222,66 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
                   </div>
                 </div>
                 <div 
-                  className="flex-shrink-0"
-                  style={{ position: 'relative', zIndex: 100 }}
+                  className="flex-shrink-0" 
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    console.log('Wrapper div clicked')
+                  }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation()
+                  }}
+                  style={{ position: 'relative', zIndex: 1000 }}
                 >
                   <button
+                    ref={buttonRef}
                     type="button"
                     onClick={(e) => {
+                      console.log('=== BUTTON CLICK START ===')
                       e.preventDefault()
                       e.stopPropagation()
-                      console.log('Add Location button clicked')
-                      console.log('selectedLocation:', selectedLocation)
-                      console.log('isPending:', addLocationMutation.isPending)
                       
-                      if (!selectedLocation) {
+                      // Test: Show alert to verify click works
+                      // Uncomment this line temporarily to test if click event fires:
+                      // alert('Button clicked! Unlocode: ' + selectedLocation?.unlocode)
+                      
+                      const unlocode = selectedLocation?.unlocode
+                      console.log('Button clicked!', { 
+                        selectedLocation, 
+                        isPending: addLocationMutation.isPending,
+                        unlocode,
+                        buttonRef: buttonRef.current,
+                        timestamp: new Date().toISOString()
+                      })
+                      
+                      if (!selectedLocation || !unlocode) {
+                        console.warn('No location selected in onClick')
                         toast.error('Please select a location first')
                         return
                       }
                       
                       if (addLocationMutation.isPending) {
-                        console.log('Mutation already in progress, ignoring click')
+                        console.warn('Mutation already pending in onClick')
                         return
                       }
                       
-                      console.log('Calling handleAddLocation with:', selectedLocation.unlocode)
+                      console.log('Calling handleAddLocation with unlocode:', unlocode)
+                      // Use handleAddLocation which has all the checks
                       handleAddLocation()
+                      console.log('=== BUTTON CLICK END ===')
                     }}
                     onMouseDown={(e) => {
-                      e.preventDefault()
                       e.stopPropagation()
+                      console.log('Button onMouseDown')
                     }}
-                    disabled={addLocationMutation.isPending}
-                    className="inline-flex items-center justify-center font-medium rounded transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-slate-700 text-white hover:bg-slate-800 focus:ring-slate-500 border border-slate-700 px-3 py-1.5 text-sm shadow-md hover:shadow-lg cursor-pointer"
+                    onMouseUp={(e) => {
+                      e.stopPropagation()
+                      console.log('Button onMouseUp')
+                    }}
+                    disabled={addLocationMutation.isPending || !selectedLocation}
+                    className="inline-flex items-center justify-center font-medium rounded transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-slate-700 text-white hover:bg-slate-800 focus:ring-slate-500 border border-slate-700 px-3 py-1.5 text-sm shadow-md hover:shadow-lg active:bg-slate-900 cursor-pointer"
                     style={{ 
-                      pointerEvents: addLocationMutation.isPending ? 'none' : 'auto',
-                      position: 'relative',
-                      zIndex: 100
+                      zIndex: 1000,
+                      position: 'relative'
                     }}
                   >
                     {addLocationMutation.isPending && (
@@ -253,4 +311,5 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
     </div>
   )
 }
+
 

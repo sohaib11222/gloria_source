@@ -115,7 +115,7 @@ export default function ForgotPasswordPage() {
               {step === 'reset' && 'Set New Password'}
             </CardTitle>
             <p className="text-sm text-gray-600 mt-1">
-              {step === 'email' && 'We'll send you a code to reset your password'}
+              {step === 'email' && "We'll send you a code to reset your password"}
               {step === 'verify' && 'Check your email for the 4-digit code'}
               {step === 'reset' && 'Choose a strong password for your account'}
             </p>

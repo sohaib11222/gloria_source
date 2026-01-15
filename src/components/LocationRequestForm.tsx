@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { Card, CardHeader, CardContent, CardTitle } from './ui/Card'
@@ -21,7 +21,39 @@ export const LocationRequestForm: React.FC<LocationRequestFormProps> = ({ onSucc
     reason: '',
   })
 
+  const locationNameInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
+
+  const handleFocusForm = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    console.log('Button clicked! Attempting to focus form...')
+    console.log('Input ref current:', locationNameInputRef.current)
+    
+    // Small delay to ensure DOM is ready
+    setTimeout(() => {
+      if (locationNameInputRef.current) {
+        locationNameInputRef.current.focus()
+        locationNameInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        console.log('Form focused successfully!')
+      } else {
+        console.error('Input ref is null!')
+        // Fallback: try to find the input by ID or querySelector
+        const inputById = document.getElementById('location-name-input') as HTMLInputElement
+        const inputByPlaceholder = document.querySelector('input[placeholder*="Manchester Airport"]') as HTMLInputElement
+        const input = inputById || inputByPlaceholder
+        
+        if (input) {
+          input.focus()
+          input.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          console.log('Form focused via fallback method!')
+        } else {
+          console.error('Could not find input element!')
+        }
+      }
+    }, 10)
+  }
 
   const createMutation = useMutation({
     mutationFn: (data: CreateLocationRequestRequest) => locationRequestsApi.createRequest(data),
@@ -63,9 +95,22 @@ export const LocationRequestForm: React.FC<LocationRequestFormProps> = ({ onSucc
     <Card className="transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100">
       <CardHeader className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border-b border-gray-200">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-white rounded-lg shadow-sm">
+          <button
+            type="button"
+            onClick={handleFocusForm}
+            onMouseDown={(e) => {
+              e.stopPropagation()
+            }}
+            onMouseUp={(e) => {
+              e.stopPropagation()
+            }}
+            className="p-2 bg-white rounded-lg shadow-sm hover:shadow-md hover:bg-emerald-50 active:bg-emerald-100 transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 relative z-10"
+            style={{ pointerEvents: 'auto' }}
+            aria-label="Focus form to enter location data"
+            title="Click to start entering location data"
+          >
             <Plus className="w-5 h-5 text-emerald-600" />
-          </div>
+          </button>
           <div>
             <CardTitle className="text-xl font-bold text-gray-900">Request New Location</CardTitle>
             <p className="text-sm text-gray-600 mt-1">Submit a request for a location not in the UN/LOCODE database</p>
@@ -77,6 +122,8 @@ export const LocationRequestForm: React.FC<LocationRequestFormProps> = ({ onSucc
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <Input
+                ref={locationNameInputRef}
+                id="location-name-input"
                 label="Location Name *"
                 value={formData.locationName}
                 onChange={(e) => setFormData({ ...formData, locationName: e.target.value })}

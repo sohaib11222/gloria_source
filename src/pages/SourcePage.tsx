@@ -1246,11 +1246,41 @@ export default function SourcePage() {
                     <Card className="transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100">
                       <CardHeader className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border-b border-gray-200">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 bg-white rounded-lg shadow-sm">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              
+                              console.log('Plus button clicked! Attempting to focus search input...')
+                              
+                              // Small delay to ensure DOM is ready
+                              setTimeout(() => {
+                                const searchInput = document.getElementById('add-location-search-input') as HTMLInputElement
+                                if (searchInput) {
+                                  searchInput.focus()
+                                  searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                  console.log('Search input focused successfully!')
+                                } else {
+                                  console.error('Search input not found!')
+                                }
+                              }, 10)
+                            }}
+                            onMouseDown={(e) => {
+                              e.stopPropagation()
+                            }}
+                            onMouseUp={(e) => {
+                              e.stopPropagation()
+                            }}
+                            className="p-2 bg-white rounded-lg shadow-sm hover:shadow-md hover:bg-emerald-50 active:bg-emerald-100 transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 relative z-10"
+                            style={{ pointerEvents: 'auto' }}
+                            aria-label="Focus search to add location"
+                            title="Click to start searching for a location"
+                          >
                             <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                             </svg>
-                          </div>
+                          </button>
                           <div>
                             <CardTitle className="text-xl font-bold text-gray-900">Add Location to Coverage</CardTitle>
                             <p className="text-sm text-gray-600 mt-1">Search and add new locations to your coverage</p>
