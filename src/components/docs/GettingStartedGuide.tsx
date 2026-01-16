@@ -159,18 +159,51 @@ const GettingStartedGuide: React.FC = () => {
           <h2 style={{ marginTop: 0 }}>What is a Source?</h2>
           <p>
             As a <strong>Source</strong> (Car Rental Supplier), you provide vehicle availability and booking services 
-            to Agents (OTAs) through the middleware. You receive availability requests, return offers, and handle bookings.
+            to Agents (OTAs) through the Gloria Connect middleware. You receive availability requests, return offers, and handle bookings.
           </p>
-          <p style={{ marginBottom: 0 }}>
-            <strong>Your main responsibilities:</strong>
+          
+          <h3 style={{ marginTop: '1.5rem' }}>System Architecture</h3>
+          <p>
+            Gloria Connect is a <strong>middleware platform</strong> that connects Agents (Online Travel Agencies) with Sources (Car Rental Suppliers). 
+            The system acts as a bridge, standardizing communication and handling complex operations like:
           </p>
-          <ul>
-            <li>Configure your HTTP and gRPC endpoints</li>
-            <li>Manage your branch locations</li>
-            <li>Sync location coverage with UN/LOCODEs</li>
-            <li>Create and offer agreements to agents</li>
-            <li>Handle availability requests and bookings</li>
-            <li>Maintain system health and performance</li>
+          <ul style={{ lineHeight: '1.8' }}>
+            <li><strong>Protocol Translation:</strong> Converts between HTTP REST, gRPC, and OTA XML formats</li>
+            <li><strong>Agreement Management:</strong> Manages business contracts between agents and sources</li>
+            <li><strong>Location Standardization:</strong> Maps locations to UN/LOCODE format for consistency</li>
+            <li><strong>Health Monitoring:</strong> Tracks performance and automatically manages source availability</li>
+            <li><strong>Parallel Processing:</strong> Queries multiple sources simultaneously for faster results</li>
+            <li><strong>Error Handling:</strong> Provides robust error handling and retry mechanisms</li>
+          </ul>
+
+          <h3 style={{ marginTop: '1.5rem' }}>How the System Works</h3>
+          <p>
+            When an Agent searches for vehicle availability, here's what happens:
+          </p>
+          <ol style={{ lineHeight: '1.8' }}>
+            <li><strong>Agent Submits Request:</strong> Agent frontend sends availability search to middleware</li>
+            <li><strong>Middleware Validates:</strong> Checks agreement status, location coverage, and request format</li>
+            <li><strong>Middleware Queries Sources:</strong> Calls your gRPC server (and other sources) in parallel</li>
+            <li><strong>You Return Offers:</strong> Your gRPC server returns vehicle availability and pricing</li>
+            <li><strong>Middleware Aggregates:</strong> Combines results from all sources</li>
+            <li><strong>Agent Receives Results:</strong> Agent frontend polls for and displays aggregated offers</li>
+            <li><strong>Agent Books:</strong> When agent books, middleware calls your CreateBooking endpoint</li>
+          </ol>
+
+          <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#dbeafe', border: '1px solid #3b82f6', borderRadius: '0.5rem' }}>
+            <strong>💡 Key Concept:</strong> The middleware handles all the complexity of routing, protocol conversion, 
+            and error handling. You just need to implement a simple gRPC service that responds to availability and booking requests.
+          </div>
+
+          <h3 style={{ marginTop: '1.5rem' }}>Your Main Responsibilities</h3>
+          <ul style={{ lineHeight: '1.8' }}>
+            <li><strong>Configure Endpoints:</strong> Set your HTTP and gRPC endpoint addresses</li>
+            <li><strong>Manage Branches:</strong> Import and map your rental locations to UN/LOCODEs</li>
+            <li><strong>Implement gRPC API:</strong> Build your gRPC server with 7 required methods</li>
+            <li><strong>Sync Location Coverage:</strong> Ensure your locations are properly mapped</li>
+            <li><strong>Create Agreements:</strong> Create and offer business contracts to agents</li>
+            <li><strong>Handle Requests:</strong> Respond to availability searches and booking requests</li>
+            <li><strong>Maintain Performance:</strong> Keep response times under 3 seconds to avoid exclusion</li>
           </ul>
         </section>
 
@@ -515,12 +548,113 @@ const GettingStartedGuide: React.FC = () => {
             </p>
 
             <h3>How the Middleware Calls Your API</h3>
+            <p>
+              The middleware uses an <strong>adapter pattern</strong> to communicate with sources. When you configure your 
+              gRPC endpoint, the middleware automatically selects the appropriate adapter:
+            </p>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li><strong>gRPC Adapter (Real gRPC):</strong> Used when <code>grpcEndpoint</code> is in <code>host:port</code> format (e.g., <code>localhost:51061</code>)</li>
+              <li><strong>HTTP Adapter:</strong> Used when <code>httpEndpoint</code> is configured (e.g., <code>http://localhost:9090</code>)</li>
+              <li><strong>Mock Adapter:</strong> Fallback when no adapter is configured (for testing only)</li>
+            </ul>
+            
+            <p style={{ marginTop: '1rem' }}>
+              <strong>Request Flow:</strong>
+            </p>
             <ol style={{ lineHeight: '1.8' }}>
-              <li>Agent searches for availability → Middleware calls your <code>GetAvailability</code> method</li>
-              <li>Agent creates booking → Middleware calls your <code>CreateBooking</code> method</li>
-              <li>Health checks → Middleware calls your <code>GetHealth</code> method periodically</li>
-              <li>Location sync → Middleware calls your <code>GetLocations</code> method</li>
+              <li><strong>Agent searches for availability</strong> → Middleware calls your <code>GetAvailability</code> method</li>
+              <li><strong>Agent creates booking</strong> → Middleware calls your <code>CreateBooking</code> method</li>
+              <li><strong>Health checks</strong> → Middleware calls your <code>GetHealth</code> method periodically</li>
+              <li><strong>Location sync</strong> → Middleware calls your <code>GetLocations</code> method</li>
+              <li><strong>Booking operations</strong> → Middleware calls <code>ModifyBooking</code>, <code>CancelBooking</code>, or <code>CheckBooking</code></li>
             </ol>
+
+            <h3 style={{ marginTop: '1.5rem' }}>Complete Availability Flow</h3>
+            <p>
+              Here's the detailed flow when an agent searches for availability:
+            </p>
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
+              <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0, lineHeight: '1.6' }}>
+{`1. Agent Frontend
+   └─> POST /availability/submit
+       { pickup_unlocode: "FRPAR", dropoff_unlocode: "FRPAR", ... }
+
+2. Middleware API Route
+   └─> Validates request
+   └─> Resolves agent_id and agreement_refs
+   └─> Calls gRPC Submit()
+
+3. gRPC Submit Handler
+   └─> Creates AvailabilityJob
+   └─> Finds eligible agreements (ACTIVE status)
+   └─> Checks location coverage per agreement
+   └─> Filters excluded sources (health check)
+   └─> Fan-out to source adapters (parallel)
+
+4. Source Adapter (Your gRPC Server)
+   └─> Calls GetAvailability() with:
+       - agreement_ref (REQUIRED)
+       - pickup_unlocode, dropoff_unlocode
+       - pickup_iso, dropoff_iso
+       - driver_age, residency_country
+       - vehicle_classes (optional)
+   └─> Returns VehicleOffer[] array
+
+5. Middleware Stores Results
+   └─> Stores offers in AvailabilityResult table
+   └─> Marks job as COMPLETE
+   └─> Returns request_id to agent
+
+6. Agent Frontend Polls
+   └─> GET /availability/poll?requestId=...&sinceSeq=0
+   └─> Receives incremental offers
+   └─> Displays results to user`}
+              </pre>
+            </div>
+
+            <h3 style={{ marginTop: '1.5rem' }}>Complete Booking Flow</h3>
+            <p>
+              Here's the detailed flow when an agent creates a booking:
+            </p>
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
+              <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0, lineHeight: '1.6' }}>
+{`1. Agent Frontend
+   └─> POST /bookings
+       Headers: { Idempotency-Key: "booking-123..." }
+       Body: { agreement_ref, supplier_offer_ref, ... }
+
+2. Middleware API Route
+   └─> Validates request
+   └─> Checks Idempotency-Key header (REQUIRED)
+   └─> Resolves agreement → source_id
+   └─> Calls gRPC Create()
+
+3. gRPC Create Handler
+   └─> Validates agreement is ACTIVE
+   └─> Checks idempotency (prevents duplicates)
+   └─> Gets source adapter
+   └─> Calls adapter.bookingCreate()
+
+4. Source Adapter (Your gRPC Server)
+   └─> Calls CreateBooking() with:
+       - agreement_ref (REQUIRED)
+       - supplier_offer_ref (REQUIRED)
+       - idempotency_key (REQUIRED)
+       - agent_booking_ref (optional)
+   └─> Returns BookingResponse:
+       - supplier_booking_ref
+       - status (REQUESTED/CONFIRMED/etc)
+
+5. Middleware Stores Booking
+   └─> Creates Booking record in database
+   └─> Records audit log
+   └─> Returns booking to agent
+
+6. Agent Frontend
+   └─> Receives booking confirmation
+   └─> Displays booking details`}
+              </pre>
+            </div>
 
             <h3>Required Proto File</h3>
             <p>
@@ -574,10 +708,33 @@ const GettingStartedGuide: React.FC = () => {
               <strong>⚠️ REQUIRED:</strong> Every request from the middleware includes an <code>agreement_ref</code> parameter.
               This identifies which agreement (contract) between you and the Agent is being used.
             </div>
-            <ul style={{ lineHeight: '1.8', marginTop: '1rem' }}>
-              <li><strong>Availability requests:</strong> Include <code>agreement_ref</code> in <code>AvailabilityRequest</code></li>
-              <li><strong>Booking requests:</strong> Include <code>agreement_ref</code> in all booking operations</li>
-              <li><strong>Use it to:</strong> Determine pricing, availability rules, location coverage for that specific agreement</li>
+            <p style={{ marginTop: '1rem' }}>
+              <strong>What is an Agreement?</strong> An agreement is a business contract between you (Source) and an Agent (OTA). 
+              It defines the terms of your partnership, including:
+            </p>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li>Pricing rules and commission rates</li>
+              <li>Location coverage (which locations are included)</li>
+              <li>Vehicle availability rules</li>
+              <li>Booking terms and conditions</li>
+              <li>Validity dates (start and end dates)</li>
+            </ul>
+            <p style={{ marginTop: '1rem' }}>
+              <strong>Why is agreement_ref Required?</strong>
+            </p>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li><strong>Different Pricing:</strong> You may have different rates for different agents</li>
+              <li><strong>Location Coverage:</strong> Some agreements may only cover specific locations</li>
+              <li><strong>Business Rules:</strong> Each agreement may have different terms and conditions</li>
+              <li><strong>Audit Trail:</strong> Tracks which agreement was used for each transaction</li>
+            </ul>
+            <p style={{ marginTop: '1rem' }}>
+              <strong>How to Use agreement_ref:</strong>
+            </p>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li><strong>Availability requests:</strong> Include <code>agreement_ref</code> in <code>AvailabilityRequest</code> - use it to determine pricing and availability rules</li>
+              <li><strong>Booking requests:</strong> Include <code>agreement_ref</code> in all booking operations - use it to validate the booking is allowed under that agreement</li>
+              <li><strong>Implementation:</strong> Store agreement details in your system and look them up by <code>agreement_ref</code> when processing requests</li>
             </ul>
 
             <h3>Data Formats</h3>
@@ -588,13 +745,38 @@ const GettingStartedGuide: React.FC = () => {
               <li><strong>Currency:</strong> ISO 4217 codes (e.g., <code>GBP</code>, <code>USD</code>)</li>
             </ul>
 
-            <h3>Response Time Requirements</h3>
+            <h3>Response Time Requirements & Health Monitoring</h3>
+            <p>
+              The middleware automatically monitors your source's performance and health. Understanding this system 
+              is critical for maintaining good service levels.
+            </p>
             <ul style={{ lineHeight: '1.8' }}>
-              <li><strong>Target:</strong> Under 3 seconds for most requests</li>
-              <li><strong>Timeout:</strong> 120 seconds maximum</li>
-              <li><strong>Slow Requests:</strong> Requests over 3 seconds trigger health monitoring</li>
-              <li><strong>Strikes:</strong> 3 slow requests = automatic backoff (15 min, 30 min, 1 hour, 2 hours, 4 hours)</li>
+              <li><strong>Target Response Time:</strong> Under 3 seconds for most requests</li>
+              <li><strong>Maximum Timeout:</strong> 120 seconds - requests exceeding this will timeout</li>
+              <li><strong>Slow Request Threshold:</strong> Requests over 3 seconds are marked as "slow"</li>
+              <li><strong>Health Monitoring:</strong> The system tracks:
+                <ul style={{ marginTop: '0.5rem', marginLeft: '1.5rem' }}>
+                  <li>Response latency (average, p50, p95, p99)</li>
+                  <li>Success rate (percentage of successful requests)</li>
+                  <li>Slow rate (percentage of requests over 3 seconds)</li>
+                  <li>Error rate (percentage of failed requests)</li>
+                </ul>
+              </li>
+              <li><strong>Automatic Backoff System:</strong>
+                <ul style={{ marginTop: '0.5rem', marginLeft: '1.5rem' }}>
+                  <li>3 slow requests = 15 minute backoff</li>
+                  <li>More slow requests = 30 min, 1 hour, 2 hours, 4 hours</li>
+                  <li>During backoff, your source is temporarily excluded from availability searches</li>
+                  <li>Backoff automatically clears after the timeout period</li>
+                </ul>
+              </li>
+              <li><strong>Exclusion:</strong> If your source is excluded, agents won't receive availability from you until health improves</li>
             </ul>
+            
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '0.5rem' }}>
+              <strong>⚠️ Critical:</strong> Slow responses will result in your source being temporarily excluded from availability requests. 
+              Optimize your API performance to keep response times under 3 seconds. Monitor your health status regularly in the Health tab.
+            </div>
 
             <h3>Implementation Steps</h3>
             <ol style={{ lineHeight: '1.8' }}>
@@ -768,6 +950,47 @@ const GettingStartedGuide: React.FC = () => {
               An <strong>Agreement</strong> is a business contract between you (Source) and an Agent (OTA). 
               You must create and offer an agreement before agents can search for availability or create bookings with you.
             </p>
+            
+            <h4 style={{ marginTop: '1rem' }}>Agreement Lifecycle</h4>
+            <p>
+              Agreements go through several statuses:
+            </p>
+            <ol style={{ lineHeight: '1.8' }}>
+              <li><strong>DRAFT:</strong> Agreement is created but not yet offered to the agent</li>
+              <li><strong>OFFERED:</strong> Agreement has been sent to the agent for review</li>
+              <li><strong>ACCEPTED:</strong> Agent has accepted the agreement (but not yet active)</li>
+              <li><strong>ACTIVE:</strong> Agreement is live - agents can search availability and create bookings</li>
+              <li><strong>SUSPENDED:</strong> Agreement is temporarily suspended</li>
+              <li><strong>EXPIRED:</strong> Agreement has passed its validity end date</li>
+            </ol>
+            
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '0.5rem' }}>
+              <strong>💡 Important:</strong> Only <code>ACTIVE</code> agreements allow agents to search availability and create bookings. 
+              Make sure your agreements are in ACTIVE status before expecting traffic.
+            </div>
+            
+            <h4 style={{ marginTop: '1.5rem' }}>How Agreements Work in the System</h4>
+            <p>
+              When an agent searches for availability:
+            </p>
+            <ol style={{ lineHeight: '1.8' }}>
+              <li>Agent specifies <code>agreement_refs</code> in the search request</li>
+              <li>Middleware validates agreements are <code>ACTIVE</code> status</li>
+              <li>Middleware checks location coverage for each agreement</li>
+              <li>Middleware calls your gRPC server with the <code>agreement_ref</code></li>
+              <li>You use the <code>agreement_ref</code> to determine pricing and availability rules</li>
+            </ol>
+            
+            <h4 style={{ marginTop: '1.5rem' }}>Location Coverage Per Agreement</h4>
+            <p>
+              Each agreement can have specific location coverage rules:
+            </p>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li><strong>Default Coverage:</strong> All your synced locations are available</li>
+              <li><strong>Specific Locations:</strong> You can restrict agreements to specific UN/LOCODEs</li>
+              <li><strong>Excluded Locations:</strong> You can exclude certain locations from an agreement</li>
+              <li><strong>Validation:</strong> Middleware checks location coverage before calling your API</li>
+            </ul>
 
             <h3>How to Create an Agreement</h3>
             <ol style={{ lineHeight: '1.8' }}>
@@ -917,44 +1140,169 @@ const GettingStartedGuide: React.FC = () => {
 
         {/* Best Practices */}
         <section id="best-practices" style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '0.5rem', scrollMarginTop: '100px' }}>
-          <h2 style={{ marginTop: 0 }}>Best Practices</h2>
+          <h2 style={{ marginTop: 0 }}>Best Practices & Performance Optimization</h2>
+          
+          <h3 style={{ marginTop: '1rem' }}>Performance</h3>
           <ul style={{ lineHeight: '1.8' }}>
             <li>
-              <strong>Endpoint Performance:</strong> Keep your HTTP and gRPC endpoints responsive. 
-              Slow responses can lead to automatic exclusion from availability searches.
+              <strong>Response Time:</strong> Keep your HTTP and gRPC endpoints responsive (under 3 seconds). 
+              Slow responses trigger health monitoring and can lead to automatic exclusion from availability searches.
             </li>
+            <li>
+              <strong>Caching:</strong> Cache frequently accessed data (locations, vehicle classes, pricing rules) to reduce database queries.
+            </li>
+            <li>
+              <strong>Connection Pooling:</strong> Use connection pooling for database connections to improve performance.
+            </li>
+            <li>
+              <strong>Async Processing:</strong> For complex availability searches, consider async processing and return results incrementally.
+            </li>
+            <li>
+              <strong>Timeout Handling:</strong> Set appropriate timeouts for external API calls to prevent hanging requests.
+            </li>
+          </ul>
+
+          <h3 style={{ marginTop: '1.5rem' }}>Location Management</h3>
+          <ul style={{ lineHeight: '1.8' }}>
             <li>
               <strong>Location Mapping:</strong> Always map branches to UN/LOCODEs after import. 
               Unmapped branches won't appear in availability searches.
             </li>
             <li>
-              <strong>Regular Syncs:</strong> Sync your location coverage regularly, especially after adding new branches.
+              <strong>Regular Syncs:</strong> Sync your location coverage regularly, especially after adding new branches or updating location data.
             </li>
             <li>
-              <strong>Agreement Management:</strong> Keep track of agreement validity dates and renew them before expiration.
+              <strong>Location Validation:</strong> Verify UN/LOCODEs exist in the database before mapping branches.
             </li>
             <li>
-              <strong>Error Handling:</strong> Ensure your endpoints return proper error responses. 
+              <strong>Location Requests:</strong> Request new locations early if you need locations that don't exist in the UN/LOCODE database.
+            </li>
+          </ul>
+
+          <h3 style={{ marginTop: '1.5rem' }}>Agreement Management</h3>
+          <ul style={{ lineHeight: '1.8' }}>
+            <li>
+              <strong>Validity Dates:</strong> Keep track of agreement validity dates and renew them before expiration.
+            </li>
+            <li>
+              <strong>Status Monitoring:</strong> Regularly check agreement status to ensure they remain ACTIVE.
+            </li>
+            <li>
+              <strong>Location Coverage:</strong> Configure location coverage per agreement to control which locations are available to each agent.
+            </li>
+            <li>
+              <strong>Agreement References:</strong> Use clear, unique agreement references (e.g., <code>AG-2025-001</code>) for easy tracking.
+            </li>
+          </ul>
+
+          <h3 style={{ marginTop: '1.5rem' }}>API Implementation</h3>
+          <ul style={{ lineHeight: '1.8' }}>
+            <li>
+              <strong>Error Handling:</strong> Ensure your endpoints return proper gRPC error codes and messages. 
               The middleware logs all errors for debugging.
             </li>
             <li>
-              <strong>Testing:</strong> Run verification tests regularly to ensure everything is working correctly.
+              <strong>Idempotency:</strong> Always check <code>idempotency_key</code> in CreateBooking to prevent duplicate bookings.
+            </li>
+            <li>
+              <strong>agreement_ref Usage:</strong> Always use <code>agreement_ref</code> to determine pricing, availability, and business rules.
+            </li>
+            <li>
+              <strong>supplier_offer_ref:</strong> Always return a unique <code>supplier_offer_ref</code> in availability responses. 
+              If missing, the system will generate one, but it's better to provide your own.
+            </li>
+            <li>
+              <strong>Data Validation:</strong> Validate all input parameters (UN/LOCODEs, dates, vehicle classes) before processing.
+            </li>
+          </ul>
+
+          <h3 style={{ marginTop: '1.5rem' }}>Testing & Monitoring</h3>
+          <ul style={{ lineHeight: '1.8' }}>
+            <li>
+              <strong>Verification:</strong> Run verification tests regularly to ensure all endpoints are working correctly.
+            </li>
+            <li>
+              <strong>Health Monitoring:</strong> Check your health status regularly in the Health tab to catch performance issues early.
+            </li>
+            <li>
+              <strong>Connection Testing:</strong> Use the gRPC connection test in the Dashboard to verify connectivity before going live.
+            </li>
+            <li>
+              <strong>Logging:</strong> Implement comprehensive logging in your gRPC server for debugging and monitoring.
+            </li>
+            <li>
+              <strong>Error Tracking:</strong> Monitor error rates and investigate any spikes in failures.
+            </li>
+          </ul>
+
+          <h3 style={{ marginTop: '1.5rem' }}>Security</h3>
+          <ul style={{ lineHeight: '1.8' }}>
+            <li>
+              <strong>Network Security:</strong> Ensure your gRPC server is only accessible from the middleware server (firewall rules).
+            </li>
+            <li>
+              <strong>Authentication:</strong> Consider implementing authentication/authorization in your gRPC server if needed.
+            </li>
+            <li>
+              <strong>Data Validation:</strong> Validate and sanitize all input data to prevent injection attacks.
+            </li>
+            <li>
+              <strong>Rate Limiting:</strong> Implement rate limiting to prevent abuse of your API.
             </li>
           </ul>
         </section>
 
         {/* Next Steps */}
         <section id="next-steps" style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#ecfdf5', border: '1px solid #86efac', borderRadius: '0.5rem', scrollMarginTop: '100px' }}>
-          <h2 style={{ marginTop: 0 }}>Next Steps</h2>
+          <h2 style={{ marginTop: 0 }}>Next Steps & Going Live</h2>
+          
+          <h3 style={{ marginTop: '1rem' }}>Pre-Launch Checklist</h3>
           <ol style={{ lineHeight: '1.8' }}>
-            <li>Complete all setup steps above</li>
-            <li>Run verification and ensure all tests pass</li>
-            <li>Create and offer agreements to agents</li>
-            <li>Monitor your health status regularly</li>
-            <li>Review the <strong>API Reference</strong> for endpoint details</li>
-            <li>Check the <strong>SDK Guide</strong> if you're building integrations</li>
-            <li>Contact support if you encounter any issues</li>
+            <li><strong>Complete Setup:</strong> Finish all setup steps above (account, endpoints, branches, locations)</li>
+            <li><strong>Implement gRPC API:</strong> Build and test your gRPC server with all 7 required methods</li>
+            <li><strong>Test Connection:</strong> Use the gRPC connection test in the Dashboard to verify connectivity</li>
+            <li><strong>Run Verification:</strong> Run verification tests and ensure all tests pass</li>
+            <li><strong>Map Locations:</strong> Ensure all branches are mapped to UN/LOCODEs</li>
+            <li><strong>Sync Locations:</strong> Sync your location coverage to update the middleware</li>
+            <li><strong>Create Agreements:</strong> Create and offer agreements to agents</li>
+            <li><strong>Wait for Acceptance:</strong> Ensure agents accept agreements (status becomes ACTIVE)</li>
+            <li><strong>Performance Test:</strong> Test your API performance to ensure response times are under 3 seconds</li>
+            <li><strong>Monitor Health:</strong> Check your health status regularly to catch issues early</li>
           </ol>
+
+          <h3 style={{ marginTop: '1.5rem' }}>Documentation & Resources</h3>
+          <ul style={{ lineHeight: '1.8' }}>
+            <li><strong>API Reference:</strong> Review the complete API Reference guide for detailed endpoint specifications</li>
+            <li><strong>SDK Guide:</strong> Check the SDK Guide for code examples in your preferred language (Go, Java, JavaScript, Python, PHP, Perl, TypeScript)</li>
+            <li><strong>Proto File:</strong> Download <code>source_provider.proto</code> from the API Reference or use <code>GET /docs/proto/source_provider.proto</code></li>
+            <li><strong>Health Monitoring:</strong> Understand the health monitoring system to maintain good performance</li>
+            <li><strong>Error Handling:</strong> Review error handling best practices in the API Reference</li>
+          </ul>
+
+          <h3 style={{ marginTop: '1.5rem' }}>Ongoing Maintenance</h3>
+          <ul style={{ lineHeight: '1.8' }}>
+            <li><strong>Monitor Health:</strong> Check your health status regularly in the Health tab</li>
+            <li><strong>Update Locations:</strong> Sync locations whenever you add new branches or update location data</li>
+            <li><strong>Agreement Management:</strong> Monitor agreement status and renew before expiration</li>
+            <li><strong>Performance Optimization:</strong> Continuously optimize your API to maintain sub-3-second response times</li>
+            <li><strong>Error Monitoring:</strong> Monitor error rates and investigate any issues promptly</li>
+            <li><strong>Regular Testing:</strong> Run verification tests periodically to ensure everything is working</li>
+          </ul>
+
+          <h3 style={{ marginTop: '1.5rem' }}>Troubleshooting</h3>
+          <p>
+            If you encounter issues:
+          </p>
+          <ul style={{ lineHeight: '1.8' }}>
+            <li><strong>Check Health Status:</strong> Verify your source is not excluded due to poor performance</li>
+            <li><strong>Review Verification Results:</strong> Check which tests are failing and fix the issues</li>
+            <li><strong>Check Logs:</strong> Review backend logs for detailed error messages</li>
+            <li><strong>Test Connection:</strong> Use the gRPC connection test to verify connectivity</li>
+            <li><strong>Validate Endpoints:</strong> Ensure your gRPC endpoint is correct and accessible</li>
+            <li><strong>Check Agreement Status:</strong> Verify agreements are ACTIVE and not expired</li>
+            <li><strong>Location Coverage:</strong> Ensure locations are properly mapped and synced</li>
+            <li><strong>Contact Support:</strong> If issues persist, contact your system administrator or support team</li>
+          </ul>
         </section>
 
         {/* Support */}
