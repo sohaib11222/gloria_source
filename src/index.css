@@ -44,19 +44,21 @@ body {
 @keyframes fadeIn {
   from {
     opacity: 0;
+    transform: translateY(2px);
   }
   to {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
 /* Simplified animations - fade only */
 .animate-in {
-  animation: fadeIn 0.2s ease-out;
+  animation: fadeIn 0.15s ease-in-out;
 }
 
 .fade-in-0 {
-  animation: fadeIn 0.2s ease-out;
+  animation: fadeIn 0.15s ease-in-out;
 }
 
 /* Focus visible styles - navy accent */
@@ -80,4 +82,27 @@ body {
 .skeleton {
   background: #f3f4f6;
   background-size: 1000px 100%;
+}
+
+/* Toast close button fix */
+[data-hot-toast] {
+  z-index: 9999 !important;
+}
+
+[data-hot-toast] button[aria-label] {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  z-index: 10000 !important;
+  position: relative !important;
+}
+
+/* Ensure toast container is above everything */
+.go4109123758 {
+  z-index: 9999 !important;
+}
+
+.go4109123758 button {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  z-index: 10000 !important;
 }

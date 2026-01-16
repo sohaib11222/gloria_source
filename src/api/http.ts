@@ -26,16 +26,57 @@ export class HttpClient {
     endpoint: string,
     options: HttpOptions = {}
   ): Promise<T> {
-    const { baseURL, ...fetchOptions } = options
+    const { baseURL, headers: providedHeaders, ...fetchOptions } = options
     const url = `${baseURL || this.baseURL}${endpoint}`
+    
+    // Check if body is FormData - if so, don't set Content-Type (browser will set it with boundary)
+    const isFormData = fetchOptions.body instanceof FormData
+    
+    // Get token from localStorage for auth
+    const token = localStorage.getItem('token')
+    
+    // Start with default headers (skip Content-Type for FormData)
+    const headers: Record<string, string> = {}
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json'
+    }
+    
+    // Add provided headers (convert to plain object if needed)
+    if (providedHeaders) {
+      if (providedHeaders instanceof Headers) {
+        providedHeaders.forEach((value, key) => {
+          // Don't override Content-Type for FormData - browser needs to set it
+          if (!(isFormData && key.toLowerCase() === 'content-type')) {
+            headers[key] = value
+          }
+        })
+      } else if (Array.isArray(providedHeaders)) {
+        providedHeaders.forEach(([key, value]) => {
+          // Don't override Content-Type for FormData - browser needs to set it
+          if (!(isFormData && key.toLowerCase() === 'content-type')) {
+            headers[key] = value
+          }
+        })
+      } else {
+        const providedHeadersObj = providedHeaders as Record<string, string>
+        Object.keys(providedHeadersObj).forEach(key => {
+          // Don't override Content-Type for FormData - browser needs to set it
+          if (!(isFormData && key.toLowerCase() === 'content-type')) {
+            headers[key] = providedHeadersObj[key]
+          }
+        })
+      }
+    }
+    
+    // ALWAYS set Authorization header if token exists
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
     
     try {
       const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...fetchOptions.headers,
-        },
         ...fetchOptions,
+        headers: headers as HeadersInit,
       })
 
       if (!response.ok) {
@@ -68,10 +109,13 @@ export class HttpClient {
   }
 
   async post<T = any>(endpoint: string, data?: any, options?: HttpOptions): Promise<T> {
+    // Check if data is FormData - if so, send it as-is without stringifying
+    const isFormData = data instanceof FormData
+    
     return this.request<T>(endpoint, {
       ...options,
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ? (isFormData ? data : JSON.stringify(data)) : undefined,
     })
   }
 

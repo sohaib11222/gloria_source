@@ -43,7 +43,7 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
 
-  const { data: agreementsData, isLoading, refetch } = useQuery({
+  const { data: agreementsData, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['my-agreements', statusFilter],
     queryFn: async () => {
       const response = await api.get('/agreements', {
@@ -56,6 +56,7 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
     },
     enabled: !!user?.company?.id,
     refetchInterval: 30000, // Refetch every 30 seconds
+    placeholderData: (previousData) => previousData, // Keep previous data visible during refetch
   })
 
   const agreements: Agreement[] = (agreementsData?.items || []) as Agreement[]
@@ -91,20 +92,11 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
     ? agreements 
     : agreements.filter((ag) => ag.status === statusFilter)
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-12">
-          <div className="flex justify-center">
-            <Loader />
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
+  // Only show loading spinner on initial load, not on refetch
+  const isInitialLoading = isLoading && !agreementsData
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-200">
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">

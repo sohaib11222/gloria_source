@@ -762,7 +762,7 @@ export default function SourcePage() {
         {/* Main content area */}
         <main className="flex-1 overflow-y-auto">
           {activeTab === 'docs' ? (
-            <div className="max-w-6xl mx-auto px-6 py-8">
+            <div className="max-w-6xl mx-auto px-6 py-8 animate-in fade-in duration-200">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
                 <h3 className="text-lg font-semibold text-blue-900 mb-2">API Documentation</h3>
                 <p className="text-sm text-blue-700 mb-4">Click the "Docs" link in the sidebar to open the full API documentation in a new tab.</p>
@@ -781,16 +781,22 @@ export default function SourcePage() {
             </div>
           ) : (
             <div className="max-w-6xl mx-auto px-6 py-8">
+              <div 
+                key={activeTab}
+                className="animate-in fade-in duration-200"
+              >
                 {activeTab === 'dashboard' && (
                 <>
                   {/* Header */}
                   <div className="mb-8">
                     <div className="flex items-center gap-4 mb-4">
-                      <svg className="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
+                      <div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl shadow-sm">
+                        <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                      </div>
                       <div>
-                        <h1 className="text-3xl font-semibold text-gray-900">
+                        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                           Overview
                         </h1>
                         <p className="mt-2 text-gray-600 font-medium">Monitor your source health and agreements</p>
@@ -799,14 +805,16 @@ export default function SourcePage() {
                     
                     {/* Company Info Card */}
                     {user?.company && (
-                      <Card className="mb-6">
+                      <Card className="mb-6 border border-gray-200 shadow-sm">
                         <CardContent className="p-6">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-4">
-                                <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                </svg>
+                                <div className="p-2 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg">
+                                  <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                  </svg>
+                                </div>
                                 <div>
                                   <h3 className="text-lg font-bold text-gray-900">Company Information</h3>
                                   <p className="text-sm text-gray-500">Your source identification details</p>
@@ -847,14 +855,16 @@ export default function SourcePage() {
                                 </div>
                               </div>
                               
-                              <div className="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                              <div className="p-4 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-l-4 border-blue-400 rounded-lg">
                                 <div className="flex items-start gap-3">
-                                  <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                                  </svg>
+                                  <div className="p-1.5 bg-blue-100 rounded-lg flex-shrink-0 mt-0.5">
+                                    <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                    </svg>
+                                  </div>
                                   <div>
-                                    <p className="text-sm font-semibold text-amber-900 mb-1">API Integration Tip</p>
-                                    <p className="text-xs text-amber-800 leading-relaxed">
+                                    <p className="text-sm font-semibold text-blue-900 mb-1">API Integration Tip</p>
+                                    <p className="text-xs text-blue-800 leading-relaxed">
                                       Use your Company ID in API requests where <code className="px-1.5 py-0.5 bg-white rounded font-mono text-xs font-bold">sourceId</code> or <code className="px-1.5 py-0.5 bg-white rounded font-mono text-xs font-bold">YOUR_COMPANY_ID</code> is required.
                                     </p>
                                   </div>
@@ -870,19 +880,19 @@ export default function SourcePage() {
                   {/* Quick Stats */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     {/* Active Agreements Card */}
-                    <Card className="border border-gray-200">
+                    <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
-                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Active Agreements</p>
-                            <p className="text-3xl font-semibold text-gray-900 mb-1">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Active Agreements</p>
+                            <p className="text-3xl font-bold text-gray-900 mb-1">
                               {(agents || []).flatMap(a => a.agentAgreements || []).filter(a => a.status === 'ACCEPTED' || a.status === 'ACTIVE').length}
                             </p>
                             <p className="text-xs text-gray-500">
                               {(agents || []).flatMap(a => a.agentAgreements || []).filter(a => a.status === 'OFFERED').length} pending
                             </p>
                           </div>
-                          <div className="p-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-2xl shadow-lg">
+                          <div className="p-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl shadow-sm">
                             <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
@@ -892,7 +902,7 @@ export default function SourcePage() {
                     </Card>
 
                     {/* Health Status Card */}
-                    <Card className={`transform transition-all duration-300 hover:shadow-xl hover:scale-[1.02] border-2 ${
+                    <Card className={`transform transition-all duration-300 hover:shadow-md border-2 shadow-sm ${
                       health?.healthy ? 'border-green-100' : health?.excludedUntil && new Date(health.excludedUntil).getTime() > Date.now() ? 'border-red-100' : 'border-yellow-100'
                     }`}>
                       <CardContent className="p-6">
@@ -918,7 +928,7 @@ export default function SourcePage() {
                               <p className="text-xs text-gray-500 mt-1">{health.sampleCount} samples</p>
                             )}
                           </div>
-                          <div className={`p-3 rounded ${
+                          <div className={`p-3 rounded-lg ${
                             health?.healthy ? 'bg-green-100' : 
                             health?.excludedUntil && new Date(health.excludedUntil).getTime() > Date.now() ? 'bg-red-100' : 
                             'bg-yellow-100'
@@ -936,7 +946,7 @@ export default function SourcePage() {
                     </Card>
 
                     {/* gRPC Status Card */}
-                    <Card className={`border ${
+                    <Card className={`border shadow-sm hover:shadow-md transition-shadow duration-200 ${
                       grpcTestResult?.ok ? 'border-green-200' : endpointConfig?.grpcEndpoint ? 'border-yellow-200' : 'border-gray-200'
                     }`}>
                       <CardContent className="p-6">
@@ -962,7 +972,7 @@ export default function SourcePage() {
                               <p className="text-xs text-yellow-600 mt-1">Test required</p>
                             )}
                           </div>
-                          <div className={`p-3 rounded ${
+                          <div className={`p-3 rounded-lg ${
                             grpcTestResult?.ok ? 'bg-green-100' : 
                             endpointConfig?.grpcEndpoint ? 'bg-yellow-100' : 
                             'bg-gray-100'
@@ -2255,6 +2265,7 @@ export default function SourcePage() {
                   )}
                 </>
               )}
+              </div>
               </div>
             )}
         </main>
