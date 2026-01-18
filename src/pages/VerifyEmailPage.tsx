@@ -94,8 +94,14 @@ export default function VerifyEmailPage() {
 
       toast.success(response.message || 'Email verified successfully!')
       
-      // Navigate to source page
-      navigate('/source')
+      // Check approval status before navigating
+      if (response.user?.company?.approvalStatus !== 'APPROVED') {
+        // Account is pending approval, will be handled by ProtectedRoute
+        navigate('/source')
+      } else {
+        // Account is approved, navigate to dashboard
+        navigate('/source')
+      }
     } catch (error: any) {
       console.error('Verification failed:', error)
       toast.error(error.response?.data?.message || 'Verification failed. Please check your OTP.')

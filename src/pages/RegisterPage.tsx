@@ -62,7 +62,7 @@ export default function RegisterPage() {
     try {
       await authApi.register(data)
       
-      toast.success('Registration successful! Please check your email for the verification code.')
+      toast.success('Registration successful! Please check your email for the verification code. After verification, your account will be pending admin approval.')
       
       // Navigate to OTP verification page with email
       navigate('/verify-email', { state: { email: data.email } })
@@ -238,24 +238,6 @@ export default function RegisterPage() {
               </p>
             </div>
 
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="space-y-3">
-                <p className="text-xs font-medium text-gray-700 text-center">What you'll get:</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { icon: '📦', text: 'Manage inventory' },
-                    { icon: '📋', text: 'Track bookings' },
-                    { icon: '📊', text: 'View analytics' },
-                    { icon: '🔌', text: 'API access' }
-                  ].map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded p-2">
-                      <span className="text-base">{item.icon}</span>
-                      <span className="text-xs text-gray-700">{item.text}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
 
