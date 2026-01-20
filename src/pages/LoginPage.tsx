@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import toast from 'react-hot-toast'
+import logoImage from '../assets/logo.jpg'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -145,11 +146,11 @@ export default function LoginPage() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="flex items-center justify-center mb-4">
-            <div className="p-3 bg-slate-700 rounded">
-              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-            </div>
+            <img 
+              src={logoImage} 
+              alt="Gloria Connect" 
+              className="h-16 w-auto object-contain"
+            />
           </div>
           <h2 className="text-2xl font-semibold text-gray-900 mb-2">
             Gloria Connect

@@ -5,12 +5,14 @@ import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Mail, ArrowLeft, CheckCircle, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
+import logoImage from '../assets/logo.jpg'
 
 export default function VerifyEmailPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [otp, setOtp] = useState(['', '', '', ''])
   const [isLoading, setIsLoading] = useState(false)
+  const lastSubmittedOtp = useRef<string>('')
   const inputRefs = [
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
@@ -79,7 +81,18 @@ export default function VerifyEmailPage() {
       return
     }
 
+    // Prevent multiple submissions
+    if (isLoading) {
+      return
+    }
+
+    // Prevent submitting the same OTP twice
+    if (lastSubmittedOtp.current === otpValue) {
+      return
+    }
+
     setIsLoading(true)
+    lastSubmittedOtp.current = otpValue
 
     try {
       const response = await authApi.verifyEmail({
@@ -107,6 +120,7 @@ export default function VerifyEmailPage() {
       toast.error(error.response?.data?.message || 'Verification failed. Please check your OTP.')
       // Clear OTP on error
       setOtp(['', '', '', ''])
+      lastSubmittedOtp.current = '' // Reset last submitted OTP on error
       inputRefs[0].current?.focus()
     } finally {
       setIsLoading(false)
@@ -123,9 +137,11 @@ export default function VerifyEmailPage() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="flex items-center justify-center mb-4">
-            <div className="p-3 bg-slate-700 rounded">
-              <Mail className="w-8 h-8 text-white" />
-            </div>
+            <img 
+              src={logoImage} 
+              alt="Gloria Connect" 
+              className="h-16 w-auto object-contain"
+            />
           </div>
           <h2 className="text-2xl font-semibold text-gray-900 mb-2">
             Verify Your Email
