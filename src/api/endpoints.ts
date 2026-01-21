@@ -6,6 +6,7 @@ export interface EndpointConfig {
   type: string
   httpEndpoint: string
   grpcEndpoint: string
+  branchEndpointUrl?: string
   adapterType: string
   description: string
   status: string
@@ -18,6 +19,7 @@ export interface EndpointConfig {
 export interface UpdateEndpointRequest {
   httpEndpoint: string
   grpcEndpoint: string
+  branchEndpointUrl?: string
 }
 
 export interface UpdateEndpointResponse {
@@ -73,6 +75,23 @@ export interface SourceGrpcTestResponse {
   tested: string[]
 }
 
+export interface ImportBranchesResponse {
+  message?: string
+  imported?: number
+  updated?: number
+  total?: number
+  skipped?: number
+  summary?: {
+    total: number
+    valid: number
+    invalid: number
+    imported: number
+    updated: number
+    skipped: number
+  }
+  validationErrors?: any[]
+}
+
 export const endpointsApi = {
   getConfig: async (): Promise<EndpointConfig> => {
     const response = await api.get('/endpoints/config')
@@ -118,7 +137,7 @@ export const endpointsApi = {
     return response.data
   },
 
-  importBranches: async (): Promise<{ message: string; imported: number; updated: number; total: number }> => {
+  importBranches: async (): Promise<ImportBranchesResponse> => {
     const response = await api.post('/sources/import-branches')
     return response.data
   },

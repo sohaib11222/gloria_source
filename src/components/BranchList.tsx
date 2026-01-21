@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Edit, MapPin, X, Plus, Filter, Store, Building2, Globe, Upload } from 'lucide-react'
+import { Search, Edit, MapPin, X, Plus, Filter, Store, Building2, Globe, Upload, Settings } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -11,7 +11,10 @@ import { branchesApi, Branch } from '../api/branches'
 import { endpointsApi } from '../api/endpoints'
 import { BranchCreateModal } from './BranchCreateModal'
 import { BranchUploadModal } from './BranchUploadModal'
+import { ValidationErrorsDisplay } from './ValidationErrorsDisplay'
+import { Modal } from './ui/Modal'
 import toast from 'react-hot-toast'
+import { ImportBranchesResponse } from '../api/endpoints'
 
 interface BranchListProps {
   onEdit?: (branch: Branch) => void
@@ -28,9 +31,27 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
+  const [showImportResult, setShowImportResult] = useState(false)
+  const [importResult, setImportResult] = useState<ImportBranchesResponse | null>(null)
+  const [isEndpointConfigOpen, setIsEndpointConfigOpen] = useState(false)
+  const [endpointUrl, setEndpointUrl] = useState('')
+  const [isSavingEndpoint, setIsSavingEndpoint] = useState(false)
   const limit = 25
 
   const queryClient = useQueryClient()
+
+  // Load endpoint configuration
+  const { data: endpointConfig } = useQuery({
+    queryKey: ['endpointConfig'],
+    queryFn: () => endpointsApi.getConfig(),
+  })
+
+  // Set endpoint URL when config loads
+  useEffect(() => {
+    if (endpointConfig?.branchEndpointUrl) {
+      setEndpointUrl(endpointConfig.branchEndpointUrl)
+    }
+  }, [endpointConfig])
 
   // Debounce search input
   useEffect(() => {
@@ -68,19 +89,103 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
 
   const importBranchesMutation = useMutation({
     mutationFn: async () => {
-      return await endpointsApi.importBranches()
+      try {
+        const response = await endpointsApi.importBranches()
+        return response
+      } catch (error: any) {
+        // Handle 422 responses - backend now returns 200, but keep this for backwards compatibility
+        if (error.response?.status === 422 && error.response?.data) {
+          // Extract the response data - it contains summary and validationErrors
+          const data = error.response.data
+          console.warn('[BranchList] Received 422 response (should be 200 now):', data)
+          return {
+            ...data,
+            summary: data.summary || {
+              total: data.total || 0,
+              valid: 0,
+              invalid: data.summary?.invalid || (data.validationErrors?.length || 0),
+              imported: data.summary?.imported || data.imported || 0,
+              updated: data.summary?.updated || data.updated || 0,
+              skipped: data.summary?.skipped || data.skipped || 0
+            },
+            validationErrors: data.validationErrors || data.invalidDetails || []
+          }
+        }
+        // Re-throw other errors
+        throw error
+      }
     },
     onSuccess: (data) => {
+      // Debug logging
+      console.log('[BranchList] Import result:', data)
+      
+      // Get validation errors and invalid count from backend
+      const invalidCount = data.summary?.invalid || data.validationErrors?.length || 0
+      const validationErrors = data.validationErrors || data.invalidDetails || []
+      
+      console.log('[BranchList] Validation errors from backend:', {
+        invalidCount,
+        validationErrorsCount: validationErrors.length,
+        validationErrors,
+        summary: data.summary
+      })
+      
+      // Normalize the data structure - include validation errors even if branches were imported
+      const normalizedData = {
+        ...data,
+        validationErrors: validationErrors, // Always include validation errors if present
+        summary: {
+          total: data.summary?.total || data.total || 0,
+          valid: data.summary?.valid || Math.max(0, (data.summary?.total || data.total || 0) - invalidCount),
+          invalid: invalidCount, // Show actual invalid count from backend
+          imported: data.summary?.imported || data.imported || 0,
+          updated: data.summary?.updated || data.updated || 0,
+          skipped: data.summary?.skipped || data.skipped || 0
+        }
+      }
+      
+      console.log('[BranchList] Normalized data:', normalizedData)
+      
       // Invalidate and refetch branches
       queryClient.invalidateQueries({ queryKey: ['branches'] })
-      toast.success(
-        `Branches imported successfully! ${data.imported} imported, ${data.updated} updated, ${data.total} total.`,
-        { duration: 5000 }
-      )
+      
+      // Store result and show modal
+      setImportResult(normalizedData)
+      setShowImportResult(true)
+      
+      // Show appropriate toast based on result - use normalized summary
+      const summary = normalizedData.summary
+      
+      if (summary.imported + summary.updated > 0) {
+        // Success (complete or partial)
+        if (summary.skipped > 0) {
+          toast.success(
+            `Branches imported successfully! ${summary.imported} imported, ${summary.updated} updated, ${summary.skipped} skipped.`,
+            { duration: 5000 }
+          )
+        } else {
+          toast.success(
+            `Branches imported successfully! ${summary.imported} imported, ${summary.updated} updated.`,
+            { duration: 5000 }
+          )
+        }
+      } else if (summary.skipped > 0) {
+        // All skipped
+        toast.warning(
+          `Import completed but no branches were imported. ${summary.skipped} branch(es) were skipped.`,
+          { duration: 7000 }
+        )
+      } else {
+        // No branches found
+        toast.error(
+          `No branches found to import.`,
+          { duration: 5000 }
+        )
+      }
     },
     onError: (error: any) => {
       console.error('Failed to import branches:', error)
-      const errorMessage = error.response?.data?.message || 'Failed to import branches from endpoint'
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to import branches from endpoint'
       toast.error(errorMessage)
     },
     onSettled: () => {
@@ -100,6 +205,24 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
   const handleUploadSuccess = () => {
     // Refresh branches list
     queryClient.invalidateQueries({ queryKey: ['branches'] })
+  }
+
+  const handleSaveEndpointUrl = async () => {
+    setIsSavingEndpoint(true)
+    try {
+      await endpointsApi.updateConfig({
+        httpEndpoint: endpointConfig?.httpEndpoint || '',
+        grpcEndpoint: endpointConfig?.grpcEndpoint || '',
+        branchEndpointUrl: endpointUrl,
+      })
+      queryClient.invalidateQueries({ queryKey: ['endpointConfig'] })
+      setIsEndpointConfigOpen(false)
+      toast.success('Branch endpoint URL configured successfully')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to save endpoint URL')
+    } finally {
+      setIsSavingEndpoint(false)
+    }
   }
 
   return (
@@ -220,10 +343,21 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
               <Button
                 variant="secondary"
                 size="sm"
+                onClick={() => setIsEndpointConfigOpen(true)}
+                className="flex items-center gap-2 shadow-md hover:shadow-lg"
+                title="Configure branch import endpoint URL"
+              >
+                <Settings className="w-4 h-4" />
+                Configure Endpoint
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={handleImportBranches}
                 loading={isImporting}
                 disabled={isImporting}
                 className="flex items-center gap-2 shadow-md hover:shadow-lg"
+                title={endpointConfig?.branchEndpointUrl ? `Import from ${endpointConfig.branchEndpointUrl}` : 'Import from configured endpoint'}
               >
                 <Upload className="w-4 h-4" />
                 Import from Endpoint
@@ -416,6 +550,83 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
         onClose={() => setIsUploadModalOpen(false)}
         onSuccess={handleUploadSuccess}
       />
+
+      {/* Import Results Modal */}
+      <Modal
+        isOpen={showImportResult && importResult !== null}
+        onClose={() => {
+          setShowImportResult(false)
+          setImportResult(null)
+        }}
+        title="Import Results"
+        size="xl"
+      >
+        {importResult && (
+          <div className="max-h-[85vh] overflow-y-auto -mx-6 -mt-6 px-6 pt-6">
+            <ValidationErrorsDisplay
+              summary={importResult.summary || {
+                total: importResult.total || 0,
+                valid: importResult.summary?.valid || Math.max(0, (importResult.total || 0) - (importResult.summary?.invalid || importResult.validationErrors?.length || 0)),
+                invalid: importResult.summary?.invalid || importResult.validationErrors?.length || 0,
+                imported: importResult.summary?.imported || importResult.imported || 0,
+                updated: importResult.summary?.updated || importResult.updated || 0,
+                skipped: importResult.summary?.skipped || importResult.skipped || 0,
+              }}
+              validationErrors={importResult.validationErrors || importResult.invalidDetails || []}
+              message={importResult.message || 'Import completed'}
+            />
+          </div>
+        )}
+      </Modal>
+
+      {/* Endpoint Configuration Modal */}
+      <Modal
+        isOpen={isEndpointConfigOpen}
+        onClose={() => setIsEndpointConfigOpen(false)}
+        title="Configure Branch Import Endpoint"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Branch Endpoint URL
+            </label>
+            <Input
+              value={endpointUrl}
+              onChange={(e) => setEndpointUrl(e.target.value)}
+              placeholder="https://example.com/loctest.php"
+              helperText="Enter the URL of your endpoint that returns branch data in OTA format or PHP var_dump format"
+            />
+          </div>
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <strong>Supported formats:</strong>
+            </p>
+            <ul className="text-xs text-blue-700 mt-2 list-disc list-inside space-y-1">
+              <li>OTA XML format (OTA_VehLocSearchRS)</li>
+              <li>PHP var_dump output format</li>
+              <li>JSON format with Branches array</li>
+            </ul>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+            <Button
+              variant="secondary"
+              onClick={() => setIsEndpointConfigOpen(false)}
+              type="button"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSaveEndpointUrl}
+              loading={isSavingEndpoint}
+              disabled={!endpointUrl.trim()}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

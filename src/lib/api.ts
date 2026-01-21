@@ -109,6 +109,17 @@ api.interceptors.request.use(
 // Response interceptor to handle errors and log responses
 api.interceptors.response.use(
   (response) => {
+    // Special handling for import-branches endpoint: 422 responses contain validation errors
+    // but should be treated as partial success, not errors
+    if (response.config.url?.includes('/sources/import-branches') || response.config.url?.includes('/sources/upload-branches')) {
+      // For import/upload endpoints, 422 means validation errors but response contains useful data
+      if (response.status === 422 && response.data) {
+        // Extract the response data - it contains summary and validationErrors
+        // Don't reject, return the response so the mutation can handle it
+        return response
+      }
+    }
+    
     // Check if response is successful (200-299)
     if (response.status >= 200 && response.status < 300) {
       // Log successful responses for debugging
@@ -130,7 +141,7 @@ api.interceptors.response.use(
       return response
     }
     
-    // For non-2xx status codes, treat as error
+    // For non-2xx status codes (except 422 for import endpoints), treat as error
     const error = new Error(`HTTP ${response.status}: ${response.statusText}`) as any
     error.response = response
     error.status = response.status
