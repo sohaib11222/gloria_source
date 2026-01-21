@@ -2,45 +2,75 @@ import axios from 'axios'
 import toast from 'react-hot-toast'
 import { API_BASE_URL } from './apiConfig'
 
+// Get API base URL - recalculate it to ensure it's current and fix protocol if needed
+function getCurrentApiBaseUrl(): string {
+  // If explicitly set in env, use that (but fix protocol if needed)
+  if (import.meta.env.VITE_API_BASE_URL) {
+    const envUrl = import.meta.env.VITE_API_BASE_URL
+    // If env URL is HTTP but page is HTTPS, convert to HTTPS to avoid mixed content
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && envUrl.startsWith('http://')) {
+      console.warn('⚠️ Converting HTTP API URL to HTTPS to avoid mixed content:', envUrl)
+      return envUrl.replace('http://', 'https://')
+    }
+    return envUrl
+  }
+
+  // Auto-detect protocol based on current page protocol
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https:' : 'http:'
+  
+  // Check if we're on localhost
+  if (typeof window !== 'undefined') {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    if (isLocalhost && !import.meta.env.PROD) {
+      return '/api' // Use Vite proxy in development
+    }
+  }
+  
+  // Production: use production API with protocol matching
+  return `${protocol}//api.gloriaconnect.com/api`
+}
+
+const CURRENT_API_BASE_URL = getCurrentApiBaseUrl()
+
+// Log the API base URL for debugging
+console.log('🔧 API Base URL configured (Source):', CURRENT_API_BASE_URL)
+console.log('🔧 Current page protocol:', typeof window !== 'undefined' ? window.location.protocol : 'N/A')
+
 export const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: CURRENT_API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
   // Ensure response is parsed as JSON
   responseType: 'json',
-  // Explicitly set CORS credentials to match backend (credentials: false)
+  // CRITICAL: Match backend CORS configuration (credentials: false)
   withCredentials: false,
-  // Handle response transformation
-  transformResponse: [(data) => {
-    // If data is empty string, return empty object
-    if (data === '' || data === null || data === undefined) {
-      console.warn('⚠️ Empty response body received')
-      return {}
-    }
-    
-    // If data is a string, try to parse it
-    if (typeof data === 'string') {
-      try {
-        const parsed = JSON.parse(data)
-        return parsed
-      } catch (e) {
-        console.warn('Failed to parse response as JSON:', data)
-        return data
-      }
-    }
-    return data
-  }],
-  // Ensure we validate status - don't throw on 200-299
-  validateStatus: (status) => {
-    return status >= 200 && status < 300
-  },
+  // Don't validate status - let axios handle all responses
+  validateStatus: () => true, // Accept all status codes, handle errors in interceptor
 })
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
+    // CRITICAL: Recalculate baseURL dynamically to ensure protocol matches page protocol
+    // This fixes mixed content issues (HTTPS page calling HTTP API)
+    if (typeof window !== 'undefined') {
+      const currentProtocol = window.location.protocol
+      const currentBaseURL = config.baseURL || CURRENT_API_BASE_URL
+      
+      // If page is HTTPS but API URL is HTTP, convert to HTTPS
+      if (currentProtocol === 'https:' && currentBaseURL.startsWith('http://')) {
+        const correctedBaseURL = currentBaseURL.replace('http://', 'https://')
+        console.warn('⚠️ Fixing protocol mismatch (Source):', {
+          original: currentBaseURL,
+          corrected: correctedBaseURL,
+          pageProtocol: currentProtocol
+        })
+        config.baseURL = correctedBaseURL
+      }
+    }
+    
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
@@ -51,12 +81,13 @@ api.interceptors.request.use(
     
     // Log request details for debugging (especially for auth endpoints)
     if (config.url?.includes('/auth/login') || config.url?.includes('/auth/register')) {
-      console.log('📤 Request interceptor:', {
+      console.log('📤 Request interceptor (Source):', {
         url: config.url,
         baseURL: config.baseURL,
         fullURL: `${config.baseURL || ''}${config.url}`,
         method: config.method,
         hasToken: !!token,
+        pageProtocol: typeof window !== 'undefined' ? window.location.protocol : 'N/A',
         headers: Object.keys(config.headers || {}),
         withCredentials: config.withCredentials
       })
@@ -78,77 +109,38 @@ api.interceptors.request.use(
 // Response interceptor to handle errors and log responses
 api.interceptors.response.use(
   (response) => {
-    // Log successful responses for debugging
-    if (response.config.url?.includes('/auth/login') || response.config.url?.includes('/auth/register')) {
-      console.log('✅ Auth response interceptor:', {
-        url: response.config.url,
-        status: response.status,
-        statusText: response.statusText,
-        hasData: !!response.data,
-        dataType: typeof response.data,
-        dataKeys: response.data ? Object.keys(response.data) : [],
-        data: response.data,
-        headers: response.headers,
-        responseText: (response as any).responseText,
-        config: {
+    // Check if response is successful (200-299)
+    if (response.status >= 200 && response.status < 300) {
+      // Log successful responses for debugging
+      if (response.config.url?.includes('/auth/login') || response.config.url?.includes('/auth/register')) {
+        console.log('✅ Auth response interceptor (Source):', {
           url: response.config.url,
-          method: response.config.method,
-          baseURL: response.config.baseURL
-        }
-      })
-      
-      // Check if data is empty or undefined
-      if (!response.data || (typeof response.data === 'object' && Object.keys(response.data).length === 0)) {
-        console.error('❌ Response data is empty or undefined!')
-        console.error('Full response object:', response)
-        console.error('Response headers:', response.headers)
-        console.error('Response status:', response.status)
-        console.error('Response statusText:', response.statusText)
-        
-        // Try to get response text if available
-        if ((response as any).request?.responseText) {
-          console.error('Response text:', (response as any).request.responseText)
-        }
-      } else {
-        console.log('✅ Response data received successfully:', response.data)
+          status: response.status,
+          hasData: !!response.data,
+          dataKeys: response.data ? Object.keys(response.data) : []
+        })
       }
+      
+      // Ensure response.data exists
+      if (!response.data) {
+        console.warn('⚠️ Response data is empty, but status is OK')
+        response.data = {}
+      }
+      
+      return response
     }
     
-    // Ensure response.data exists even if empty
-    if (!response.data) {
-      response.data = {}
-    }
-    
-    return response
+    // For non-2xx status codes, treat as error
+    const error = new Error(`HTTP ${response.status}: ${response.statusText}`) as any
+    error.response = response
+    error.status = response.status
+    error.statusText = response.statusText
+    return Promise.reject(error)
   },
   (error) => {
-    // Check for CORS errors specifically - only if we have a network error AND no response
-    // CORS errors typically show up as network errors with no response object
-    if (error.code === 'ERR_NETWORK' && !error.response) {
-      // Check if it's actually a CORS error by checking the error message
-      const isCorsError = error.message?.includes('CORS') || 
-                         error.message?.includes('cross-origin') ||
-                         error.message?.includes('Access-Control')
-      
-      if (isCorsError) {
-        console.error('🚫 CORS Error detected:', {
-          message: error.message,
-          code: error.code,
-          config: error.config
-        })
-        
-        // Create a CORS-specific error
-        const corsError = new Error('CORS error: Unable to connect to server. Please check your network connection and ensure the server CORS configuration is correct.')
-        ;(corsError as any).isNetworkError = true
-        ;(corsError as any).isCorsError = true
-        ;(corsError as any).code = 'CORS_ERROR'
-        return Promise.reject(corsError)
-      }
-    }
-    
-    // Ensure error.response is preserved for proper error handling
+    // If we have a response, extract error data properly
     if (error.response) {
-      // We have a valid HTTP response (even if it's an error status)
+      // Response was received but status is not 2xx
       const status = error.response.status
       let errorData = error.response.data || {}
       
@@ -157,92 +149,61 @@ api.interceptors.response.use(
         try {
           errorData = JSON.parse(errorData)
         } catch (e) {
-          // If parsing fails, use the string as the message
           errorData = { message: errorData }
         }
       }
       
-      // Ensure error.response.data is an object with proper structure
-      if (!error.response.data || typeof error.response.data !== 'object') {
-        error.response.data = errorData
-      }
+      // Ensure error.response.data is properly structured
+      error.response.data = errorData
       
-      // Ensure error.message contains the backend message if available
+      // Extract backend error message if available
       if (errorData.message && !error.message.includes(errorData.message)) {
-        // Don't override error.message completely, but ensure backend message is accessible
-        if (!error.response.data.message) {
-          error.response.data.message = errorData.message
-        }
+        error.message = errorData.message || error.message
       }
       
+      // Log for debugging
+      if (error.config?.url?.includes('/auth/login') || error.config?.url?.includes('/auth/register')) {
+        console.error('🔴 Auth error response (Source):', {
+          url: error.config?.url,
+          status: status,
+          error: errorData.error,
+          message: errorData.message || error.message
+        })
+      }
+      
+      // Handle 401 - redirect to login
       if (status === 401) {
         localStorage.removeItem('token')
         localStorage.removeItem('user')
-        // Get base path (matches vite.config.js and main.jsx)
         const basePath = import.meta.env.PROD ? '/source' : ''
         const loginPath = `${basePath}/login`
         const currentPath = window.location.pathname
-        // Only redirect if not already on login page
         if (!currentPath.endsWith('/login') && !currentPath.endsWith('/login/')) {
           window.location.href = loginPath
         }
       }
       
-      // Preserve the error structure so components can extract messages
-      // Don't modify the error, just ensure it has the right structure
       return Promise.reject(error)
     }
     
-    // This is a true network error (no response received)
-    // Check if it's a connection error, timeout, or CORS issue
-    const isConnectionError = error.code === 'ERR_NETWORK' || 
-                              error.code === 'ECONNABORTED' ||
-                              error.code === 'ETIMEDOUT' ||
-                              error.message?.includes('Network Error') ||
-                              error.message?.includes('Failed to fetch') ||
-                              error.message?.includes('timeout')
-    
-    // Log detailed error information for debugging
-    console.error('🔴 Network/Connection Error:', {
-      message: error.message,
-      code: error.code,
-      name: error.name,
-      config: {
+    // Network error (no response received)
+    if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+      console.error('🔴 Network error (Source):', {
+        message: error.message,
+        code: error.code,
         url: error.config?.url,
-        method: error.config?.method,
-        baseURL: error.config?.baseURL,
-        timeout: error.config?.timeout
-      },
-      request: error.request ? 'Request object exists' : 'No request object'
-    })
-    
-    // Create a structured error that components can handle
-    const networkError = new Error(error.message || 'Network error. Please check your connection.')
-    ;(networkError as any).isNetworkError = true
-    ;(networkError as any).code = error.code || 'NETWORK_ERROR'
-    ;(networkError as any).isConnectionError = isConnectionError
-    
-    // Don't show toast for every error - let components handle it
-    // Only show toast for critical errors
-    if (error.response?.status >= 500) {
-      const errorData = error.response?.data || {}
-      const errorCode = errorData.error
-      const errorMessage = errorData.message || error.message || 'An error occurred'
+        baseURL: error.config?.baseURL
+      })
       
-      // Handle specific error types
-      if (errorCode === 'DATABASE_AUTH_ERROR' || errorCode === 'DATABASE_CONFIG_ERROR') {
-        // Don't show toast - let component handle it with better message
-      } else {
-        // Only log to console, don't show toast for server errors
-        console.error('Server error:', {
-          status: error.response?.status,
-          code: errorCode,
-          message: errorMessage
-        })
-      }
+      const networkError = new Error('Network error. Please check your internet connection and ensure the server is running.') as any
+      networkError.isNetworkError = true
+      networkError.code = error.code || 'ERR_NETWORK'
+      networkError.status = 0
+      return Promise.reject(networkError)
     }
     
-    return Promise.reject(networkError)
+    // Other errors
+    return Promise.reject(error)
   }
 )
 

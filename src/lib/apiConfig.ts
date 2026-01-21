@@ -13,20 +13,30 @@
  */
 
 export function getApiBaseUrl(): string {
-  // If explicitly set, use that
+  // If explicitly set, use that (but still check for protocol mismatch)
   if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL
+    const envUrl = import.meta.env.VITE_API_BASE_URL
+    // If env URL is HTTP but page is HTTPS, convert to HTTPS to avoid mixed content
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && envUrl.startsWith('http://')) {
+      return envUrl.replace('http://', 'https://')
+    }
+    return envUrl
   }
 
-  // In production, use relative path (works with reverse proxy like nginx)
-  // The backend should be accessible at the same origin
-  if (import.meta.env.PROD) {
-    // Return '/api' for production with proxy, empty string if backend handles routing directly
-    return '/api'
+  // Auto-detect protocol based on current page protocol to avoid mixed content issues
+  // If page is HTTPS, use HTTPS for API; if HTTP, use HTTP
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https:' : 'http:'
+  
+  // Check if we're on localhost - if so, use Vite proxy
+  if (typeof window !== 'undefined') {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    if (isLocalhost && !import.meta.env.PROD) {
+      return '/api' // Use Vite proxy in development
+    }
   }
-
-  // Development: use /api with Vite proxy (proxy forwards to http://localhost:8080)
-  return '/api'
+  
+  // Production or remote: use production API with protocol matching
+  return `${protocol}//api.gloriaconnect.com/api`
 }
 
 export const API_BASE_URL = getApiBaseUrl()
