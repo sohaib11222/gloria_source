@@ -72,6 +72,20 @@ export default function LoginPage() {
       console.log('Login attempt:', data.email)
       const response = await authApi.login(data)
       console.log('Login response:', response)
+      console.log('Response type:', typeof response)
+      console.log('Response keys:', response ? Object.keys(response) : 'null/undefined')
+      
+      // Check if response is valid
+      if (!response) {
+        toast.error('No response received from server. Please try again.')
+        return
+      }
+      
+      if (!response.access || !response.refresh || !response.user) {
+        console.error('Invalid response structure:', response)
+        toast.error('Invalid response from server. Please try again.')
+        return
+      }
       
       // Store the authentication tokens and user data
       localStorage.setItem('token', response.access)
@@ -117,14 +131,87 @@ export default function LoginPage() {
       }
     } catch (error: any) {
       console.error('Login failed:', error)
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response,
+        responseData: error.response?.data,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        isNetworkError: error.isNetworkError,
+        code: error.code
+      })
+      
+      // Check if this is a CORS error
+      if (error.isCorsError || error.code === 'CORS_ERROR') {
+        toast.error('CORS error: Unable to connect to server. Please check your network connection and ensure the server CORS configuration is correct.')
+        return
+      }
+      
+      // Check if this is a true network/connection error (no response received)
+      // But first check if we actually got a response with an error status
+      if (error.response) {
+        // We have a response, so it's not a network error - process it normally below
+        console.log('✅ Got response from server, processing error:', error.response.status)
+      } else if (error.isNetworkError || error.isConnectionError || (!error.response && (error.code === 'ERR_NETWORK' || error.message?.includes('Network') || error.message?.includes('Failed to fetch')))) {
+        // True network error - no response received
+        console.error('❌ True network error - no response received:', {
+          message: error.message,
+          code: error.code,
+          isNetworkError: error.isNetworkError,
+          isConnectionError: error.isConnectionError
+        })
+        toast.error('Network error. Please check your internet connection and ensure the server is running. If the problem persists, check the browser console for more details.')
+        return
+      }
+      
       // Extract error code and message from various possible locations
-      const errorCode = error.response?.data?.error || 
-                       error.response?.error || 
-                       error.code
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.message || 
-                          error.message || 
-                          'Login failed. Please check your credentials.'
+      // ALWAYS prioritize response.data over error.message (which might be generic)
+      let errorCode = error.response?.data?.error || 
+                     error.response?.error || 
+                     error.code ||
+                     null
+      
+      // Priority order: 
+      // 1. response.data.message (backend message)
+      // 2. response.data.error (backend error code as message)
+      // 3. response.message (axios response message)
+      // 4. Generic fallback based on status code
+      // 5. error.message (last resort, but filter out generic messages)
+      let errorMessage: string
+      
+      if (error.response?.data?.message) {
+        // Always use backend message if available
+        errorMessage = error.response.data.message
+      } else if (error.response?.data?.error) {
+        // Use error code as message if no message field
+        errorMessage = error.response.data.error
+      } else if (error.response?.status === 401) {
+        errorMessage = 'Invalid credentials. Please check your email and password.'
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Access denied. Please contact support.'
+      } else if (error.response?.status) {
+        // We have a response but no message - use a generic message based on status
+        errorMessage = `Request failed with status ${error.response.status}. Please try again.`
+      } else {
+        // No response at all - this shouldn't happen if we got past the network error check
+        errorMessage = 'Login failed. Please check your credentials.'
+      }
+      
+      // Final check: if errorMessage is still a generic message, try one more time to get backend message
+      const genericMessages = ['Network Error', 'Network error', 'Error', 'Request failed', 'Unauthorized', 'Forbidden']
+      if (genericMessages.some(msg => errorMessage === msg || errorMessage.includes(msg))) {
+        // Try to extract from response one more time
+        if (error.response?.data) {
+          const data = error.response.data
+          if (typeof data === 'object') {
+            errorMessage = data.message || data.error || errorMessage
+          } else if (typeof data === 'string') {
+            errorMessage = data
+          }
+        }
+      }
+      
+      console.log('Final error message to display:', errorMessage)
       
       // Always show the proper error message from the backend
       if (errorCode === 'NOT_APPROVED') {

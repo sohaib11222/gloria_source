@@ -25,18 +25,46 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterForm) => {
     setIsLoading(true)
     try {
-      await authApi.register(data)
+      console.log('📝 Starting registration for:', data.email)
+      const response = await authApi.register(data)
+      console.log('✅ Registration response:', response)
       
-      toast.success('Registration successful! Please check your email for the verification code. After verification, your account will be pending admin approval.')
+      // Check if response is valid
+      if (!response || (typeof response === 'object' && Object.keys(response).length === 0)) {
+        console.error('❌ Empty registration response')
+        toast.error('Registration completed but no response received. Please check your email or try logging in.')
+        return
+      }
+      
+      toast.success(response.message || 'Registration successful! Please check your email for the verification code. After verification, your account will be pending admin approval.')
       
       // Navigate to OTP verification page with email
       navigate('/verify-email', { state: { email: data.email } })
     } catch (error: any) {
-      console.error('Registration error:', error)
+      console.error('❌ Registration error:', error)
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response,
+        responseData: error.response?.data,
+        isNetworkError: error.isNetworkError,
+        code: error.code
+      })
+      
+      // Check if this is a CORS error
+      if (error.isCorsError || error.code === 'CORS_ERROR') {
+        toast.error('CORS error: Unable to connect to server. Please check your network connection and ensure the server CORS configuration is correct.')
+        return
+      }
+      
+      // Check if this is a true network error (no response at all)
+      if (error.isNetworkError || (!error.response && error.message?.includes('Network'))) {
+        toast.error('Network error. Please check your internet connection and try again.')
+        return
+      }
       
       // Extract error message - prioritize API message over HTTP status text
       // Check multiple possible locations for the error message
-      let errorMessage = 'Registration failed'
+      let errorMessage = 'Registration failed. Please try again.'
       
       // Priority order: response.data.message > response.message > details.message > message (if not HTTP status)
       if (error.response?.data?.message) {
@@ -45,17 +73,22 @@ export default function RegisterPage() {
         errorMessage = error.response.message
       } else if (error.details?.message) {
         errorMessage = error.details.message
-      } else if (error.message && !error.message.startsWith('HTTP ') && !error.message.includes('Conflict')) {
-        // Only use error.message if it's not the generic HTTP status message
+      } else if (error.message && !error.message.startsWith('HTTP ') && !error.message.includes('Network')) {
+        // Only use error.message if it's not the generic HTTP status message or Network error
         errorMessage = error.message
       } else if (error.response?.data && typeof error.response.data === 'object') {
         // Try to extract message from response.data object directly
-        const data = error.response.data
-        if (data.message) {
-          errorMessage = data.message
-        } else if (data.error && typeof data.error === 'string' && data.error !== 'CONFLICT') {
-          errorMessage = data.error
+        const responseData = error.response.data
+        if (responseData.message) {
+          errorMessage = responseData.message
+        } else if (responseData.error && typeof responseData.error === 'string') {
+          errorMessage = responseData.error
         }
+      }
+      
+      // Filter out generic messages
+      if (errorMessage === 'Network Error' || errorMessage === 'Network error' || errorMessage.includes('Network')) {
+        errorMessage = 'Unable to connect to server. Please check your internet connection and try again.'
       }
       
       // Only show toast, don't set error state (removed error UI)

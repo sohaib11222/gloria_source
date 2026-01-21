@@ -77,7 +77,19 @@ export class HttpClient {
       const response = await fetch(url, {
         ...fetchOptions,
         headers: headers as HeadersInit,
+        mode: 'cors', // Explicitly set CORS mode
+        credentials: 'omit', // Match backend credentials: false
+        referrerPolicy: 'unsafe-url' as ReferrerPolicy,
       })
+
+      // Check if response was blocked by CORS
+      if (response.type === 'opaque' || response.type === 'opaqueredirect') {
+        const corsError = new Error('CORS error: Response was blocked by browser CORS policy. Please check server CORS configuration.') as HttpError
+        corsError.status = 0
+        corsError.statusText = 'CORS Error'
+        ;(corsError as any).isCorsError = true
+        throw corsError
+      }
 
       if (!response.ok) {
         const error = new Error(`HTTP ${response.status}: ${response.statusText}`) as HttpError
@@ -93,6 +105,16 @@ export class HttpClient {
       
       return await response.text() as T
     } catch (error) {
+      // Check for CORS errors
+      if (error instanceof TypeError && error.message?.includes('Failed to fetch')) {
+        const corsError = new Error('CORS error: Unable to connect to server. Please check your network connection and CORS configuration.') as HttpError
+        corsError.status = 0
+        corsError.statusText = 'CORS Error'
+        ;(corsError as any).isCorsError = true
+        ;(corsError as any).isNetworkError = true
+        throw corsError
+      }
+      
       if (error instanceof Error && 'status' in error) {
         throw error
       }
@@ -100,6 +122,7 @@ export class HttpClient {
       const httpError = new Error(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`) as HttpError
       httpError.status = 0
       httpError.statusText = 'Network Error'
+      ;(httpError as any).isNetworkError = true
       throw httpError
     }
   }
