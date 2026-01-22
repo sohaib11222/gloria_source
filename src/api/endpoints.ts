@@ -142,8 +142,14 @@ export const endpointsApi = {
     return response.data
   },
 
-  uploadBranches: async (branchesData: any): Promise<{ message: string; imported: number; updated: number; total: number }> => {
-    const response = await api.post('/sources/upload-branches', branchesData)
+  uploadBranches: async (branchesData: any): Promise<ImportBranchesResponse> => {
+    // If branchesData is a string (PHP var_dump or XML), wrap it in an object
+    // to ensure it's sent correctly
+    const payload = typeof branchesData === 'string' 
+      ? { rawContent: branchesData } 
+      : branchesData
+    
+    const response = await api.post('/sources/upload-branches', payload)
     return response.data
   },
 
