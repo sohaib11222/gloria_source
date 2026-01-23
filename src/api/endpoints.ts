@@ -7,6 +7,7 @@ export interface EndpointConfig {
   httpEndpoint: string
   grpcEndpoint: string
   branchEndpointUrl?: string
+  locationEndpointUrl?: string
   adapterType: string
   description: string
   status: string
@@ -20,6 +21,7 @@ export interface UpdateEndpointRequest {
   httpEndpoint: string
   grpcEndpoint: string
   branchEndpointUrl?: string
+  locationEndpointUrl?: string
 }
 
 export interface UpdateEndpointResponse {
@@ -73,6 +75,19 @@ export interface SourceGrpcTestResponse {
     bookings: any | null
   }
   tested: string[]
+}
+
+export interface ImportLocationsResponse {
+  message: string
+  imported: number
+  updated: number
+  skipped: number
+  total: number
+  errors?: Array<{
+    index: number
+    unlocode?: string
+    error: string
+  }>
 }
 
 export interface ImportBranchesResponse {
@@ -139,6 +154,11 @@ export const endpointsApi = {
 
   importBranches: async (): Promise<ImportBranchesResponse> => {
     const response = await api.post('/sources/import-branches')
+    return response.data
+  },
+
+  importLocations: async (): Promise<ImportLocationsResponse> => {
+    const response = await api.post('/sources/import-locations')
     return response.data
   },
 

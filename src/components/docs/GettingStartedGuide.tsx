@@ -310,7 +310,13 @@ const GettingStartedGuide: React.FC = () => {
 
             <h3>Branch Data Format</h3>
             <p>
-              Your supplier endpoint must return branches in the following exact format:
+              Your supplier endpoint can return branches in <strong>JSON</strong> or <strong>XML</strong> format. 
+              The system also supports <strong>PHP var_dump</strong> format with the "gloria" structure (recommended).
+            </p>
+
+            <h4 style={{ marginTop: '1.5rem' }}>Format 1: JSON Format (Standard)</h4>
+            <p>
+              Standard JSON format with <code>CompanyCode</code> and <code>Branches</code> array:
             </p>
             
             <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
@@ -404,6 +410,250 @@ const GettingStartedGuide: React.FC = () => {
   ]
 }`}
               </pre>
+            </div>
+
+            <h4 style={{ marginTop: '1.5rem' }}>Format 2: XML Format (OTA Standard)</h4>
+            <p>
+              XML format following OTA (Open Travel Alliance) standards. Note that child elements should be structured properly:
+            </p>
+            
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
+              <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
+{`<?xml version="1.0" encoding="UTF-8"?>
+<OTA_VehLocSearchRS 
+  xmlns="http://www.opentravel.org/OTA/2003/05"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.opentravel.org/OTA/2003/05 OTA_VehLocSearchRS.xsd"
+  TimeStamp="2025-04-28T10:30:45"
+  Target="Production"
+  Version="1.00">
+  <Success/>
+  <RentalBrand>RightCars</RentalBrand>
+  <VehMatchedLocs>
+    <VehMatchedLoc>
+      <LocationDetail 
+        BranchType="BR001"
+        AtAirport="true"
+        LocationType="Airport"
+        Code="BR001"
+        Brand="RightCars"
+        Name="Manchester Airport"
+        Latitude="53.3656"
+        Longitude="-2.2729">
+        <Address>
+          <AddressLine>Terminal 1, Manchester Airport</AddressLine>
+          <CityName>Manchester</CityName>
+          <PostalCode>M90 1QX</PostalCode>
+          <Country>
+            <CountryCode>GB</CountryCode>
+          </Country>
+        </Address>
+        <Telephone PhoneNumber="+441612345678"/>
+        <Opening>
+          <Monday Open="08:00" Closed="20:00"/>
+          <Tuesday Open="08:00" Closed="20:00"/>
+          <Wednesday Open="08:00" Closed="20:00"/>
+          <Thursday Open="08:00" Closed="20:00"/>
+          <Friday Open="08:00" Closed="20:00"/>
+          <Saturday Open="09:00" Closed="18:00"/>
+          <Sunday Open="09:00" Closed="18:00"/>
+        </Opening>
+        <PickupInstructions Pickup="Return to same location"/>
+      </LocationDetail>
+    </VehMatchedLoc>
+  </VehMatchedLocs>
+</OTA_VehLocSearchRS>`}
+              </pre>
+            </div>
+            <p style={{ marginTop: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
+              <strong>Note:</strong> In XML format, <code>Country</code> should have <code>CountryCode</code> as a child element, 
+              not as an attribute. The structure should be: <code>&lt;Country&gt;&lt;CountryCode&gt;GB&lt;/CountryCode&gt;&lt;/Country&gt;</code>
+            </p>
+
+            <h4 style={{ marginTop: '1.5rem' }}>Format 3: PHP var_dump with "gloria" Structure (Recommended)</h4>
+            <p>
+              For PHP-based suppliers, you can return data in PHP <code>var_dump</code> format using the <strong>"gloria"</strong> structure. 
+              This format is recommended as it provides better compatibility and is easier to parse:
+            </p>
+            
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
+              <pre style={{ color: '#e2e8f0', fontSize: '0.75rem', margin: 0, lineHeight: '1.4' }}>
+{`array(1) {
+  ["gloria"]=>
+  array(4) {
+    ["attr"]=>
+    array(6) {
+      ["xmlns"]=>
+      string(37) "http://www.opentravel.org/OTA/2003/05"
+      ["xmlns:xsi"]=>
+      string(41) "http://www.w3.org/2001/XMLSchema-instance"
+      ["xsi:schemaLocation"]=>
+      string(60) "http://www.opentravel.org/OTA/2003/05 OTA_VehLocSearchRS.xsd"
+      ["TimeStamp"]=>
+      string(19) "2025-04-28T10:30:45"
+      ["Target"]=>
+      string(10) "Production"
+      ["Version"]=>
+      string(4) "1.00"
+    }
+    ["Success"]=>
+    array(0) {
+    }
+    ["RentalBrand"]=>
+    array(1) {
+      ["value"]=>
+      string(9) "RightCars"
+    }
+    ["VehMatchedLocs"]=>
+    array(2) {
+      [0]=>
+      array(1) {
+        ["VehMatchedLoc"]=>
+        array(1) {
+          ["LocationDetail"]=>
+          array(6) {
+            ["attr"]=>
+            array(8) {
+              ["BranchType"]=>
+              string(6) "BR001"
+              ["AtAirport"]=>
+              string(4) "true"
+              ["LocationType"]=>
+              string(15) "Outside Airport"
+              ["Code"]=>
+              string(6) "BR001"
+              ["Brand"]=>
+              string(9) "RightCars"
+              ["Name"]=>
+              string(13) "Manchester Airport"
+              ["Latitude"]=>
+              string(9) "53.3656"
+              ["Longitude"]=>
+              string(9) "-2.2729"
+            }
+            ["Address"]=>
+            array(4) {
+              ["AddressLine"]=>
+              array(1) {
+                ["value"]=>
+                string(30) "Terminal 1, Manchester Airport"
+              }
+              ["CityName"]=>
+              array(1) {
+                ["value"]=>
+                string(10) "Manchester"
+              }
+              ["PostalCode"]=>
+              array(1) {
+                ["value"]=>
+                string(7) "M90 1QX"
+              }
+              ["CountryName"]=>
+              array(2) {
+                ["value"]=>
+                string(14) "United Kingdom"
+                ["attr"]=>
+                array(1) {
+                  ["Code"]=>
+                  string(2) "GB"
+                }
+              }
+            }
+            ["Telephone"]=>
+            array(1) {
+              ["attr"]=>
+              array(1) {
+                ["PhoneNumber"]=>
+                string(13) "+441612345678"
+              }
+            }
+            ["Opening"]=>
+            array(7) {
+              ["monday"]=>
+              array(1) {
+                ["attr"]=>
+                array(1) {
+                  ["Open"]=>
+                  string(16) ": 08:00 - 20:00 "
+                }
+              }
+              ["tuesday"]=>
+              array(1) {
+                ["attr"]=>
+                array(1) {
+                  ["Open"]=>
+                  string(16) ": 08:00 - 20:00 "
+                }
+              }
+              ["wednesday"]=>
+              array(1) {
+                ["attr"]=>
+                array(1) {
+                  ["Open"]=>
+                  string(16) ": 08:00 - 20:00 "
+                }
+              }
+              ["thursday"]=>
+              array(1) {
+                ["attr"]=>
+                array(1) {
+                  ["Open"]=>
+                  string(16) ": 08:00 - 20:00 "
+                }
+              }
+              ["friday"]=>
+              array(1) {
+                ["attr"]=>
+                array(1) {
+                  ["Open"]=>
+                  string(16) ": 08:00 - 20:00 "
+                }
+              }
+              ["saturday"]=>
+              array(1) {
+                ["attr"]=>
+                array(1) {
+                  ["Open"]=>
+                  string(16) ": 09:00 - 18:00 "
+                }
+              }
+              ["sunday"]=>
+              array(1) {
+                ["attr"]=>
+                array(1) {
+                  ["Open"]=>
+                  string(16) ": 09:00 - 18:00 "
+                }
+              }
+            }
+            ["PickupInstructions"]=>
+            array(1) {
+              ["attr"]=>
+              array(1) {
+                ["Pickup"]=>
+                string(30) "Return to same location"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+            
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#dbeafe', border: '1px solid #3b82f6', borderRadius: '0.5rem' }}>
+              <strong>💡 Key Points:</strong>
+              <ul style={{ marginTop: '0.5rem', marginBottom: 0, lineHeight: '1.8' }}>
+                <li>Use <strong>"gloria"</strong> as the root key instead of "OTA_VehLocSearchRS" (recommended by client)</li>
+                <li>The <code>["attr"]</code> array contains namespace information, timestamp, target, and version</li>
+                <li><code>["Success"]</code> is an empty array</li>
+                <li><code>["RentalBrand"]</code> contains <code>["value"]</code> with your brand name</li>
+                <li><code>["VehMatchedLocs"]</code> is an array of location entries</li>
+                <li>Each location has <code>["LocationDetail"]</code> with <code>["attr"]</code> containing branch details</li>
+                <li>Opening hours can use combined format like <code>": 08:00 - 20:00 "</code> (start and end time in one field)</li>
+              </ul>
             </div>
 
             <h3>Required Fields</h3>
@@ -843,16 +1093,186 @@ const GettingStartedGuide: React.FC = () => {
             <h3>Understanding Location Coverage</h3>
             <p>
               <strong>Location Coverage</strong> defines which UN/LOCODE locations your source supports. 
-              This is synced from your supplier adapter and mapped to the standard UN/LOCODE format.
+              You can sync locations from your supplier adapter via gRPC, or import them directly from an HTTP endpoint.
             </p>
 
-            <h3>How to Sync Coverage</h3>
+            <h3>Method 1: Import Locations from HTTP Endpoint</h3>
+            <p>
+              You can configure a location import endpoint that returns location data in JSON or XML format. 
+              This is similar to branch import but for UN/LOCODE locations.
+            </p>
+
+            <h4 style={{ marginTop: '1.5rem' }}>Preparing Your Location Endpoint</h4>
+            <p>
+              Your supplier HTTP endpoint must return location data in a specific format. The endpoint will be called with:
+            </p>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li><strong>Method:</strong> GET</li>
+              <li><strong>Header:</strong> <code>Request-Type: LocationRq</code></li>
+              <li><strong>Response Format:</strong> JSON or XML with location array</li>
+            </ul>
+
+            <h4 style={{ marginTop: '1.5rem' }}>Location Data Format</h4>
+            <p>
+              Your endpoint can return locations in <strong>JSON</strong> or <strong>XML</strong> format.
+            </p>
+
+            <h5 style={{ marginTop: '1rem' }}>Format 1: JSON Format (Recommended)</h5>
+            <p>
+              JSON format with <code>Locations</code> array, <code>items</code> array, or direct array:
+            </p>
+            
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
+              <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
+{`{
+  "Locations": [
+    {
+      "unlocode": "GBMAN",
+      "country": "GB",
+      "place": "Manchester",
+      "iataCode": "MAN",
+      "latitude": 53.3656,
+      "longitude": -2.2729
+    },
+    {
+      "unlocode": "GBLON",
+      "country": "GB",
+      "place": "London",
+      "iataCode": "LHR",
+      "latitude": 51.5074,
+      "longitude": -0.1278
+    }
+  ]
+}
+
+// OR alternative JSON format:
+{
+  "items": [
+    {
+      "unlocode": "GBMAN",
+      "country": "GB",
+      "place": "Manchester",
+      "iataCode": "MAN",
+      "latitude": 53.3656,
+      "longitude": -2.2729
+    }
+  ]
+}
+
+// OR simple array:
+[
+  {
+    "unlocode": "GBMAN",
+    "country": "GB",
+    "place": "Manchester",
+    "iataCode": "MAN",
+    "latitude": 53.3656,
+    "longitude": -2.2729
+  }
+]`}
+              </pre>
+            </div>
+
+            <h5 style={{ marginTop: '1.5rem' }}>Format 2: XML Format (Also Supported)</h5>
+            <p>
+              XML format with <code>Locations</code> root element:
+            </p>
+            
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
+              <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
+{`<?xml version="1.0" encoding="UTF-8"?>
+<Locations>
+  <Location>
+    <unlocode>GBMAN</unlocode>
+    <country>GB</country>
+    <place>Manchester</place>
+    <iataCode>MAN</iataCode>
+    <latitude>53.3656</latitude>
+    <longitude>-2.2729</longitude>
+  </Location>
+  <Location>
+    <unlocode>GBLON</unlocode>
+    <country>GB</country>
+    <place>London</place>
+    <iataCode>LHR</iataCode>
+    <latitude>51.5074</latitude>
+    <longitude>-0.1278</longitude>
+  </Location>
+</Locations>`}
+              </pre>
+            </div>
+
+            <h4 style={{ marginTop: '1.5rem' }}>Required Fields</h4>
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '0.5rem' }}>
+              <p style={{ marginTop: 0, fontWeight: 600 }}>⚠️ Required Field:</p>
+              <ul style={{ lineHeight: '1.8', marginBottom: 0 }}>
+                <li><code>unlocode</code> - UN/LOCODE identifier (e.g., "GBMAN", "USNYC"). <strong>This is REQUIRED.</strong></li>
+              </ul>
+            </div>
+
+            <h4 style={{ marginTop: '1.5rem' }}>Optional Fields</h4>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li><code>country</code> - 2-letter country code (e.g., "GB", "US")</li>
+              <li><code>place</code> - Location name (e.g., "Manchester", "New York")</li>
+              <li><code>iataCode</code> - IATA airport code (e.g., "MAN", "LHR")</li>
+              <li><code>latitude</code> - Decimal degrees (e.g., 53.3656)</li>
+              <li><code>longitude</code> - Decimal degrees (e.g., -2.2729)</li>
+            </ul>
+
+            <h4 style={{ marginTop: '1.5rem' }}>How to Import Locations</h4>
+            <ol style={{ lineHeight: '1.8' }}>
+              <li>
+                <strong>Configure Location Endpoint:</strong>
+                <ul>
+                  <li>Go to the "Locations" tab in the Source UI</li>
+                  <li>Click "Configure Endpoint" button</li>
+                  <li>Enter your location endpoint URL (e.g., <code>https://example.com/locations.php</code>)</li>
+                  <li>Click "Test Endpoint" to verify the format is correct</li>
+                  <li>Click "Save" to store the configuration</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Import Locations:</strong>
+                <ul>
+                  <li>Click "Import Locations" button</li>
+                  <li>The system will call your endpoint with <code>Request-Type: LocationRq</code> header</li>
+                  <li>Locations will be imported and linked to your source</li>
+                  <li>If any locations fail validation, you'll see detailed error messages</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Verify Import:</strong> Check that all locations were imported correctly. 
+                If validation fails, review the error messages to fix the format.
+              </li>
+            </ol>
+
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#dbeafe', border: '1px solid #3b82f6', borderRadius: '0.5rem' }}>
+              <strong>💡 Important:</strong>
+              <ul style={{ marginTop: '0.5rem', marginBottom: 0, lineHeight: '1.8' }}>
+                <li>Your endpoint <strong>must</strong> return an array of locations. The response should contain either:
+                  <ul style={{ marginTop: '0.5rem', marginLeft: '1.5rem' }}>
+                    <li><code>{"{ Locations: [...] }"}</code> - JSON object with "Locations" key</li>
+                    <li><code>{"{ items: [...] }"}</code> - JSON object with "items" key</li>
+                    <li><code>[location1, location2, ...]</code> - Direct JSON array</li>
+                    <li><code>{"<Locations><Location>...</Location></Locations>"}</code> - XML format</li>
+                  </ul>
+                </li>
+                <li>Each location must have a <code>unlocode</code> field (required). Other fields are optional.</li>
+                <li>UN/LOCODEs must be valid 5-character codes (e.g., "GBMAN", "USNYC").</li>
+                <li>If a location doesn't exist in the UN/LOCODE database, you can request it to be added (see Location Requests section).</li>
+              </ul>
+            </div>
+
+            <h3 style={{ marginTop: '2rem' }}>Method 2: Sync Coverage from gRPC</h3>
+            <p>
+              You can also sync locations from your gRPC adapter's <code>GetLocations</code> method.
+            </p>
             <ol style={{ lineHeight: '1.8' }}>
               <li>
                 <strong>Go to Locations Tab:</strong> Navigate to the "Locations" section.
               </li>
               <li>
-                <strong>Click "Sync Locations":</strong> This triggers a sync with your supplier adapter.
+                <strong>Click "Sync Locations":</strong> This triggers a sync with your supplier adapter's gRPC <code>GetLocations</code> method.
               </li>
               <li>
                 <strong>Wait for Completion:</strong> The sync process maps your supplier locations to UN/LOCODEs.

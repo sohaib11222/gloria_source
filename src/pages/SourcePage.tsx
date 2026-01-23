@@ -32,6 +32,366 @@ import { useQuery } from '@tanstack/react-query'
 import { Bell } from 'lucide-react'
 import { NotificationsDrawer } from '../components/NotificationsDrawer'
 import { SourceHealth } from '../types/api'
+import { Modal } from '../components/ui/Modal'
+import { Input } from '../components/ui/Input'
+import { useQueryClient } from '@tanstack/react-query'
+import { AlertCircle, XCircle, CheckCircle2, ChevronDown, ChevronUp, FileText } from 'lucide-react'
+
+// Location Import Result Display Component
+const LocationImportResultDisplay: React.FC<{ result: any }> = ({ result }) => {
+  const hasErrors = result.errors && result.errors.length > 0
+  const hasPartialSuccess = (result.imported || 0) > 0 || (result.updated || 0) > 0
+  const isCompleteSuccess = !hasErrors && hasPartialSuccess
+  const isFormatError = result.error === 'INVALID_FORMAT' || result.error === 'INVALID_RESPONSE_FORMAT'
+  const [showExample, setShowExample] = useState(isFormatError) // Show by default for format errors
+
+  return (
+    <div className="space-y-4">
+      {/* Summary Card */}
+      <Card className={`border-2 ${
+        isCompleteSuccess 
+          ? 'border-green-200 bg-green-50' 
+          : hasPartialSuccess 
+          ? 'border-yellow-200 bg-yellow-50' 
+          : 'border-red-200 bg-red-50'
+      }`}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {isCompleteSuccess ? (
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+              ) : hasPartialSuccess ? (
+                <AlertCircle className="w-5 h-5 text-yellow-600" />
+              ) : (
+                <XCircle className="w-5 h-5 text-red-600" />
+              )}
+              <CardTitle className={`text-lg font-bold ${
+                isCompleteSuccess 
+                  ? 'text-green-900' 
+                  : hasPartialSuccess 
+                  ? 'text-yellow-900' 
+                  : 'text-red-900'
+              }`}>
+                Import Summary
+              </CardTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              {(result.imported || 0) > 0 && (
+                <Badge variant="success" className="font-semibold">
+                  {result.imported} Imported
+                </Badge>
+              )}
+              {(result.updated || 0) > 0 && (
+                <Badge variant="info" className="font-semibold">
+                  {result.updated} Updated
+                </Badge>
+              )}
+              {(result.skipped || 0) > 0 && (
+                <Badge variant="warning" className="font-semibold">
+                  {result.skipped} Skipped
+                </Badge>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className={`text-sm font-medium mb-3 ${
+            isCompleteSuccess 
+              ? 'text-green-800' 
+              : hasPartialSuccess 
+              ? 'text-yellow-800' 
+              : 'text-red-800'
+          }`}>
+            {result.message || 'Import completed'}
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-white/70 rounded-lg p-3 border border-gray-200">
+              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
+                Total
+              </div>
+              <div className="text-lg font-bold text-gray-900">{result.total || 0}</div>
+            </div>
+            <div className="bg-white/70 rounded-lg p-3 border border-blue-200">
+              <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">
+                Imported
+              </div>
+              <div className="text-lg font-bold text-blue-900">{result.imported || 0}</div>
+            </div>
+            <div className="bg-white/70 rounded-lg p-3 border border-purple-200">
+              <div className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-1">
+                Updated
+              </div>
+              <div className="text-lg font-bold text-purple-900">{result.updated || 0}</div>
+            </div>
+            <div className="bg-white/70 rounded-lg p-3 border border-orange-200">
+              <div className="text-xs font-semibold text-orange-700 uppercase tracking-wide mb-1">
+                Skipped
+              </div>
+              <div className="text-lg font-bold text-orange-900">{result.skipped || 0}</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Format Error Display */}
+      {isFormatError && result.details && (
+        <Card className="border-2 border-red-200">
+          <CardHeader className="bg-red-50 border-b border-red-200">
+            <div className="flex items-center gap-3">
+              <XCircle className="w-5 h-5 text-red-600" />
+              <CardTitle className="text-lg font-bold text-red-900">
+                Format Error
+              </CardTitle>
+            </div>
+            <p className="text-sm text-red-700 mt-2">
+              The endpoint response format is not recognized. Your endpoint must return location data in one of the supported formats below.
+            </p>
+            <p className="text-xs text-red-600 mt-1 font-semibold">
+              ⚠️ Your endpoint must return an array of locations. The response should contain either:
+            </p>
+            <ul className="text-xs text-red-700 mt-2 space-y-1 list-disc list-inside ml-2">
+              <li><code className="bg-red-100 px-1 rounded">{"{ Locations: [...] }"}</code> - JSON object with "Locations" key</li>
+              <li><code className="bg-red-100 px-1 rounded">{"{ items: [...] }"}</code> - JSON object with "items" key</li>
+              <li><code className="bg-red-100 px-1 rounded">[location1, location2, ...]</code> - Direct JSON array</li>
+              <li><code className="bg-red-100 px-1 rounded">{"<Locations><Location>...</Location></Locations>"}</code> - XML format</li>
+            </ul>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              {/* Error Details */}
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm font-semibold text-red-900 mb-2">Error Details:</p>
+                <p className="text-sm text-red-800">{result.message}</p>
+                {result.details.receivedKeys && result.details.receivedKeys.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs font-semibold text-red-800 mb-1">Received keys in response:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {result.details.receivedKeys.map((key: string, idx: number) => (
+                        <code key={idx} className="px-2 py-1 bg-red-100 text-red-900 rounded text-xs font-mono">
+                          {key}
+                        </code>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {result.details.dataPreview && (
+                  <div className="mt-3">
+                    <p className="text-xs font-semibold text-red-800 mb-1">Response preview:</p>
+                    <pre className="text-xs bg-red-100 text-red-900 p-3 rounded overflow-x-auto max-h-40">
+                      {result.details.dataPreview}
+                    </pre>
+                  </div>
+                )}
+              </div>
+
+              {/* Expected Formats */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm font-semibold text-blue-900 mb-2">✅ Expected Formats:</p>
+                {result.details.expectedFormats && (
+                  <ul className="text-xs text-blue-800 space-y-1 list-disc list-inside mb-3">
+                    {result.details.expectedFormats.map((format: string, idx: number) => (
+                      <li key={idx}>{format}</li>
+                    ))}
+                  </ul>
+                )}
+                {result.details.help && (
+                  <p className="text-xs text-blue-700 italic">{result.details.help}</p>
+                )}
+              </div>
+
+              {/* Example Format - Always visible for format errors, collapsible otherwise */}
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                {!isFormatError && (
+                  <button
+                    onClick={() => setShowExample(!showExample)}
+                    className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-gray-600" />
+                      <span className="text-sm font-semibold text-gray-800">
+                        📋 Example Location Data Format
+                      </span>
+                    </div>
+                    {showExample ? (
+                      <ChevronUp className="w-4 h-4 text-gray-600" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-gray-600" />
+                    )}
+                  </button>
+                )}
+                {isFormatError && (
+                  <div className="p-3 bg-yellow-50 border-b border-yellow-200">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-yellow-600" />
+                      <span className="text-sm font-semibold text-yellow-900">
+                        📋 Sample Location Data Format (How your data should look)
+                      </span>
+                    </div>
+                  </div>
+                )}
+                
+                {(showExample || isFormatError) && (
+                  <div className="p-4 bg-white space-y-4 border-t border-gray-200">
+                    <div>
+                      <p className="text-xs text-gray-700 font-semibold mb-2">✅ JSON Format (Recommended):</p>
+                      <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto max-h-96">
+{`{
+  "Locations": [
+    {
+      "unlocode": "GBMAN",
+      "country": "GB",
+      "place": "Manchester",
+      "iataCode": "MAN",
+      "latitude": 53.3656,
+      "longitude": -2.2729
+    },
+    {
+      "unlocode": "GBLON",
+      "country": "GB",
+      "place": "London",
+      "iataCode": "LHR",
+      "latitude": 51.5074,
+      "longitude": -0.1278
+    }
+  ]
+}
+
+// OR alternative JSON format:
+{
+  "items": [
+    {
+      "unlocode": "GBMAN",
+      "country": "GB",
+      "place": "Manchester",
+      "iataCode": "MAN",
+      "latitude": 53.3656,
+      "longitude": -2.2729
+    }
+  ]
+}
+
+// OR simple array:
+[
+  {
+    "unlocode": "GBMAN",
+    "country": "GB",
+    "place": "Manchester",
+    "iataCode": "MAN",
+    "latitude": 53.3656,
+    "longitude": -2.2729
+  }
+]`}
+                      </pre>
+                    </div>
+                    
+                    <div>
+                      <p className="text-xs text-gray-700 font-semibold mb-2">✅ XML Format (Also Supported):</p>
+                      <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto max-h-96">
+{`<?xml version="1.0" encoding="UTF-8"?>
+<Locations>
+  <Location>
+    <unlocode>GBMAN</unlocode>
+    <country>GB</country>
+    <place>Manchester</place>
+    <iataCode>MAN</iataCode>
+    <latitude>53.3656</latitude>
+    <longitude>-2.2729</longitude>
+  </Location>
+  <Location>
+    <unlocode>GBLON</unlocode>
+    <country>GB</country>
+    <place>London</place>
+    <iataCode>LHR</iataCode>
+    <latitude>51.5074</latitude>
+    <longitude>-0.1278</longitude>
+  </Location>
+</Locations>`}
+                      </pre>
+                    </div>
+                    
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-900 font-semibold mb-2">📝 Required Fields:</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <div className="text-xs text-blue-800">
+                            <code className="bg-blue-100 px-1.5 py-0.5 rounded font-mono">unlocode</code> (required) - UN/LOCODE identifier (e.g., "GBMAN")
+                          </div>
+                          <div className="text-xs text-blue-800">
+                            <code className="bg-blue-100 px-1.5 py-0.5 rounded font-mono">country</code> (optional) - 2-letter country code (e.g., "GB")
+                          </div>
+                          <div className="text-xs text-blue-800">
+                            <code className="bg-blue-100 px-1.5 py-0.5 rounded font-mono">place</code> (optional) - Location name (e.g., "Manchester")
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs text-blue-800">
+                            <code className="bg-blue-100 px-1.5 py-0.5 rounded font-mono">iataCode</code> (optional) - IATA airport code (e.g., "MAN")
+                          </div>
+                          <div className="text-xs text-blue-800">
+                            <code className="bg-blue-100 px-1.5 py-0.5 rounded font-mono">latitude</code> (optional) - Decimal degrees
+                          </div>
+                          <div className="text-xs text-blue-800">
+                            <code className="bg-blue-100 px-1.5 py-0.5 rounded font-mono">longitude</code> (optional) - Decimal degrees
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-xs text-blue-700 mt-2 italic">
+                        Note: Only <code className="bg-blue-100 px-1 rounded">unlocode</code> is required. Other fields are optional but recommended.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Validation Errors Table */}
+      {hasErrors && !isFormatError && (
+        <Card className="border-2 border-red-200">
+          <CardHeader className="bg-red-50 border-b border-red-200">
+            <div className="flex items-center gap-3">
+              <XCircle className="w-5 h-5 text-red-600" />
+              <CardTitle className="text-lg font-bold text-red-900">
+                Validation Errors ({result.errors.length})
+              </CardTitle>
+            </div>
+            <p className="text-sm text-red-700 mt-2">
+              The following locations could not be imported due to validation errors. Please fix the issues and try again.
+            </p>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Index</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">UN/LOCODE</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Error</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {result.errors.map((error: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-red-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{error.index + 1}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <code className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-mono">
+                          {error.unlocode || 'N/A'}
+                        </code>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-red-700">{error.error}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
 
 export default function SourcePage() {
   const navigate = useNavigate()
@@ -204,7 +564,15 @@ export default function SourcePage() {
   // Note: selectedAgreementFilterId is defined earlier (line 59) for use in loadLocations
   const [isSyncingLocations, setIsSyncingLocations] = useState(false)
   const [isImportingBranches, setIsImportingBranches] = useState(false)
+  const [isImportingLocations, setIsImportingLocations] = useState(false)
+  const [isLocationEndpointConfigOpen, setIsLocationEndpointConfigOpen] = useState(false)
+  const [locationEndpointUrl, setLocationEndpointUrl] = useState('')
+  const [isSavingLocationEndpoint, setIsSavingLocationEndpoint] = useState(false)
+  const [isValidatingLocationEndpoint, setIsValidatingLocationEndpoint] = useState(false)
+  const [showLocationImportResult, setShowLocationImportResult] = useState(false)
+  const [locationImportResult, setLocationImportResult] = useState<any>(null)
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
+  const queryClient = useQueryClient()
   
   // Branches state
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null)
@@ -351,6 +719,7 @@ export default function SourcePage() {
       setEndpointConfig(response)
       setHttpEndpoint(response.httpEndpoint)
       setGrpcEndpoint(response.grpcEndpoint)
+      setLocationEndpointUrl(response.locationEndpointUrl || '')
       
       // Save endpoint to localStorage for validation
       if (user?.company?.id) {
@@ -413,6 +782,8 @@ export default function SourcePage() {
       // Show user-friendly error messages
       if (errorCode === 'DATABASE_AUTH_ERROR' || errorCode === 'DATABASE_CONFIG_ERROR') {
         toast.error('Server configuration error. Please contact the administrator.')
+      } else if (error.response?.status === 404) {
+        toast.error('Endpoints endpoint not found. Please check your backend configuration.')
       } else if (error.response?.status >= 500) {
         toast.error('Server error. Please try again later or contact support.')
       } else {
@@ -422,6 +793,13 @@ export default function SourcePage() {
       setIsLoadingEndpoints(false)
     }
   }
+
+  // Load locationEndpointUrl when endpointConfig changes
+  useEffect(() => {
+    if (endpointConfig?.locationEndpointUrl) {
+      setLocationEndpointUrl(endpointConfig.locationEndpointUrl)
+    }
+  }, [endpointConfig])
 
   const loadHealth = async () => {
     try {
@@ -569,6 +947,178 @@ export default function SourcePage() {
       }
     } finally {
       setIsImportingBranches(false)
+    }
+  }
+
+  const importLocations = async () => {
+    setIsImportingLocations(true)
+    try {
+      const result = await endpointsApi.importLocations()
+      
+      // Check if there are errors in the response
+      if (result.errors && result.errors.length > 0) {
+        // Partial success or errors - show result modal
+        setLocationImportResult(result)
+        setShowLocationImportResult(true)
+        
+        if (result.imported > 0 || result.updated > 0) {
+          toast.success(`Locations imported: ${result.imported} new, ${result.updated} updated, ${result.skipped} skipped`, { duration: 5000 })
+        } else {
+          toast.warning(`Import completed but no locations were imported. ${result.skipped} location(s) were skipped.`, { duration: 7000 })
+        }
+      } else if (result.imported > 0 || result.updated > 0) {
+        // Complete success
+        toast.success(`Locations imported successfully! ${result.imported} new, ${result.updated} updated`)
+      } else {
+        toast.warning('No locations found to import')
+      }
+      
+      // Reload synced locations after import
+      if (user?.company?.id) {
+        loadSyncedLocations()
+      }
+      // Reload endpoint config to get updated lastLocationSyncAt
+      await loadEndpointConfig()
+    } catch (error: any) {
+      console.error('Failed to import locations:', error)
+      const errorData = error.response?.data || {}
+      const errorMessage = errorData.message || 'Failed to import locations'
+      const errorCode = errorData.error || ''
+      
+      // Handle format errors with detailed display
+      if (error.response?.status === 400 && (errorCode === 'INVALID_FORMAT' || errorCode === 'INVALID_RESPONSE_FORMAT')) {
+        setLocationImportResult({
+          message: errorMessage,
+          error: errorCode,
+          details: errorData.details,
+          imported: 0,
+          updated: 0,
+          skipped: 0,
+          total: 0,
+          errors: [{
+            index: 0,
+            error: errorMessage,
+            details: errorData.details
+          }]
+        })
+        setShowLocationImportResult(true)
+        toast.error(errorMessage, { duration: 8000 })
+      } else if (error.response?.status === 400 && (errorCode === 'NOT_APPROVED' || errorMessage.includes('approved'))) {
+        // Show error modal for important errors
+        setErrorModal({
+          isOpen: true,
+          title: 'Account Approval Required',
+          message: errorMessage,
+          error: errorCode,
+        })
+      } else {
+        // Other errors - show in result modal too
+        setLocationImportResult({
+          message: errorMessage,
+          error: errorCode,
+          details: errorData.details,
+          imported: 0,
+          updated: 0,
+          skipped: 0,
+          total: 0,
+          errors: [{
+            index: 0,
+            error: errorMessage,
+            details: errorData.details
+          }]
+        })
+        setShowLocationImportResult(true)
+        toast.error(errorMessage, { duration: 8000 })
+      }
+    } finally {
+      setIsImportingLocations(false)
+    }
+  }
+
+  const handleSaveLocationEndpointUrl = async () => {
+    setIsSavingLocationEndpoint(true)
+    try {
+      await endpointsApi.updateConfig({
+        httpEndpoint: endpointConfig?.httpEndpoint || '',
+        grpcEndpoint: endpointConfig?.grpcEndpoint || '',
+        branchEndpointUrl: endpointConfig?.branchEndpointUrl,
+        locationEndpointUrl: locationEndpointUrl,
+      })
+      queryClient.invalidateQueries({ queryKey: ['endpointConfig'] })
+      await loadEndpointConfig()
+      setIsLocationEndpointConfigOpen(false)
+      toast.success('Location endpoint URL configured successfully')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to save endpoint URL')
+    } finally {
+      setIsSavingLocationEndpoint(false)
+    }
+  }
+
+  const validateLocationEndpoint = async () => {
+    if (!locationEndpointUrl.trim()) {
+      toast.error('Please enter a location endpoint URL first')
+      return
+    }
+
+    setIsValidatingLocationEndpoint(true)
+    try {
+      // Test the endpoint by making a request
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
+
+      let testUrl = locationEndpointUrl.trim()
+      if (!testUrl.startsWith('http://') && !testUrl.startsWith('https://')) {
+        testUrl = `http://${testUrl}`
+      }
+
+      const response = await fetch(testUrl, {
+        method: 'GET',
+        headers: {
+          'Request-Type': 'LocationRq',
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      } as any)
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        throw new Error(`Endpoint returned status ${response.status}`)
+      }
+
+      const responseText = await response.text()
+      
+      // Try to parse as JSON
+      let isValid = false
+      let format = ''
+      try {
+        const json = JSON.parse(responseText)
+        if (Array.isArray(json) || json.Locations || json.items || json.Location) {
+          isValid = true
+          format = 'JSON'
+        }
+      } catch {
+        // Try XML
+        if (responseText.includes('<Locations>') || responseText.includes('<Location>')) {
+          isValid = true
+          format = 'XML'
+        }
+      }
+
+      if (isValid) {
+        toast.success(`Endpoint is valid! Detected ${format} format.`)
+      } else {
+        toast.warning('Endpoint responded but format could not be detected. Expected JSON or XML.')
+      }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        toast.error('Endpoint validation timed out')
+      } else {
+        toast.error(`Endpoint validation failed: ${error.message || 'Unknown error'}`)
+      }
+    } finally {
+      setIsValidatingLocationEndpoint(false)
     }
   }
 
@@ -1192,6 +1742,41 @@ export default function SourcePage() {
                               </svg>
                               Import Branches
                             </Button>
+                            <Button 
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                setIsLocationEndpointConfigOpen(true)
+                              }} 
+                              variant="ghost"
+                              size="sm"
+                              className="shadow-md hover:shadow-lg"
+                              title="Configure location import endpoint URL"
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              Configure Endpoint
+                            </Button>
+                            <Button 
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                importLocations()
+                              }} 
+                              loading={isImportingLocations}
+                              variant="secondary"
+                              size="sm"
+                              className="shadow-md hover:shadow-lg"
+                              title={endpointConfig?.locationEndpointUrl ? `Import from ${endpointConfig.locationEndpointUrl}` : 'Import from configured endpoint'}
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              Import Locations
+                            </Button>
                           </div>
                         </div>
                       </CardHeader>
@@ -1244,7 +1829,7 @@ export default function SourcePage() {
                             <div>
                               <p className="text-sm font-semibold text-blue-900 mb-1">Sync Information</p>
                               <p className="text-xs text-blue-800 leading-relaxed">
-                                Click "Sync Locations" to sync your coverage from supplier adapter. Click "Import Branches" to import branches from your HTTP endpoint.
+                                Click "Sync Locations" to sync your coverage from supplier adapter. Click "Import Branches" to import branches from your HTTP endpoint. Click "Configure Endpoint" to set up your location import endpoint, then click "Import Locations" to import locations/UN/LOCODEs from your HTTP endpoint (supports XML and JSON formats).
                         </p>
                       </div>
                     </div>
@@ -1375,6 +1960,84 @@ export default function SourcePage() {
                       showRemoveButton={!selectedAgreementFilterId}
                     />
                   </div>
+
+                  {/* Location Endpoint Configuration Modal */}
+                  <Modal
+                    isOpen={isLocationEndpointConfigOpen}
+                    onClose={() => setIsLocationEndpointConfigOpen(false)}
+                    title="Configure Location Import Endpoint"
+                    size="md"
+                  >
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Location Endpoint URL
+                        </label>
+                        <Input
+                          value={locationEndpointUrl}
+                          onChange={(e) => setLocationEndpointUrl(e.target.value)}
+                          placeholder="https://example.com/locations.php"
+                          helperText="Enter the URL of your endpoint that returns location data in JSON or XML format"
+                        />
+                      </div>
+                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-sm text-blue-800">
+                          <strong>Supported formats:</strong>
+                        </p>
+                        <ul className="text-xs text-blue-700 mt-2 list-disc list-inside space-y-1">
+                          <li>JSON format: <code>{`{ Locations: [...] }`}</code> or <code>{`{ items: [...] }`}</code> or array</li>
+                          <li>XML format: <code>{`<Locations><Location>...</Location></Locations>`}</code></li>
+                          <li>Each location should have: unlocode (required), country, place, iataCode, latitude, longitude</li>
+                        </ul>
+                      </div>
+                      <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                        <Button
+                          variant="secondary"
+                          onClick={validateLocationEndpoint}
+                          loading={isValidatingLocationEndpoint}
+                          disabled={!locationEndpointUrl.trim()}
+                          type="button"
+                        >
+                          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Test Endpoint
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => setIsLocationEndpointConfigOpen(false)}
+                          type="button"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="primary"
+                          onClick={handleSaveLocationEndpointUrl}
+                          loading={isSavingLocationEndpoint}
+                          disabled={!locationEndpointUrl.trim()}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  </Modal>
+
+                  {/* Location Import Results Modal */}
+                  <Modal
+                    isOpen={showLocationImportResult && locationImportResult !== null}
+                    onClose={() => {
+                      setShowLocationImportResult(false)
+                      setLocationImportResult(null)
+                    }}
+                    title="Location Import Results"
+                    size="xl"
+                  >
+                    {locationImportResult && (
+                      <div className="max-h-[85vh] overflow-y-auto -mx-6 -mt-6 px-6 pt-6">
+                        <LocationImportResultDisplay result={locationImportResult} />
+                      </div>
+                    )}
+                  </Modal>
                 </>
               )}
 
