@@ -139,9 +139,21 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Edit Branch">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+    <Modal isOpen={isOpen} onClose={onClose} title="Edit Branch" size="md">
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Branch code (read-only) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Branch Code</label>
+          <Input
+            value={branch?.branchCode ?? ''}
+            disabled
+            className="bg-gray-100 text-gray-700 cursor-not-allowed"
+          />
+          <p className="text-xs text-gray-500 mt-0.5">Branch code cannot be changed.</p>
+        </div>
+
+        {/* Name & Status */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
             <Input
@@ -162,54 +174,38 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
               ]}
             />
           </div>
+        </div>
+
+        {/* Location Type & Collection Type */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Location Type</label>
             <Input
               value={formData.locationType}
               onChange={(e) => setFormData({ ...formData, locationType: e.target.value })}
+              placeholder="e.g. AIRPORT, CITY"
             />
           </div>
-          <div className="relative" ref={locodeInputRef}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">UN/LOCODE</label>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Collection Type</label>
             <Input
-              value={locodeSearchQuery}
-              onChange={(e) => handleLocodeSearch(e.target.value)}
-              onFocus={() => locodeSearchQuery.length >= 2 && setShowLocodeDropdown(true)}
-              placeholder="Search UN/LOCODE (e.g., GBMAN, Manchester)"
-              className="w-full"
+              value={formData.collectionType}
+              onChange={(e) => setFormData({ ...formData, collectionType: e.target.value })}
+              placeholder="e.g. AIRPORT, CITY"
             />
-            {showLocodeDropdown && (
-              <div
-                ref={dropdownRef}
-                className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-              >
-                {isLoadingLocodes ? (
-                  <div className="p-3 text-sm text-gray-500">Searching...</div>
-                ) : locodeResults?.items && locodeResults.items.length > 0 ? (
-                  locodeResults.items.map((locode) => (
-                    <div
-                      key={locode.unlocode}
-                      className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                      onClick={() => handleSelectLocode(locode)}
-                    >
-                      <div className="font-medium text-sm">{locode.unlocode}</div>
-                      <div className="text-xs text-gray-600">
-                        {locode.place}, {locode.country}
-                        {locode.iata_code && ` • IATA: ${locode.iata_code}`}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-3 text-sm text-gray-500">No UN/LOCODEs found</div>
-                )}
-              </div>
-            )}
-            {selectedLocode && (
-              <div className="mt-1 text-xs text-gray-600">
-                Selected: {selectedLocode.unlocode} - {selectedLocode.place}, {selectedLocode.country}
-              </div>
-            )}
           </div>
+        </div>
+
+        {/* Address */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Address Line</label>
+          <Input
+            value={formData.addressLine}
+            onChange={(e) => setFormData({ ...formData, addressLine: e.target.value })}
+            placeholder="Street address"
+          />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
             <Input
@@ -218,12 +214,33 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
             />
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
+            <Input
+              value={formData.postalCode}
+              onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
+            />
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
             <Input
               value={formData.country}
               onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+              placeholder="Country name"
             />
           </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Country Code (ISO)</label>
+          <Input
+            value={formData.countryCode}
+            onChange={(e) => setFormData({ ...formData, countryCode: e.target.value.toUpperCase().slice(0, 3) })}
+            placeholder="e.g. GB, AE, US"
+            maxLength={3}
+          />
+        </div>
+
+        {/* Contact */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <Input
@@ -237,8 +254,13 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
             <Input
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="e.g. +441234567890"
             />
           </div>
+        </div>
+
+        {/* Coordinates */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
             <Input
@@ -258,15 +280,52 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
             />
           </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+
+        {/* UN/LOCODE */}
+        <div className="relative" ref={locodeInputRef}>
+          <label className="block text-sm font-medium text-gray-700 mb-1">UN/LOCODE</label>
           <Input
-            value={formData.addressLine}
-            onChange={(e) => setFormData({ ...formData, addressLine: e.target.value })}
+            value={locodeSearchQuery}
+            onChange={(e) => handleLocodeSearch(e.target.value)}
+            onFocus={() => locodeSearchQuery.length >= 2 && setShowLocodeDropdown(true)}
+            placeholder="Search UN/LOCODE (e.g., GBMAN, Manchester)"
+            className="w-full"
           />
+          {showLocodeDropdown && (
+            <div
+              ref={dropdownRef}
+              className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+            >
+              {isLoadingLocodes ? (
+                <div className="p-3 text-sm text-gray-500">Searching...</div>
+              ) : locodeResults?.items && locodeResults.items.length > 0 ? (
+                locodeResults.items.map((locode) => (
+                  <div
+                    key={locode.unlocode}
+                    className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    onClick={() => handleSelectLocode(locode)}
+                  >
+                    <div className="font-medium text-sm">{locode.unlocode}</div>
+                    <div className="text-xs text-gray-600">
+                      {locode.place}, {locode.country}
+                      {locode.iata_code && ` • IATA: ${locode.iata_code}`}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-3 text-sm text-gray-500">No UN/LOCODEs found</div>
+              )}
+            </div>
+          )}
+          {selectedLocode && (
+            <div className="mt-1 text-xs text-gray-600">
+              Selected: {selectedLocode.unlocode} - {selectedLocode.place}, {selectedLocode.country}
+            </div>
+          )}
         </div>
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="secondary" onClick={onClose}>
+
+        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+          <Button variant="secondary" onClick={onClose} type="button">
             Cancel
           </Button>
           <Button type="submit" variant="primary" loading={updateMutation.isPending}>

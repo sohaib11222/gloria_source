@@ -11,9 +11,10 @@ import toast from 'react-hot-toast'
 interface BranchCreateModalProps {
   isOpen: boolean
   onClose: () => void
+  onSuccess?: () => void
 }
 
-export const BranchCreateModal: React.FC<BranchCreateModalProps> = ({ isOpen, onClose }) => {
+export const BranchCreateModal: React.FC<BranchCreateModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     branchCode: '',
     name: '',
@@ -137,6 +138,7 @@ export const BranchCreateModal: React.FC<BranchCreateModalProps> = ({ isOpen, on
     onSuccess: () => {
       toast.success('Branch created successfully')
       queryClient.invalidateQueries({ queryKey: ['branches'] })
+      onSuccess?.()
       onClose()
     },
     onError: (error: any) => {

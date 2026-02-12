@@ -5,11 +5,12 @@ import { endpointsApi, Location } from '../api/endpoints'
 import toast from 'react-hot-toast'
 
 interface AddLocationFormProps {
+  disabled?: boolean
   onSuccess?: () => void
   onLocationAdded?: (location: Location) => void
 }
 
-export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onLocationAdded }) => {
+export const AddLocationForm: React.FC<AddLocationFormProps> = ({ disabled = false, onSuccess, onLocationAdded }) => {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Location[]>([])
   const [isSearching, setIsSearching] = useState(false)
@@ -155,7 +156,7 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
               }}
               onKeyDown={handleKeyDown}
               placeholder="e.g., GBMAN, Manchester, GB, or MAN"
-              disabled={addLocationMutation.isPending}
+              disabled={addLocationMutation.isPending || disabled}
             />
             
             {/* Search Results Dropdown */}
@@ -277,7 +278,8 @@ export const AddLocationForm: React.FC<AddLocationFormProps> = ({ onSuccess, onL
                       e.stopPropagation()
                       console.log('Button onMouseUp')
                     }}
-                    disabled={addLocationMutation.isPending || !selectedLocation}
+                    disabled={addLocationMutation.isPending || !selectedLocation || disabled}
+                    title={disabled ? 'Select a plan to continue.' : undefined}
                     className="inline-flex items-center justify-center font-medium rounded transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-slate-700 text-white hover:bg-slate-800 focus:ring-slate-500 border border-slate-700 px-3 py-1.5 text-sm shadow-md hover:shadow-lg active:bg-slate-900 cursor-pointer"
                     style={{ 
                       zIndex: 1000,

@@ -31,9 +31,11 @@ export const ValidationErrorsDisplay: React.FC<ValidationErrorsDisplayProps> = (
   
   // Show errors if validationErrors array has items OR invalid count > 0
   // Branches may be imported even with validation issues, so show errors for transparency
-  const hasErrors = validationErrors.length > 0 || summary.invalid > 0
-  const hasPartialSuccess = summary.imported > 0 || summary.updated > 0
-  const isCompleteSuccess = !hasErrors && hasPartialSuccess
+  const hasErrors = validationErrors.length > 0 || (summary.invalid ?? 0) > 0
+  const hasPartialSuccess = (summary.imported ?? 0) > 0 || (summary.updated ?? 0) > 0
+  // Success: no errors and (we have import results, or this is pre-upload validation with valid data)
+  const isValidationOnlySuccess = (summary.total ?? 0) > 0 && (summary.invalid ?? 0) === 0 && !hasErrors
+  const isCompleteSuccess = !hasErrors && (hasPartialSuccess || isValidationOnlySuccess)
 
   return (
     <div className="space-y-4">

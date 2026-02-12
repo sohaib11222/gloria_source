@@ -88,7 +88,23 @@ const DocsFullscreen: React.FC = () => {
       
       setCategoriesSafe(categoriesData);
       
-      if (endpointId) {
+      // Treat reserved path segments as views (so links like /docs-fullscreen/api-reference work)
+      if (endpointId === 'api-reference') {
+        setShowApiReference(true);
+        setShowGettingStarted(false);
+        setShowSdkGuide(false);
+        setSelectedEndpoint(null);
+      } else if (endpointId === 'getting-started') {
+        setShowGettingStarted(true);
+        setShowApiReference(false);
+        setShowSdkGuide(false);
+        setSelectedEndpoint(null);
+      } else if (endpointId === 'sdk') {
+        setShowSdkGuide(true);
+        setShowApiReference(false);
+        setShowGettingStarted(false);
+        setSelectedEndpoint(null);
+      } else if (endpointId) {
         const endpoint = categoriesData
           ?.flatMap(cat => cat.endpoints || [])
           .find(ep => ep.id === endpointId);

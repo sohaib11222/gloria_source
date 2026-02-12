@@ -392,6 +392,48 @@ message VehicleOffer {
             <strong>⚠️ Critical:</strong> The <code>agreement_ref</code> is REQUIRED and must be included in every request.
             Use it to determine pricing, availability, and location coverage for that specific agreement.
           </div>
+
+          <h3 style={{ marginTop: '1.5rem' }}>HTTP availability: OTA VehAvailRSCore format</h3>
+          <p style={{ marginTop: '0.5rem' }}>
+            If you use an <strong>HTTP endpoint</strong> for availability (e.g. <code>your-endpoint/availability</code> or pricetest2.php-style APIs), the middleware expects your response as <strong>JSON</strong> in the <strong>OTA VehAvailRSCore</strong> structure. Return <code>Content-Type: application/json</code> and a root object with <code>VehAvailRSCore</code> so the middleware can parse and store offers.
+          </p>
+          <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#64748b' }}>
+            Return <strong>JSON</strong> (e.g. <code>json_encode($array)</code> in PHP) or <strong>PHP <code>var_dump()</code></strong> of the same OTA structure—the middleware parses both automatically.
+          </p>
+          <div style={{ marginTop: '0.75rem', padding: '1rem', backgroundColor: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '0.5rem' }}>
+            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', marginBottom: '0.5rem' }}>Expected root structure (JSON)</p>
+            <pre style={{ fontSize: '0.8rem', margin: 0, overflow: 'auto' }}>{`{
+  "@attributes": { "TimeStamp", "Target", "Version", "CDCode" },
+  "Success": [],
+  "VehAvailRSCore": {
+    "VehRentalCore": {
+      "@attributes": { "PickUpDateTime", "ReturnDateTime" },
+      "PickUpLocation": { "@attributes": { "LocationCode", "Locationname", "Locationaddress", "Locationcity", "Locationtele", "emailaddress", "Locationlat", "Locationlong" } },
+      "ReturnLocation": { "@attributes": { ... } }
+    },
+    "VehVendorAvails": {
+      "VehVendorAvail": {
+        "VehAvails": {
+          "VehAvail": [
+            {
+              "VehAvailCore": {
+                "@attributes": { "Status", "RStatus", "VehID" },
+                "Vehicle": { "VehMakeModel", "VehType", "VehClass", "VehTerms" },
+                "RentalRate": { "RateDistance", "RateQualifier" },
+                "VehicleCharges": { "VehicleCharge", "TotalCharge" },
+                "PricedEquips": [ ... ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}`}</pre>
+            <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem' }}>
+              Key elements: <code>VehRentalCore</code> (pickup/return dates and locations), <code>VehVendorAvails.VehVendorAvail.VehAvails.VehAvail</code> (array of offers). Each <code>VehAvail</code> includes <code>VehAvailCore</code>, <code>Vehicle</code> (VehMakeModel with Name/PictureURL, VehType DoorCount/Baggage, VehClass Size, VehTerms Included/NotIncluded), <code>VehicleCharges</code>, <code>TotalCharge</code>, and optionally <code>PricedEquips</code>. Full spec: Application Flow and Data Spec (Section 3.1.1).
+            </p>
+          </div>
         </section>
 
         {/* Booking Endpoints */}
@@ -443,7 +485,22 @@ message BookingResponse {
         <section id="data-formats" style={{ marginBottom: '3rem', scrollMarginTop: '100px' }}>
           <h2>Data Format Requirements</h2>
 
-          <h3>UN/LOCODE Format</h3>
+          <h3>Branch / location import formats</h3>
+          <p>
+            Branch data (for <code>POST /sources/import-branches</code> or <code>POST /sources/upload-branches</code>) must match one of these standard formats. The system validates structure on import/upload.
+          </p>
+          <ul style={{ lineHeight: '1.8' }}>
+            <li><strong>JSON</strong> — <code>CompanyCode</code> + <code>Branches</code> array, or OTA <code>OTA_VehLocSearchRS</code> / <code>gloria</code>. Each branch: <code>Branchcode</code>, <code>Name</code>, <code>AtAirport</code>, <code>Address</code> (AddressLine, CityName, PostalCode, CountryName with <code>attr.Code</code>), <code>Telephone.attr.PhoneNumber</code>, <code>Latitude</code>, <code>Longitude</code>, etc.</li>
+            <li><strong>OTA XML</strong> — <code>OTA_VehLocSearchRS</code> with <code>VehMatchedLocs</code> / <code>VehMatchedLoc</code> / <code>LocationDetail</code> (attributes: Code, Name, AtAirport, Latitude, Longitude, LocationType), plus <code>Address</code>, <code>Telephone</code>.</li>
+            <li><strong>PHP var_dump</strong> — Same OTA structure as output by PHP <code>var_dump()</code> (root key <code>OTA_VehLocSearchRS</code> or <code>gloria</code>).</li>
+            <li><strong>CSV</strong> — First row = headers. Required column: <code>Branchcode</code> or <code>Code</code>. Optional: Name, CountryCode, Country, City, AddressLine, PostalCode, Latitude, Longitude, AtAirport, LocationType, Phone, Email. Column names case-insensitive; aliases supported (e.g. CityName/City, Telephone/Phone). Set default country in config when column is missing.</li>
+            <li><strong>Excel</strong> — .xlsx/.xls with same column layout as CSV (first row = headers, one branch per row).</li>
+          </ul>
+          <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+            For full sample payloads and validation rules, see <strong>Getting Started → Branch data format</strong> and the <strong>Branches → Upload / Configure Endpoint</strong> format samples in the app.
+          </p>
+
+          <h3 style={{ marginTop: '1.5rem' }}>UN/LOCODE Format</h3>
           <ul style={{ lineHeight: '1.8' }}>
             <li><strong>Format:</strong> 2-letter country code + 3-character location code</li>
             <li><strong>Examples:</strong> <code>GBMAN</code> (Manchester, UK), <code>USNYC</code> (New York, USA), <code>FRPAR</code> (Paris, France)</li>

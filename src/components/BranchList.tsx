@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Edit, MapPin, X, Plus, Filter, Store, Building2, Globe, Upload, Settings } from 'lucide-react'
+import { Search, Edit, MapPin, X, Plus, Filter, Store, Building2, Globe, Upload, Settings, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -15,12 +15,17 @@ import { ValidationErrorsDisplay } from './ValidationErrorsDisplay'
 import { Modal } from './ui/Modal'
 import toast from 'react-hot-toast'
 import { ImportBranchesResponse } from '../api/endpoints'
+import { BranchQuotaExceededPayload } from '../api/subscription'
+
+const PLAN_REQUIRED_TITLE = 'Select a plan to continue.'
 
 interface BranchListProps {
+  subscriptionActive?: boolean
   onEdit?: (branch: Branch) => void
+  onQuotaExceeded?: (payload: BranchQuotaExceededPayload, retry: () => Promise<void>) => void
 }
 
-export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
+export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = true, onEdit, onQuotaExceeded }) => {
   const [filters, setFilters] = useState({
     status: '',
     locationType: '',
@@ -35,7 +40,10 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
   const [importResult, setImportResult] = useState<ImportBranchesResponse | null>(null)
   const [isEndpointConfigOpen, setIsEndpointConfigOpen] = useState(false)
   const [endpointUrl, setEndpointUrl] = useState('')
+  const [branchEndpointFormat, setBranchEndpointFormat] = useState<string>('')
+  const [branchDefaultCountryCode, setBranchDefaultCountryCode] = useState('')
   const [isSavingEndpoint, setIsSavingEndpoint] = useState(false)
+  const [showStructureHelp, setShowStructureHelp] = useState(false)
   const limit = 25
 
   const queryClient = useQueryClient()
@@ -46,10 +54,12 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
     queryFn: () => endpointsApi.getConfig(),
   })
 
-  // Set endpoint URL when config loads
+  // Set endpoint config when it loads
   useEffect(() => {
-    if (endpointConfig?.branchEndpointUrl) {
-      setEndpointUrl(endpointConfig.branchEndpointUrl)
+    if (endpointConfig) {
+      if (endpointConfig.branchEndpointUrl) setEndpointUrl(endpointConfig.branchEndpointUrl)
+      setBranchEndpointFormat(endpointConfig.branchEndpointFormat || '')
+      setBranchDefaultCountryCode(endpointConfig.branchDefaultCountryCode || '')
     }
   }, [endpointConfig])
 
@@ -185,7 +195,13 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
     },
     onError: (error: any) => {
       console.error('Failed to import branches:', error)
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to import branches from endpoint'
+      const status = error.response?.status
+      const data = error.response?.data || {}
+      if (status === 402 && data.error === 'BRANCH_QUOTA_EXCEEDED' && onQuotaExceeded) {
+        onQuotaExceeded(data as BranchQuotaExceededPayload, () => importBranchesMutation.mutateAsync())
+        return
+      }
+      const errorMessage = data.message || error.message || 'Failed to import branches from endpoint'
       toast.error(errorMessage)
     },
     onSettled: () => {
@@ -203,8 +219,19 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
   }
 
   const handleUploadSuccess = () => {
-    // Refresh branches list
     queryClient.invalidateQueries({ queryKey: ['branches'] })
+  }
+
+  const handleCreateBranchSuccess = async () => {
+    queryClient.invalidateQueries({ queryKey: ['branches'] })
+    if (endpointConfig?.branchEndpointUrl) {
+      try {
+        await importBranchesMutation.mutateAsync()
+        toast.success('Branch added and synced from endpoint')
+      } catch {
+        toast.success('Branch added. Sync from endpoint failed or was skipped.')
+      }
+    }
   }
 
   const handleSaveEndpointUrl = async () => {
@@ -214,12 +241,14 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
         httpEndpoint: endpointConfig?.httpEndpoint || '',
         grpcEndpoint: endpointConfig?.grpcEndpoint || '',
         branchEndpointUrl: endpointUrl,
+        branchEndpointFormat: branchEndpointFormat || undefined,
+        branchDefaultCountryCode: branchDefaultCountryCode.trim() || undefined,
       })
       queryClient.invalidateQueries({ queryKey: ['endpointConfig'] })
       setIsEndpointConfigOpen(false)
-      toast.success('Branch endpoint URL configured successfully')
+      toast.success('Branch endpoint configured successfully')
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to save endpoint URL')
+      toast.error(error.response?.data?.message || 'Failed to save endpoint configuration')
     } finally {
       setIsSavingEndpoint(false)
     }
@@ -363,6 +392,18 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
                 Import from Endpoint
               </Button>
               <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleImportBranches}
+                loading={isImporting}
+                disabled={isImporting}
+                className="flex items-center gap-2 shadow-md hover:shadow-lg"
+                title="Sync branches from configured endpoint"
+              >
+                <RefreshCw className={`w-4 h-4 ${isImporting ? 'animate-spin' : ''}`} />
+                Sync
+              </Button>
+              <Button
                 variant="primary"
                 size="sm"
                 onClick={() => setIsCreateModalOpen(true)}
@@ -396,6 +437,8 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
                         variant="secondary"
                         size="sm"
                         onClick={() => setIsUploadModalOpen(true)}
+                        disabled={!subscriptionActive}
+                        title={!subscriptionActive ? PLAN_REQUIRED_TITLE : undefined}
                         className="flex items-center gap-2"
                       >
                         <Upload className="w-4 h-4" />
@@ -405,6 +448,8 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
                         variant="primary"
                         size="sm"
                         onClick={() => setIsCreateModalOpen(true)}
+                        disabled={!subscriptionActive}
+                        title={!subscriptionActive ? PLAN_REQUIRED_TITLE : undefined}
                         className="flex items-center gap-2"
                       >
                         <Plus className="w-4 h-4" />
@@ -415,89 +460,107 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded border border-gray-200">
-                  <table className="min-w-full divide-y divide-gray-200">
+                  <table className="min-w-full divide-y divide-gray-200 table-fixed sm:table-auto">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-28 sm:w-32">
                           Branch Code
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider min-w-[120px]">
                           Name
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider min-w-[160px]">
                           Location
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-24">
+                          Type
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-24">
                           Status
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-28">
                           UN/LOCODE
                         </th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider w-20">
                           Actions
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {(branchesData?.items ?? []).map((branch) => (
-                        <tr key={branch.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <Store className="w-4 h-4 text-gray-400" />
-                              <span className="text-sm font-medium text-gray-900 font-mono">
-                                {branch.branchCode}
+                      {(branchesData?.items ?? []).map((branch) => {
+                        const locationParts = [
+                          branch.addressLine,
+                          branch.city,
+                          branch.postalCode,
+                          branch.country || (branch.countryCode ? `(${branch.countryCode})` : null),
+                        ].filter(Boolean)
+                        const locationText = locationParts.length > 0 ? locationParts.join(', ') : '—'
+                        return (
+                          <tr key={branch.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 align-top border-r border-gray-100">
+                              <div className="flex items-center gap-2">
+                                <Store className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <span className="text-sm font-medium text-gray-900 font-mono break-all">
+                                  {branch.branchCode || '—'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 align-top border-r border-gray-100">
+                              <span className="text-sm text-gray-900 break-words">{branch.name || '—'}</span>
+                            </td>
+                            <td className="px-4 py-3 align-top border-r border-gray-100 max-w-[200px]">
+                              <div className="flex items-start gap-2 text-sm text-gray-600">
+                                <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                                <span className="break-words" title={locationText}>
+                                  {locationText}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 align-top border-r border-gray-100">
+                              <span className="text-xs text-gray-600">
+                                {branch.locationType || '—'}
+                                {branch.collectionType ? ` / ${branch.collectionType}` : ''}
                               </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-sm text-gray-900">{branch.name}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <MapPin className="w-4 h-4 text-gray-400" />
-                              <span>
-                                {branch.city && branch.country
-                                  ? `${branch.city}, ${branch.country}`
-                                  : '—'}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <Badge
-                              variant={
-                                branch.status === 'ACTIVE'
-                                  ? 'success'
-                                  : branch.status === 'INACTIVE'
-                                  ? 'danger'
-                                  : 'secondary'
-                              }
-                            >
-                              {branch.status || '—'}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {branch.natoLocode ? (
-                              <Badge variant="info" className="font-mono">
-                                {branch.natoLocode}
-                              </Badge>
-                            ) : (
-                              <Badge variant="warning">Unmapped</Badge>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-right">
-                            {onEdit && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => onEdit(branch)}
-                                className="hover:bg-blue-100 hover:text-blue-700"
+                            </td>
+                            <td className="px-4 py-3 align-top border-r border-gray-100">
+                              <Badge
+                                variant={
+                                  branch.status === 'ACTIVE'
+                                    ? 'success'
+                                    : branch.status === 'INACTIVE'
+                                    ? 'danger'
+                                    : 'secondary'
+                                }
                               >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                                {branch.status || '—'}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3 align-top border-r border-gray-100">
+                              {branch.natoLocode ? (
+                                <Badge variant="info" className="font-mono">
+                                  {branch.natoLocode}
+                                </Badge>
+                              ) : (
+                                <Badge variant="warning">Unmapped</Badge>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 align-top text-right">
+                              {onEdit && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => onEdit(branch)}
+                                  disabled={!subscriptionActive}
+                                  title={!subscriptionActive ? PLAN_REQUIRED_TITLE : 'Edit branch'}
+                                  className="hover:bg-blue-100 hover:text-blue-700"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -542,6 +605,7 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
       <BranchCreateModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={handleCreateBranchSuccess}
       />
 
       {/* Upload Branches Modal */}
@@ -595,18 +659,67 @@ export const BranchList: React.FC<BranchListProps> = ({ onEdit }) => {
               value={endpointUrl}
               onChange={(e) => setEndpointUrl(e.target.value)}
               placeholder="https://example.com/loctest.php"
-              helperText="Enter the URL of your endpoint that returns branch data in OTA format or PHP var_dump format"
+              helperText="URL that returns branch data (XML, JSON, PHP, CSV, or Excel)"
+            />
+          </div>
+          <div>
+            <Select
+              label="Response / file format"
+              value={branchEndpointFormat}
+              onChange={(e) => setBranchEndpointFormat(e.target.value)}
+              options={[
+                { value: '', label: 'Auto-detect' },
+                { value: 'XML', label: 'OTA XML (OTA_VehLocSearchRS)' },
+                { value: 'JSON', label: 'JSON (Branches array or OTA)' },
+                { value: 'PHP', label: 'PHP var_dump' },
+                { value: 'CSV', label: 'CSV' },
+                { value: 'EXCEL', label: 'Excel (.xlsx / .xls)' },
+              ]}
+              helperText="Set when your endpoint or file type is known"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Default country code
+            </label>
+            <Input
+              value={branchDefaultCountryCode}
+              onChange={(e) => setBranchDefaultCountryCode(e.target.value.toUpperCase().slice(0, 3))}
+              placeholder="e.g. AE, US"
+              maxLength={3}
+              helperText="ISO 2–3 letter code used to map branches to a country when not in the data"
             />
           </div>
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm text-blue-800">
-              <strong>Supported formats:</strong>
+              <strong>Supported formats:</strong> OTA XML, PHP var_dump, JSON, CSV, Excel (.xlsx/.xls)
             </p>
-            <ul className="text-xs text-blue-700 mt-2 list-disc list-inside space-y-1">
-              <li>OTA XML format (OTA_VehLocSearchRS)</li>
-              <li>PHP var_dump output format</li>
-              <li>JSON format with Branches array</li>
-            </ul>
+          </div>
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <button
+              type="button"
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 text-left text-sm font-medium text-gray-700 hover:bg-gray-100"
+              onClick={() => setShowStructureHelp(!showStructureHelp)}
+            >
+              <span>Expected structure / column mapping</span>
+              <span className="text-gray-500">{showStructureHelp ? '▼' : '▶'}</span>
+            </button>
+            {showStructureHelp && (
+              <div className="p-4 bg-white border-t border-gray-200 text-sm text-gray-600 space-y-3">
+                <p><strong>CSV / Excel columns</strong> (case-insensitive; first row = headers):</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li><code>Branchcode</code> or <code>Code</code> – branch identifier</li>
+                  <li><code>Name</code> – branch name</li>
+                  <li><code>CountryCode</code>, <code>Country</code> – country (or use default above)</li>
+                  <li><code>City</code>, <code>AddressLine</code>, <code>PostalCode</code></li>
+                  <li><code>Latitude</code>, <code>Longitude</code></li>
+                  <li><code>AtAirport</code> (true/false), <code>LocationType</code>, <code>CollectionType</code></li>
+                  <li><code>Phone</code>, <code>Email</code></li>
+                </ul>
+                <p><strong>JSON</strong>: <code>Branches</code> array or OTA <code>OTA_VehLocSearchRS</code> / <code>gloria</code>.</p>
+                <p><strong>XML / PHP</strong>: OTA VehLocSearchRS structure (VehMatchedLocs / LocationDetail).</p>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
             <Button

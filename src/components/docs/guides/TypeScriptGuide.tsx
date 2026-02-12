@@ -262,6 +262,7 @@ server.addService(sourceProviderProto.SourceProviderService.service, {
   },
   
   GetAvailability: (call, callback) => {
+    // Required fields; optional rich OTA: picture_url, door_count, baggage, vehicle_category, veh_id, ota_vehicle_json
     const vehicles = [
       {
         supplier_offer_ref: \`OFFER-\${Date.now()}-1\`,
@@ -270,6 +271,7 @@ server.addService(sourceProviderProto.SourceProviderService.service, {
         currency: 'USD',
         total_price: 45.99,
         availability_status: 'AVAILABLE'
+        // Optional: picture_url, door_count, baggage, vehicle_category, veh_id, ota_vehicle_json (JSON for VehTerms, VehicleCharges, PricedEquips)
       }
     ];
     callback(null, { vehicles });
@@ -539,12 +541,12 @@ yarn add axios`}</pre>
                   <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
                     <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}><code style={{ background: '#1e293b', color: 'white', padding: '0.25rem 0.5rem', borderRadius: '0.125rem', fontWeight: 600 }}>POST</code></td>
                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', fontFamily: 'monospace' }}>/sources/import-branches</td>
-                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>Import branches from supplier HTTP endpoint</td>
+                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>Import branches from configured endpoint. Formats: OTA XML, JSON, PHP var_dump, CSV, Excel. Set format and default country in Endpoints config.</td>
                   </tr>
                   <tr>
                     <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}><code style={{ background: '#1e293b', color: 'white', padding: '0.25rem 0.5rem', borderRadius: '0.125rem', fontWeight: 600 }}>POST</code></td>
                     <td style={{ padding: '0.75rem', fontSize: '0.875rem', fontFamily: 'monospace' }}>/sources/upload-branches</td>
-                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>Upload branches from JSON file</td>
+                    <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>Upload branches from file or paste. Body: JSON (Branches array), or rawContent (string) with optional format (CSV/EXCEL) and defaultCountryCode. Supports JSON, XML, PHP, CSV, Excel.</td>
                   </tr>
                 </tbody>
               </table>
@@ -654,6 +656,12 @@ yarn add axios`}</pre>
               <p style={{ margin: 0, fontSize: '0.875rem', color: '#1f2937', fontWeight: 500 }}>
                 ⚠️ <strong>Important:</strong> Your gRPC server must be accessible at the endpoint you configure in the middleware. 
                 Make sure your server is running and reachable before testing.
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '0.25rem' }}>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#1e293b' }}>
+                <strong>Rich OTA (GetAvailability):</strong> <code>VehicleOffer</code> supports optional fields for full pricing and terms: <code>picture_url</code>, <code>door_count</code>, <code>baggage</code>, <code>vehicle_category</code>, <code>veh_id</code>, and <code>ota_vehicle_json</code> (a JSON string for VehTerms, VehicleCharges, PricedEquips). When provided, agents receive rich OTA data in the availability response. <strong>HTTP OTA:</strong> If you use an HTTP endpoint for availability instead of gRPC, you can return OTA VehAvailRS-style JSON (VehAvailRSCore with VehVendorAvails, VehTerms, VehicleCharges, PricedEquips); the middleware parses it automatically. To receive OTA_VehAvailRateRQ XML from the middleware, your source must be configured with <code>useOtaAvailabilityXml</code> and optionally <code>availabilityRequestorId</code> (see Getting Started guide).
               </p>
             </div>
 

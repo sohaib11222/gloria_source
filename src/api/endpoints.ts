@@ -1,5 +1,7 @@
 import api from '../lib/api'
 
+export type BranchEndpointFormat = 'XML' | 'JSON' | 'PHP' | 'CSV' | 'EXCEL'
+
 export interface EndpointConfig {
   companyId: string
   companyName: string
@@ -7,7 +9,10 @@ export interface EndpointConfig {
   httpEndpoint: string
   grpcEndpoint: string
   branchEndpointUrl?: string
+  branchEndpointFormat?: BranchEndpointFormat | null
+  branchDefaultCountryCode?: string | null
   locationEndpointUrl?: string
+  availabilityEndpointUrl?: string
   adapterType: string
   description: string
   status: string
@@ -21,7 +26,10 @@ export interface UpdateEndpointRequest {
   httpEndpoint: string
   grpcEndpoint: string
   branchEndpointUrl?: string
+  branchEndpointFormat?: BranchEndpointFormat | null
+  branchDefaultCountryCode?: string | null
   locationEndpointUrl?: string
+  availabilityEndpointUrl?: string
 }
 
 export interface UpdateEndpointResponse {
@@ -189,5 +197,34 @@ export const endpointsApi = {
     const response = await api.delete(`/sources/locations/${unlocode}`)
     return response.data
   },
+
+  fetchAvailability: async (params?: {
+    url?: string
+    pickupDateTime?: string
+    returnDateTime?: string
+    pickupLoc?: string
+    returnLoc?: string
+  }): Promise<FetchAvailabilityResponse> => {
+    const response = await api.post('/sources/fetch-availability', params ?? {})
+    return response.data
+  },
+}
+
+export interface OfferSummaryItem {
+  vehicle_class: string
+  vehicle_make_model: string
+  total_price: number
+  currency: string
+  availability_status: string
+}
+
+export interface FetchAvailabilityResponse {
+  message: string
+  offersCount: number
+  stored: boolean
+  isNew: boolean
+  duplicate?: boolean
+  offersSummary?: OfferSummaryItem[]
+  criteria?: { pickupLoc: string; returnLoc: string; pickupIso: string; returnIso: string }
 }
 

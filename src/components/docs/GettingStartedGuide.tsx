@@ -310,8 +310,17 @@ const GettingStartedGuide: React.FC = () => {
 
             <h3>Branch Data Format</h3>
             <p>
-              Your supplier endpoint can return branches in <strong>JSON</strong> or <strong>XML</strong> format. 
-              The system also supports <strong>PHP var_dump</strong> format with the "gloria" structure (recommended).
+              Your supplier endpoint or upload file can use any of these formats. The system validates structure on import/upload:
+            </p>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li><strong>JSON</strong> — <code>CompanyCode</code> + <code>Branches</code> array, or OTA <code>OTA_VehLocSearchRS</code> / <code>gloria</code></li>
+              <li><strong>OTA XML</strong> — <code>OTA_VehLocSearchRS</code> with <code>VehMatchedLocs</code> / <code>LocationDetail</code></li>
+              <li><strong>PHP var_dump</strong> — Same OTA structure output by PHP <code>var_dump()</code> (recommended for PHP endpoints)</li>
+              <li><strong>CSV</strong> — Header row + data rows; columns: Branchcode, Name, CountryCode, City, etc. (see sample below)</li>
+              <li><strong>Excel</strong> — .xlsx/.xls with same column layout as CSV (first row = headers)</li>
+            </ul>
+            <p>
+              Configure <strong>Response / file format</strong> and <strong>Default country code</strong> in Source → Branches → Configure Branch Import Endpoint. For CSV/Excel, use the default country when a row has no country.
             </p>
 
             <h4 style={{ marginTop: '1.5rem' }}>Format 1: JSON Format (Standard)</h4>
@@ -656,6 +665,26 @@ const GettingStartedGuide: React.FC = () => {
               </ul>
             </div>
 
+            <h4 style={{ marginTop: '1.5rem' }}>Format 4: CSV (Standard columns)</h4>
+            <p>
+              For CSV files or endpoints returning CSV, use a header row (first line) then one branch per row. Column names are case-insensitive. Set <strong>Default country code</strong> in Configure Branch Endpoint if rows lack a country.
+            </p>
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
+              <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
+{`Branchcode,Name,CountryCode,Country,City,AddressLine,PostalCode,Latitude,Longitude,AtAirport,LocationType,Phone,Email
+BR001,Airport Branch,GB,United Kingdom,Manchester,123 Main St,M1 1AA,53.3656,-2.2729,true,AIRPORT,+441234567890,branch@example.com
+BR002,City Branch,GB,United Kingdom,London,456 High St,SW1A 1AA,51.5074,-0.1278,false,CITY,+442071234567,city@example.com`}
+              </pre>
+            </div>
+            <p style={{ marginTop: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
+              <strong>Accepted column aliases:</strong> <code>Code</code> / <code>Branchcode</code>, <code>CityName</code> / <code>City</code>, <code>AddressLine</code> / <code>Address</code>, <code>Phone</code> / <code>Telephone</code>, <code>Email</code> / <code>EmailAddress</code>, <code>Lat</code> / <code>Latitude</code>, <code>Lon</code> / <code>Longitude</code>.
+            </p>
+
+            <h4 style={{ marginTop: '1.5rem' }}>Format 5: Excel (.xlsx / .xls)</h4>
+            <p>
+              Same structure as CSV: first row = headers, one branch per row. Use the same column names (Branchcode, Name, CountryCode, City, AddressLine, Latitude, Longitude, AtAirport, Phone, Email, etc.). Upload via <strong>Upload File</strong>; the system parses the first sheet.
+            </p>
+
             <h3>Required Fields</h3>
             <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '0.5rem' }}>
               <p style={{ marginTop: 0, fontWeight: 600 }}>⚠️ All of these fields are REQUIRED:</p>
@@ -862,6 +891,31 @@ const GettingStartedGuide: React.FC = () => {
               </pre>
             </div>
 
+            <h3 style={{ marginTop: '1.5rem' }}>OTA Availability (HTTP Endpoint)</h3>
+            <p>
+              If you use an <strong>HTTP endpoint</strong> for availability (instead of gRPC), the middleware supports two modes:
+            </p>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li><strong>JSON request:</strong> By default, the middleware POSTs a JSON body to <code>your-http-endpoint/availability</code> with criteria (PickupLocation, DropOffLocation, PickupDateTime, etc.). Your endpoint returns either a flat array of offers or an <strong>OTA VehAvailRS-style</strong> JSON structure.</li>
+              <li><strong>OTA XML request:</strong> If your source is configured with <code>useOtaAvailabilityXml</code> (e.g. for endpoints like <code>pricetest2.php</code>), the middleware sends an <strong>OTA_VehAvailRateRQ</strong> XML body (PickUpDateTime, ReturnDateTime, PickUpLocation, ReturnLocation, DriverType Age, Customer CitizenCountryName). Your endpoint should accept this XML and return availability.</li>
+            </ul>
+            <p style={{ marginTop: '1rem' }}>
+              <strong>Rich OTA response (VehAvailRS):</strong> If your HTTP endpoint returns a full <strong>OTA VehAvailRS</strong> structure (e.g. <code>VehAvailRSCore</code> with <code>VehVendorAvails</code> → <code>VehAvail</code> array), the middleware automatically parses it and passes through rich data to agents:
+            </p>
+            <ul style={{ lineHeight: '1.8' }}>
+              <li>VehTerms (Included / NotIncluded: insurance, CDW, etc.)</li>
+              <li>VehicleCharges and TotalCharge (prices, tax, currency)</li>
+              <li>PricedEquips (child seats, GPS, etc.)</li>
+              <li>PictureURL, DoorCount, Baggage, VehicleCategory (ACRISS)</li>
+              <li>PickUp/Return location details (name, address, city, phone, coordinates)</li>
+            </ul>
+            <p style={{ marginTop: '1rem' }}>
+              Response format: return <strong>JSON</strong> that matches the OTA structure (e.g. root with <code>VehAvailRSCore</code>, <code>VehRentalCore</code>, <code>VehVendorAvails.VehVendorAvail.VehAvails.VehAvail</code> array). Each <code>VehAvail</code> can include <code>VehAvailCore</code>, <code>Vehicle</code> (VehMakeModel with Name/PictureURL, VehType with DoorCount/Baggage), <code>VehTerms</code>, <code>RentalRate</code>, <code>VehicleCharges</code>, <code>TotalCharge</code>, <code>PricedEquips</code>.
+            </p>
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f0f9ff', border: '1px solid #3b82f6', borderRadius: '0.5rem' }}>
+              <strong>Configuration:</strong> To have the middleware send <strong>OTA_VehAvailRateRQ</strong> XML to your HTTP availability URL, your source must be configured with <code>useOtaAvailabilityXml: true</code> and optionally <code>availabilityRequestorId</code> (default <code>1000097</code>). This is typically set in the backend/admin for your company. Ask your administrator if your endpoint expects OTA XML (e.g. pricetest2.php-style APIs).
+            </div>
+
             <h3 style={{ marginTop: '1.5rem' }}>Complete Booking Flow</h3>
             <p>
               Here's the detailed flow when an agent creates a booking:
@@ -946,7 +1000,7 @@ const GettingStartedGuide: React.FC = () => {
             <ul style={{ lineHeight: '1.8' }}>
               <li><code>GetHealth</code> - Health check (returns status)</li>
               <li><code>GetLocations</code> - Return all supported UN/LOCODEs</li>
-              <li><code>GetAvailability</code> - Return vehicle availability for search criteria</li>
+              <li><code>GetAvailability</code> - Return vehicle availability for search criteria. <code>VehicleOffer</code> supports optional rich OTA fields: <code>picture_url</code>, <code>door_count</code>, <code>baggage</code>, <code>vehicle_category</code>, <code>veh_id</code>, and <code>ota_vehicle_json</code> (JSON blob for VehTerms, VehicleCharges, PricedEquips) so agents receive full pricing and terms.</li>
               <li><code>CreateBooking</code> - Create a new booking</li>
               <li><code>ModifyBooking</code> - Modify an existing booking</li>
               <li><code>CancelBooking</code> - Cancel an existing booking</li>
@@ -1104,20 +1158,26 @@ const GettingStartedGuide: React.FC = () => {
 
             <h4 style={{ marginTop: '1.5rem' }}>Preparing Your Location Endpoint</h4>
             <p>
-              Your supplier HTTP endpoint must return location data in a specific format. The endpoint will be called with:
+              Your supplier HTTP endpoint must return location data in a supported format. The endpoint will be called with:
             </p>
             <ul style={{ lineHeight: '1.8' }}>
               <li><strong>Method:</strong> GET</li>
               <li><strong>Header:</strong> <code>Request-Type: LocationRq</code></li>
-              <li><strong>Response Format:</strong> JSON or XML with location array</li>
+              <li><strong>Response Format:</strong> JSON, XML, or OTA_VehLocSearchRS format (same structure as branch imports)</li>
             </ul>
+            
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f0fdf4', border: '1px solid #86efac', borderRadius: '0.5rem' }}>
+              <strong>✅ Compatibility:</strong> If you're already using the OTA_VehLocSearchRS format for branch imports, 
+              you can use the exact same endpoint and format for location imports. The system automatically detects and extracts location data from the OTA structure.
+            </div>
 
             <h4 style={{ marginTop: '1.5rem' }}>Location Data Format</h4>
             <p>
-              Your endpoint can return locations in <strong>JSON</strong> or <strong>XML</strong> format.
+              Your endpoint can return locations in <strong>JSON</strong>, <strong>XML</strong>, or <strong>OTA_VehLocSearchRS</strong> format 
+              (same structure as branch imports). The system supports multiple formats for maximum compatibility.
             </p>
 
-            <h5 style={{ marginTop: '1rem' }}>Format 1: JSON Format (Recommended)</h5>
+            <h5 style={{ marginTop: '1rem' }}>Format 1: JSON Format (Simple - Recommended for New Implementations)</h5>
             <p>
               JSON format with <code>Locations</code> array, <code>items</code> array, or direct array:
             </p>
@@ -1202,21 +1262,111 @@ const GettingStartedGuide: React.FC = () => {
               </pre>
             </div>
 
+            <h5 style={{ marginTop: '1.5rem' }}>Format 3: OTA_VehLocSearchRS Format (Same as Branch Import - Recommended for Existing Systems)</h5>
+            <p>
+              If you're already using the OTA_VehLocSearchRS format for branch imports, you can use the same format for location imports. 
+              This format is automatically detected and locations are extracted from the <code>VehMatchedLocs</code> structure.
+            </p>
+            
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
+              <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0, lineHeight: '1.4' }}>
+{`{
+  "OTA_VehLocSearchRS": {
+    "VehMatchedLocs": [
+      {
+        "VehMatchedLoc": {
+          "LocationDetail": {
+            "attr": {
+              "Code": "DXBA02",
+              "Name": "Dubai Airport",
+              "Latitude": "25.228005",
+              "Longitude": "55.364241"
+            },
+            "Address": {
+              "CountryName": {
+                "attr": {
+                  "Code": "AE"
+                }
+              }
+            },
+            "NatoLocode": "AEDXB"  // Optional: explicit UN/LOCODE
+          }
+        }
+      }
+    ]
+  }
+}`}
+              </pre>
+            </div>
+
+            <h5 style={{ marginTop: '1.5rem' }}>Format 4: PHP var_dump with OTA_VehLocSearchRS (Also Supported)</h5>
+            <p>
+              For PHP-based suppliers, you can return location data in PHP <code>var_dump</code> format using the <strong>OTA_VehLocSearchRS</strong> structure, 
+              exactly the same as branch imports:
+            </p>
+            
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
+              <pre style={{ color: '#e2e8f0', fontSize: '0.75rem', margin: 0, lineHeight: '1.4' }}>
+{`array(1) {
+  ["OTA_VehLocSearchRS"]=> array(4) {
+    ["VehMatchedLocs"]=> array(2) {
+      [0]=> array(1) {
+        ["VehMatchedLoc"]=> array(1) {
+          ["LocationDetail"]=> array(6) {
+            ["attr"]=> array(8) {
+              ["Code"]=> string(6) "DXBA02"
+              ["Name"]=> string(13) "Dubai Airport"
+              ["Latitude"]=> string(9) "25.228005"
+              ["Longitude"]=> string(9) "55.364241"
+            }
+            ["Address"]=> array(4) {
+              ["CountryName"]=> array(2) {
+                ["value"]=> string(20) "UNITED ARAB EMIRATES"
+                ["attr"]=> array(1) {
+                  ["Code"]=> string(2) "AE"
+                }
+              }
+            }
+            ["NatoLocode"]=> string(5) "AEDXB"  // Optional: explicit UN/LOCODE
+          }
+        }
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+            
+            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#dbeafe', border: '1px solid #3b82f6', borderRadius: '0.5rem' }}>
+              <strong>💡 Key Points for OTA Format:</strong>
+              <ul style={{ marginTop: '0.5rem', marginBottom: 0, lineHeight: '1.8' }}>
+                <li>Use the same <strong>OTA_VehLocSearchRS</strong> structure as branch imports</li>
+                <li>Locations are extracted from <code>VehMatchedLocs[].VehMatchedLoc.LocationDetail</code></li>
+                <li><code>NatoLocode</code> field is optional - if not provided, UN/LOCODE is derived from country code + location identifier</li>
+                <li>Country code is extracted from <code>Address.CountryName.attr.Code</code></li>
+                <li>Location name is extracted from <code>LocationDetail.attr.Name</code></li>
+                <li>Coordinates are extracted from <code>LocationDetail.attr.Latitude</code> and <code>LocationDetail.attr.Longitude</code></li>
+                <li>If <code>NatoLocode</code> is not provided, the system will derive it as: <code>[CountryCode][Last3CharsOfCode]</code></li>
+              </ul>
+            </div>
+
             <h4 style={{ marginTop: '1.5rem' }}>Required Fields</h4>
             <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '0.5rem' }}>
               <p style={{ marginTop: 0, fontWeight: 600 }}>⚠️ Required Field:</p>
               <ul style={{ lineHeight: '1.8', marginBottom: 0 }}>
                 <li><code>unlocode</code> - UN/LOCODE identifier (e.g., "GBMAN", "USNYC"). <strong>This is REQUIRED.</strong></li>
+                <li style={{ marginTop: '0.5rem' }}><strong>For OTA Format:</strong> If <code>NatoLocode</code> is not provided, the system will automatically derive the UN/LOCODE from the country code and location identifier. However, it's recommended to provide <code>NatoLocode</code> explicitly when available.</li>
               </ul>
             </div>
 
             <h4 style={{ marginTop: '1.5rem' }}>Optional Fields</h4>
             <ul style={{ lineHeight: '1.8' }}>
-              <li><code>country</code> - 2-letter country code (e.g., "GB", "US")</li>
-              <li><code>place</code> - Location name (e.g., "Manchester", "New York")</li>
+              <li><code>country</code> - 2-letter country code (e.g., "GB", "US"). For OTA format, extracted from <code>Address.CountryName.attr.Code</code></li>
+              <li><code>place</code> - Location name (e.g., "Manchester", "New York"). For OTA format, extracted from <code>LocationDetail.attr.Name</code></li>
               <li><code>iataCode</code> - IATA airport code (e.g., "MAN", "LHR")</li>
-              <li><code>latitude</code> - Decimal degrees (e.g., 53.3656)</li>
-              <li><code>longitude</code> - Decimal degrees (e.g., -2.2729)</li>
+              <li><code>latitude</code> - Decimal degrees (e.g., 53.3656). For OTA format, extracted from <code>LocationDetail.attr.Latitude</code></li>
+              <li><code>longitude</code> - Decimal degrees (e.g., -2.2729). For OTA format, extracted from <code>LocationDetail.attr.Longitude</code></li>
+              <li><code>NatoLocode</code> - Explicit UN/LOCODE (for OTA format only). If not provided, system derives it automatically</li>
             </ul>
 
             <h4 style={{ marginTop: '1.5rem' }}>How to Import Locations</h4>
@@ -1249,16 +1399,19 @@ const GettingStartedGuide: React.FC = () => {
             <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#dbeafe', border: '1px solid #3b82f6', borderRadius: '0.5rem' }}>
               <strong>💡 Important:</strong>
               <ul style={{ marginTop: '0.5rem', marginBottom: 0, lineHeight: '1.8' }}>
-                <li>Your endpoint <strong>must</strong> return an array of locations. The response should contain either:
+                <li>Your endpoint can return locations in multiple formats:
                   <ul style={{ marginTop: '0.5rem', marginLeft: '1.5rem' }}>
                     <li><code>{"{ Locations: [...] }"}</code> - JSON object with "Locations" key</li>
                     <li><code>{"{ items: [...] }"}</code> - JSON object with "items" key</li>
                     <li><code>[location1, location2, ...]</code> - Direct JSON array</li>
                     <li><code>{"<Locations><Location>...</Location></Locations>"}</code> - XML format</li>
+                    <li><code>{"{ OTA_VehLocSearchRS: { VehMatchedLocs: [...] } }"}</code> - OTA format (same as branch import)</li>
+                    <li><code>PHP var_dump with OTA_VehLocSearchRS</code> - PHP var_dump format</li>
                   </ul>
                 </li>
-                <li>Each location must have a <code>unlocode</code> field (required). Other fields are optional.</li>
-                <li>UN/LOCODEs must be valid 5-character codes (e.g., "GBMAN", "USNYC").</li>
+                <li>Each location must have a <code>unlocode</code> field (required). For OTA format, if <code>NatoLocode</code> is not provided, the system will derive it automatically.</li>
+                <li>UN/LOCODEs must be valid 4-5 character codes (e.g., "GBMAN", "USNYC", "AEDXB").</li>
+                <li><strong>OTA Format Support:</strong> If you're already using OTA_VehLocSearchRS for branch imports, you can use the exact same format for location imports. The system automatically extracts location data from the <code>VehMatchedLocs</code> structure.</li>
                 <li>If a location doesn't exist in the UN/LOCODE database, you can request it to be added (see Location Requests section).</li>
               </ul>
             </div>

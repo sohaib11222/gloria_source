@@ -142,6 +142,18 @@ api.interceptors.response.use(
     }
     
     // For non-2xx status codes (except 422 for import endpoints), treat as error
+    // CRITICAL: With validateStatus: () => true, 401 is delivered HERE (not in error callback).
+    // Always logout and redirect to login on 401 (Invalid token / unauthenticated).
+    if (response.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      const basePath = import.meta.env.PROD ? '/source' : ''
+      const loginPath = `${basePath}/login`
+      const currentPath = window.location.pathname
+      if (!currentPath.endsWith('/login') && !currentPath.endsWith('/login/')) {
+        window.location.href = loginPath
+      }
+    }
     const error = new Error(`HTTP ${response.status}: ${response.statusText}`) as any
     error.response = response
     error.status = response.status

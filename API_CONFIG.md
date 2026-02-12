@@ -45,6 +45,22 @@ VITE_API_BASE_URL=/api
 VITE_API_BASE_URL=https://api.example.com
 ```
 
+## Availability endpoint configuration (OTA)
+
+When your source uses an **HTTP endpoint** for availability (instead of gRPC), the middleware can send either JSON or OTA XML. Configuration is stored in the **backend** for your company (not in this frontend):
+
+| Option | Description |
+|--------|-------------|
+| `useOtaAvailabilityXml` | When `true`, the middleware POSTs **OTA_VehAvailRateRQ** XML to your availability URL (e.g. `your-endpoint/availability` or `pricetest2.php`) instead of JSON. Use this when your API expects OTA XML. |
+| `availabilityRequestorId` | RequestorID value in the OTA request (default `1000097`). Set if your supplier requires a specific ID. |
+
+**Response:** Your HTTP availability endpoint can return:
+
+- **Flat JSON array** of offers (e.g. `[{ supplier_offer_ref, vehicle_class, make_model, currency, total_price, ... }]`), or  
+- **OTA VehAvailRS-style JSON** (root with `VehAvailRSCore`, `VehRentalCore`, `VehVendorAvails.VehVendorAvail.VehAvails.VehAvail` array). The middleware auto-detects this and parses VehTerms, VehicleCharges, TotalCharge, PricedEquips, PictureURL, DoorCount, Baggage, and location details so agents receive full pricing and terms.
+
+Ask your administrator to set `useOtaAvailabilityXml` and `availabilityRequestorId` in the backend if your endpoint expects OTA XML (e.g. pricetest2.php-style APIs). See the **Getting Started** and **SDK Guide** in the Docs section for full details.
+
 ## Implementation
 
 Configuration file: `src/lib/apiConfig.ts`

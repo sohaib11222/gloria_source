@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { agreementsApi, Agent, CreateAgreementRequest } from '../api/agreements'
 import { endpointsApi, EndpointConfig, Location, SourceGrpcTestResponse } from '../api/endpoints'
 import { Button } from '../components/ui/Button'
@@ -13,6 +13,7 @@ import { GrpcTestRequired } from '../components/GrpcTestRequired'
 import { CreateAgreementForm } from '../components/CreateAgreementForm'
 import { AvailableAgents } from '../components/AvailableAgents'
 import { BranchList } from '../components/BranchList'
+import { PlanPicker } from '../components/PlanPicker'
 import { BranchEditModal } from '../components/BranchEditModal'
 import { LocationRequestForm } from '../components/LocationRequestForm'
 import { LocationRequestList } from '../components/LocationRequestList'
@@ -27,6 +28,7 @@ import { Badge } from '../components/ui/Badge'
 import toast from 'react-hot-toast'
 import api from '../lib/api'
 import { Branch } from '../api/branches'
+import { subscriptionApi, transactionsApi, SourceTransaction, BranchQuotaExceededPayload } from '../api/subscription'
 import { verificationApi, VerificationResult } from '../api/verification'
 import { useQuery } from '@tanstack/react-query'
 import { Bell } from 'lucide-react'
@@ -35,7 +37,9 @@ import { SourceHealth } from '../types/api'
 import { Modal } from '../components/ui/Modal'
 import { Input } from '../components/ui/Input'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, XCircle, CheckCircle2, ChevronDown, ChevronUp, FileText } from 'lucide-react'
+import { Loader } from '../components/ui/Loader'
+import { formatDate } from '../lib/utils'
+import { AlertCircle, XCircle, CheckCircle2, ChevronDown, ChevronUp, FileText, Info, Receipt, RefreshCw, ExternalLink } from 'lucide-react'
 
 // Location Import Result Display Component
 const LocationImportResultDisplay: React.FC<{ result: any }> = ({ result }) => {
@@ -154,6 +158,8 @@ const LocationImportResultDisplay: React.FC<{ result: any }> = ({ result }) => {
               <li><code className="bg-red-100 px-1 rounded">{"{ items: [...] }"}</code> - JSON object with "items" key</li>
               <li><code className="bg-red-100 px-1 rounded">[location1, location2, ...]</code> - Direct JSON array</li>
               <li><code className="bg-red-100 px-1 rounded">{"<Locations><Location>...</Location></Locations>"}</code> - XML format</li>
+              <li><code className="bg-red-100 px-1 rounded">{"{ OTA_VehLocSearchRS: { VehMatchedLocs: [...] } }"}</code> - OTA format (same as branch import)</li>
+              <li><code className="bg-red-100 px-1 rounded">PHP var_dump with OTA_VehLocSearchRS</code> - PHP var_dump format</li>
             </ul>
           </CardHeader>
           <CardContent className="pt-6">
@@ -305,7 +311,35 @@ const LocationImportResultDisplay: React.FC<{ result: any }> = ({ result }) => {
     <latitude>51.5074</latitude>
     <longitude>-0.1278</longitude>
   </Location>
-</Locations>`}
+</Locations>
+
+// OR OTA_VehLocSearchRS format (same as branch import):
+{
+  "OTA_VehLocSearchRS": {
+    "VehMatchedLocs": [
+      {
+        "VehMatchedLoc": {
+          "LocationDetail": {
+            "attr": {
+              "Code": "DXBA02",
+              "Name": "Dubai Airport",
+              "Latitude": "25.228005",
+              "Longitude": "55.364241"
+            },
+            "Address": {
+              "CountryName": {
+                "attr": {
+                  "Code": "AE"
+                }
+              }
+            },
+            "NatoLocode": "AEDXB"  // Optional: explicit UN/LOCODE
+          }
+        }
+      }
+    ]
+  }
+}`}
                       </pre>
                     </div>
                     
@@ -393,14 +427,335 @@ const LocationImportResultDisplay: React.FC<{ result: any }> = ({ result }) => {
   )
 }
 
+// Availability Fetch Result Display (Pricing tab) - like LocationImportResultDisplay
+const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) => {
+  const isError = !!result.error
+  const isDuplicate = !result.error && result.stored === false && result.duplicate === true
+  const isStored = !result.error && result.stored === true
+  const isSuccess = isStored || isDuplicate
+  const isFormatError = result.error === 'INVALID_FORMAT' || result.error === 'INVALID_RESPONSE_FORMAT'
+  const [showSample, setShowSample] = useState(isFormatError)
+
+  return (
+    <div className="space-y-4">
+      <Card className={`border-2 ${
+        isError ? 'border-red-200 bg-red-50' :
+        isDuplicate ? 'border-amber-200 bg-amber-50' :
+        'border-green-200 bg-green-50'
+      }`}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {isError ? (
+                <XCircle className="w-5 h-5 text-red-600" />
+              ) : isDuplicate ? (
+                <Info className="w-5 h-5 text-amber-600" />
+              ) : (
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+              )}
+              <CardTitle className={`text-lg font-bold ${
+                isError ? 'text-red-900' : isDuplicate ? 'text-amber-900' : 'text-green-900'
+              }`}>
+                {isError ? 'Fetch Failed' : isDuplicate ? 'Duplicate — Not Stored' : 'Fetch & Store Summary'}
+              </CardTitle>
+            </div>
+            {!isError && (result.offersCount ?? 0) >= 0 && (
+              <Badge variant={isDuplicate ? 'secondary' : 'success'} className="font-semibold">
+                {result.offersCount} offers
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className={`text-sm font-medium ${
+            isError ? 'text-red-800' : isDuplicate ? 'text-amber-800' : 'text-green-800'
+          }`}>
+            {result.message}
+          </p>
+          {isStored && (
+            <p className="text-xs text-green-700 mt-1">
+              {result.isNew ? 'New sample stored in database.' : 'Existing sample updated with new data.'}
+            </p>
+          )}
+          {isDuplicate && (
+            <p className="text-xs text-amber-700 mt-1">
+              Same data already stored for this criteria; no duplicate was saved.
+            </p>
+          )}
+          {result.criteria && (result.offersSummary?.length ?? 0) > 0 && (
+            <div className="mt-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-700">
+                Criteria: {result.criteria.pickupLoc} → {result.criteria.returnLoc}
+                {result.criteria.pickupIso && result.criteria.returnIso && (
+                  <span className="text-gray-600 font-normal ml-1">
+                    ({result.criteria.pickupIso.slice(0, 10)} – {result.criteria.returnIso.slice(0, 10)})
+                  </span>
+                )}
+              </p>
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">#</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Vehicle class</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Make / Model</th>
+                      <th className="px-3 py-2 text-right font-semibold text-gray-700">Price</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {(result.offersSummary ?? []).map((offer, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 text-gray-600">{idx + 1}</td>
+                        <td className="px-3 py-2">{offer.vehicle_class || '—'}</td>
+                        <td className="px-3 py-2">{offer.vehicle_make_model || '—'}</td>
+                        <td className="px-3 py-2 text-right font-medium">
+                          {offer.currency && offer.total_price != null
+                            ? `${offer.currency} ${Number(offer.total_price).toFixed(2)}`
+                            : '—'}
+                        </td>
+                        <td className="px-3 py-2">{offer.availability_status || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {isFormatError && result.details && (
+        <Card className="border-2 border-red-200">
+          <CardHeader className="bg-red-50 border-b border-red-200">
+            <div className="flex items-center gap-3">
+              <XCircle className="w-5 h-5 text-red-600" />
+              <CardTitle className="text-lg font-bold text-red-900">Format Error</CardTitle>
+            </div>
+            <p className="text-sm text-red-700 mt-2">
+              The endpoint response format is not recognized. Your endpoint must return availability data in one of the supported formats below.
+            </p>
+            <p className="text-xs text-red-600 mt-1 font-semibold">
+              Your response must contain <code className="bg-red-100 px-1 rounded">VehAvailRSCore</code> and <code className="bg-red-100 px-1 rounded">VehVendorAvails</code>.
+            </p>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              {result.details.dataPreview && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm font-semibold text-red-900 mb-2">Response preview:</p>
+                  <pre className="text-xs bg-red-100 text-red-900 p-3 rounded overflow-x-auto max-h-40">
+                    {result.details.dataPreview}
+                  </pre>
+                </div>
+              )}
+              {result.details.expectedFormats && result.details.expectedFormats.length > 0 && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm font-semibold text-blue-900 mb-2">Expected formats:</p>
+                  <ul className="text-xs text-blue-800 space-y-1 list-disc list-inside">
+                    {result.details.expectedFormats.map((format: string, idx: number) => (
+                      <li key={idx}>{format}</li>
+                    ))}
+                  </ul>
+                  {result.details.help && (
+                    <p className="text-xs text-blue-700 mt-2 italic">{result.details.help}</p>
+                  )}
+                </div>
+              )}
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowSample(!showSample)}
+                  className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm font-semibold text-gray-800">
+                      Sample OTA VehAvailRSCore format (how your data should look)
+                    </span>
+                  </div>
+                  {showSample ? <ChevronUp className="w-4 h-4 text-gray-600" /> : <ChevronDown className="w-4 h-4 text-gray-600" />}
+                </button>
+                {showSample && (
+                  <div className="p-4 bg-white border-t border-gray-200">
+                    <p className="text-xs text-gray-700 font-semibold mb-2">JSON root structure:</p>
+                    <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto max-h-80">{`{
+  "@attributes": { "TimeStamp", "Target", "Version", "CDCode" },
+  "Success": [],
+  "VehAvailRSCore": {
+    "VehRentalCore": {
+      "@attributes": { "PickUpDateTime", "ReturnDateTime" },
+      "PickUpLocation": { "@attributes": { "LocationCode", "Locationname", ... } },
+      "ReturnLocation": { "@attributes": { "LocationCode", "Locationname", ... } }
+    },
+    "VehVendorAvails": {
+      "VehVendorAvail": {
+        "VehAvails": {
+          "VehAvail": [
+            {
+              "VehAvailCore": { "@attributes": { "Status", "RStatus", "VehID" } },
+              "Vehicle": { "VehMakeModel", "VehType", "VehClass", "VehTerms" },
+              "RentalRate": { ... },
+              "VehicleCharges": { "VehicleCharge": [...], "TotalCharge": { "@attributes": { "RateTotalAmount", "CurrencyCode" } } },
+              "PricedEquips": [ ... ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}`}</pre>
+                    <p className="text-xs text-gray-600 mt-2">
+                      PHP <code className="bg-gray-100 px-1 rounded">var_dump()</code> of the same structure is also parsed automatically.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+const STATUS_VARIANTS: Record<string, 'success' | 'warning' | 'default'> = {
+  paid: 'success',
+  open: 'warning',
+  draft: 'default',
+  uncollectible: 'default',
+  void: 'default',
+}
+
+function formatAmount(cents: number, currency: string): string {
+  const code = currency.toUpperCase() === 'EUR' ? 'EUR' : currency
+  return new Intl.NumberFormat('en-IE', {
+    style: 'currency',
+    currency: code,
+    minimumFractionDigits: 2,
+  }).format(cents / 100)
+}
+
+function SourceTransactionsTab() {
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['source', 'transactions'],
+    queryFn: () => transactionsApi.getMyTransactions(),
+  })
+  const items: SourceTransaction[] = data?.items ?? []
+
+  return (
+    <>
+      <div className="mb-8">
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl shadow-sm">
+              <Receipt className="w-8 h-8 text-blue-600" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                My Transactions
+              </h1>
+              <p className="mt-2 text-gray-600 font-medium">View your billing history and invoices</p>
+            </div>
+          </div>
+          <Button variant="secondary" size="sm" onClick={() => refetch()} disabled={isLoading}>
+            <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      <Card className="border border-gray-200 shadow-sm">
+        <CardContent className="pt-6">
+          {isLoading ? (
+            <div className="py-12 flex justify-center">
+              <Loader size="lg" />
+            </div>
+          ) : error ? (
+            <p className="text-red-600 py-4">Failed to load transactions. Please try again.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2">Date</th>
+                    <th className="text-left py-2">Plan</th>
+                    <th className="text-left py-2">Status</th>
+                    <th className="text-right py-2">Amount</th>
+                    <th className="text-right py-2">Period</th>
+                    <th className="text-right py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((t) => (
+                    <tr key={t.id} className="border-b border-gray-100">
+                      <td className="py-2 text-gray-700">
+                        {t.createdAt ? formatDate(t.createdAt) : '—'}
+                      </td>
+                      <td className="py-2">{t.planName ?? '—'}</td>
+                      <td className="py-2">
+                        <Badge variant={STATUS_VARIANTS[t.status] ?? 'default'}>
+                          {t.status}
+                        </Badge>
+                      </td>
+                      <td className="py-2 text-right font-medium">
+                        {formatAmount(t.amountPaid || t.amountDue, t.currency)}
+                      </td>
+                      <td className="py-2 text-right text-gray-600">
+                        {t.periodStart && t.periodEnd
+                          ? `${formatDate(t.periodStart).split(' ')[0]} – ${formatDate(t.periodEnd).split(' ')[0]}`
+                          : '—'}
+                      </td>
+                      <td className="py-2 text-right">
+                        {t.hostedInvoiceUrl && (
+                          <a
+                            href={t.hostedInvoiceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            View
+                          </a>
+                        )}
+                        {t.invoicePdf && (
+                          <a
+                            href={t.invoicePdf}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-gray-600 hover:underline ml-2"
+                          >
+                            <FileText className="w-4 h-4" />
+                            PDF
+                          </a>
+                        )}
+                        {!t.hostedInvoiceUrl && !t.invoicePdf && '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {items.length === 0 && (
+                <p className="text-gray-500 py-4">
+                  No transactions yet. Transactions appear when you pay for a plan via Stripe.
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  )
+}
+
 export default function SourcePage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [user, setUser] = useState<any>(null)
   
   // Get active tab from URL or default to dashboard
-  const tabFromUrl = searchParams.get('tab') as 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings' | null
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings'>(
+  const tabFromUrl = searchParams.get('tab') as 'dashboard' | 'agreements' | 'locations' | 'branches' | 'pricing' | 'transactions' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings' | null
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'agreements' | 'locations' | 'branches' | 'pricing' | 'transactions' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings'>(
     tabFromUrl || 'dashboard'
   )
   
@@ -418,6 +773,13 @@ export default function SourcePage() {
     isOpen: false,
     message: '',
   })
+
+  // Branch quota exceeded modal (402): add more branches then retry import
+  const [quotaModal, setQuotaModal] = useState<{
+    payload: BranchQuotaExceededPayload
+    retry: () => Promise<void>
+  } | null>(null)
+  const [isAddingBranches, setIsAddingBranches] = useState(false)
   
   // Locations state (defined early for use in loadSyncedLocations)
   const [locations, setLocations] = useState<Location[]>([])
@@ -496,7 +858,7 @@ export default function SourcePage() {
   }, [selectedAgreementFilterId, user?.company?.id])
   
   // Sync URL when tab changes
-  const handleTabChange = (tab: 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings') => {
+  const handleTabChange = (tab: 'dashboard' | 'agreements' | 'locations' | 'branches' | 'pricing' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings') => {
     setActiveTab(tab)
     setSearchParams({ tab })
     // When switching to locations tab, refresh the locations data
@@ -516,7 +878,7 @@ export default function SourcePage() {
   // Sync tab when URL changes (back/forward button)
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['dashboard', 'agreements', 'locations', 'branches', 'location-requests', 'health', 'verification', 'support', 'docs', 'settings'].includes(tab)) {
+    if (tab && ['dashboard', 'agreements', 'locations', 'branches', 'pricing', 'location-requests', 'health', 'verification', 'support', 'docs', 'settings'].includes(tab)) {
       setActiveTab(tab as any)
     } else if (!tab) {
       // If no tab in URL, set to dashboard and update URL
@@ -571,7 +933,26 @@ export default function SourcePage() {
   const [isValidatingLocationEndpoint, setIsValidatingLocationEndpoint] = useState(false)
   const [showLocationImportResult, setShowLocationImportResult] = useState(false)
   const [locationImportResult, setLocationImportResult] = useState<any>(null)
+  const [locationConfigTab, setLocationConfigTab] = useState<'settings' | 'sample'>('settings')
+  const [locationSamplePaste, setLocationSamplePaste] = useState('')
+  const [locationSampleValidation, setLocationSampleValidation] = useState<{
+    ok: boolean
+    format?: string
+    count?: number
+    errors?: string[]
+  } | null>(null)
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
+  const [availabilityEndpointUrl, setAvailabilityEndpointUrl] = useState('')
+  const [isSavingAvailabilityEndpoint, setIsSavingAvailabilityEndpoint] = useState(false)
+  const [isFetchingAvailability, setIsFetchingAvailability] = useState(false)
+  const [fetchAvailabilityResult, setFetchAvailabilityResult] = useState<{
+    message: string
+    offersCount?: number
+    stored?: boolean
+    isNew?: boolean
+    error?: string
+    details?: { expectedFormats?: string[]; help?: string; dataPreview?: string }
+  } | null>(null)
   const queryClient = useQueryClient()
   
   // Branches state
@@ -615,7 +996,31 @@ export default function SourcePage() {
   })
   
   const unreadCount = notificationsData?.length || 0
-  
+
+  // Subscription (plan gate for branches/locations)
+  const { data: subscription, isLoading: isLoadingSubscription } = useQuery({
+    queryKey: ['subscription'],
+    queryFn: () => subscriptionApi.getMySubscription(),
+    retry: false,
+    enabled: !!user?.company?.id,
+  })
+  const subscriptionActive =
+    !!subscription?.active &&
+    !!subscription.currentPeriodEnd &&
+    new Date(subscription.currentPeriodEnd) > new Date()
+  const nearExpiry =
+    subscriptionActive &&
+    !!subscription?.currentPeriodEnd &&
+    (new Date(subscription.currentPeriodEnd).getTime() - Date.now()) / (7 * 24 * 60 * 60 * 1000) < 1
+
+  useEffect(() => {
+    if (searchParams.get('checkout') === 'success') {
+      queryClient.invalidateQueries({ queryKey: ['subscription'] })
+      const tab = searchParams.get('tab') || 'dashboard'
+      setSearchParams({ tab }, { replace: true })
+    }
+  }, [searchParams, queryClient, setSearchParams])
+
   // Form state for creating agreement
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [agreementRef, setAgreementRef] = useState('')
@@ -794,10 +1199,13 @@ export default function SourcePage() {
     }
   }
 
-  // Load locationEndpointUrl when endpointConfig changes
+  // Load locationEndpointUrl and availabilityEndpointUrl when endpointConfig changes
   useEffect(() => {
     if (endpointConfig?.locationEndpointUrl) {
       setLocationEndpointUrl(endpointConfig.locationEndpointUrl)
+    }
+    if (endpointConfig?.availabilityEndpointUrl) {
+      setAvailabilityEndpointUrl(endpointConfig.availabilityEndpointUrl)
     }
   }, [endpointConfig])
 
@@ -931,11 +1339,15 @@ export default function SourcePage() {
       toast.success(`Branches imported successfully! ${result.imported} new, ${result.updated} updated`)
     } catch (error: any) {
       console.error('Failed to import branches:', error)
-      const errorMessage = error.response?.data?.message || 'Failed to import branches'
-      const errorCode = error.response?.data?.error || ''
-      
-      // Show error modal for important errors
-      if (error.response?.status === 400 && (errorCode === 'NOT_APPROVED' || errorMessage.includes('approved'))) {
+      const errorData = error.response?.data || {}
+      const errorMessage = errorData.message || 'Failed to import branches'
+      const errorCode = errorData.error || ''
+      if (error.response?.status === 402 && errorCode === 'BRANCH_QUOTA_EXCEEDED') {
+        setQuotaModal({
+          payload: errorData as BranchQuotaExceededPayload,
+          retry: () => importBranches(),
+        })
+      } else if (error.response?.status === 400 && (errorCode === 'NOT_APPROVED' || errorMessage.includes('approved'))) {
         setErrorModal({
           isOpen: true,
           title: 'Account Approval Required',
@@ -1003,8 +1415,12 @@ export default function SourcePage() {
         })
         setShowLocationImportResult(true)
         toast.error(errorMessage, { duration: 8000 })
+      } else if (error.response?.status === 402 && errorCode === 'BRANCH_QUOTA_EXCEEDED') {
+        setQuotaModal({
+          payload: errorData as BranchQuotaExceededPayload,
+          retry: () => importLocations(),
+        })
       } else if (error.response?.status === 400 && (errorCode === 'NOT_APPROVED' || errorMessage.includes('approved'))) {
-        // Show error modal for important errors
         setErrorModal({
           isOpen: true,
           title: 'Account Approval Required',
@@ -1012,7 +1428,6 @@ export default function SourcePage() {
           error: errorCode,
         })
       } else {
-        // Other errors - show in result modal too
         setLocationImportResult({
           message: errorMessage,
           error: errorCode,
@@ -1035,6 +1450,23 @@ export default function SourcePage() {
     }
   }
 
+  const handleConfirmAddBranches = async () => {
+    if (!quotaModal) return
+    const { payload, retry } = quotaModal
+    const newQuantity = payload.currentCount + payload.adding
+    setIsAddingBranches(true)
+    try {
+      await subscriptionApi.updateSubscriptionQuantity(newQuantity)
+      setQuotaModal(null)
+      toast.success(`Added ${payload.needToAdd} branches. Your subscription will be prorated.`)
+      await retry()
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Failed to update subscription')
+    } finally {
+      setIsAddingBranches(false)
+    }
+  }
+
   const handleSaveLocationEndpointUrl = async () => {
     setIsSavingLocationEndpoint(true)
     try {
@@ -1043,6 +1475,7 @@ export default function SourcePage() {
         grpcEndpoint: endpointConfig?.grpcEndpoint || '',
         branchEndpointUrl: endpointConfig?.branchEndpointUrl,
         locationEndpointUrl: locationEndpointUrl,
+        availabilityEndpointUrl: endpointConfig?.availabilityEndpointUrl,
       })
       queryClient.invalidateQueries({ queryKey: ['endpointConfig'] })
       await loadEndpointConfig()
@@ -1052,6 +1485,55 @@ export default function SourcePage() {
       toast.error(error.response?.data?.message || 'Failed to save endpoint URL')
     } finally {
       setIsSavingLocationEndpoint(false)
+    }
+  }
+
+  const handleSaveAvailabilityEndpointUrl = async () => {
+    setIsSavingAvailabilityEndpoint(true)
+    try {
+      await endpointsApi.updateConfig({
+        httpEndpoint: endpointConfig?.httpEndpoint || '',
+        grpcEndpoint: endpointConfig?.grpcEndpoint || '',
+        branchEndpointUrl: endpointConfig?.branchEndpointUrl,
+        locationEndpointUrl: endpointConfig?.locationEndpointUrl,
+        availabilityEndpointUrl: availabilityEndpointUrl.trim() || undefined,
+      })
+      queryClient.invalidateQueries({ queryKey: ['endpointConfig'] })
+      await loadEndpointConfig()
+      toast.success('Availability endpoint URL saved')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to save availability endpoint URL')
+    } finally {
+      setIsSavingAvailabilityEndpoint(false)
+    }
+  }
+
+  const handleFetchAvailability = async () => {
+    const urlToUse = availabilityEndpointUrl.trim() || endpointConfig?.availabilityEndpointUrl || endpointConfig?.httpEndpoint
+    if (!urlToUse) {
+      toast.error('Configure an availability endpoint URL first (e.g. https://ota.example.com/pricetest2.php)')
+      return
+    }
+    setIsFetchingAvailability(true)
+    setFetchAvailabilityResult(null)
+    try {
+      const result = await endpointsApi.fetchAvailability({
+        url: availabilityEndpointUrl.trim() || undefined,
+      })
+      setFetchAvailabilityResult(result)
+      toast.success(result.message)
+    } catch (error: any) {
+      const errorData = error.response?.data || {}
+      const errorMessage = errorData.message || 'Failed to fetch availability'
+      const errorCode = errorData.error || ''
+      setFetchAvailabilityResult({
+        message: errorMessage,
+        error: errorCode,
+        details: errorData.details,
+      })
+      toast.error(errorMessage)
+    } finally {
+      setIsFetchingAvailability(false)
     }
   }
 
@@ -1097,19 +1579,25 @@ export default function SourcePage() {
         if (Array.isArray(json) || json.Locations || json.items || json.Location) {
           isValid = true
           format = 'JSON'
+        } else if (json.OTA_VehLocSearchRS?.VehMatchedLocs || json.gloria?.VehMatchedLocs) {
+          isValid = true
+          format = 'JSON (OTA_VehLocSearchRS)'
         }
       } catch {
         // Try XML
         if (responseText.includes('<Locations>') || responseText.includes('<Location>')) {
           isValid = true
           format = 'XML'
+        } else if (responseText.includes('OTA_VehLocSearchRS') && responseText.includes('VehMatchedLocs')) {
+          isValid = true
+          format = 'PHP var_dump / OTA'
         }
       }
 
       if (isValid) {
         toast.success(`Endpoint is valid! Detected ${format} format.`)
       } else {
-        toast.warning('Endpoint responded but format could not be detected. Expected JSON or XML.')
+        toast.warning('Endpoint responded but format could not be detected. Expected JSON, XML, or PHP var_dump (OTA_VehLocSearchRS).')
       }
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -1120,6 +1608,50 @@ export default function SourcePage() {
     } finally {
       setIsValidatingLocationEndpoint(false)
     }
+  }
+
+  /** Client-side validation of pasted location sample (JSON, XML, or PHP var_dump OTA). */
+  const validateLocationSample = () => {
+    const pasted = locationSamplePaste.trim()
+    setLocationSampleValidation(null)
+    if (!pasted) {
+      setLocationSampleValidation({ ok: false, errors: ['Paste sample data first.'] })
+      return
+    }
+    const errors: string[] = []
+    try {
+      const parsed = JSON.parse(pasted)
+      let count = 0
+      if (Array.isArray(parsed)) count = parsed.length
+      else if (Array.isArray(parsed.Locations)) count = parsed.Locations.length
+      else if (Array.isArray(parsed.items)) count = parsed.items.length
+      else if (parsed.OTA_VehLocSearchRS?.VehMatchedLocs) count = parsed.OTA_VehLocSearchRS.VehMatchedLocs.length
+      else if (parsed.gloria?.VehMatchedLocs) count = parsed.gloria.VehMatchedLocs.length
+      if (count > 0) {
+        setLocationSampleValidation({ ok: true, format: 'JSON', count })
+        return
+      }
+      errors.push('JSON is valid but no known location array found (expect Locations, items, or OTA_VehLocSearchRS.VehMatchedLocs).')
+    } catch {
+      if (pasted.includes('OTA_VehLocSearchRS') && pasted.includes('VehMatchedLocs')) {
+        const locationDetailCount = (pasted.match(/\["LocationDetail"\]/g) || []).length
+        const count = locationDetailCount
+        setLocationSampleValidation({
+          ok: count > 0,
+          format: 'PHP var_dump / OTA',
+          count: count || undefined,
+          errors: count === 0 ? ['OTA structure found but no LocationDetail blocks detected.'] : undefined,
+        })
+        return
+      }
+      const xmlLocCount = (pasted.match(/<Location\b/g) || []).length
+      if (pasted.includes('<Locations>') || xmlLocCount > 0) {
+        setLocationSampleValidation({ ok: xmlLocCount > 0, format: 'XML', count: xmlLocCount || undefined })
+        return
+      }
+      errors.push('Could not recognize format. Use JSON, XML, or PHP var_dump with OTA_VehLocSearchRS and VehMatchedLocs.')
+    }
+    setLocationSampleValidation({ ok: false, errors })
   }
 
   const testSourceGrpc = async () => {
@@ -1335,6 +1867,24 @@ export default function SourcePage() {
                 key={activeTab}
                 className="animate-in fade-in duration-200"
               >
+                {subscriptionActive && nearExpiry && subscription?.currentPeriodEnd && (
+                  <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-amber-900 font-medium">
+                      Your plan expires on {new Date(subscription.currentPeriodEnd).toLocaleDateString()}. Renew now to continue.
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => setSearchParams((prev) => ({ ...Object.fromEntries(prev), renew: '1' }))}
+                    >
+                      Renew now
+                    </Button>
+                  </div>
+                )}
+                {(searchParams.get('renew') === '1' || (!isLoadingSubscription && !subscriptionActive && ['dashboard', 'locations', 'branches', 'location-requests'].includes(activeTab))) ? (
+                  <PlanPicker />
+                ) : (
+                <>
                 {activeTab === 'dashboard' && (
                 <>
                   {/* Header */}
@@ -1719,6 +2269,8 @@ export default function SourcePage() {
                               loading={isSyncingLocations}
                               variant="primary"
                               size="sm"
+                              disabled={!subscriptionActive}
+                              title={!subscriptionActive ? 'Select a plan to continue.' : undefined}
                               className="shadow-md hover:shadow-lg"
                             >
                               <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1735,6 +2287,8 @@ export default function SourcePage() {
                               loading={isImportingBranches}
                               variant="secondary"
                               size="sm"
+                              disabled={!subscriptionActive}
+                              title={!subscriptionActive ? 'Select a plan to continue.' : undefined}
                               className="shadow-md hover:shadow-lg"
                             >
                               <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1750,8 +2304,9 @@ export default function SourcePage() {
                               }} 
                               variant="ghost"
                               size="sm"
+                              disabled={!subscriptionActive}
                               className="shadow-md hover:shadow-lg"
-                              title="Configure location import endpoint URL"
+                              title={!subscriptionActive ? 'Select a plan to continue.' : 'Configure location import endpoint URL'}
                             >
                               <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -1768,8 +2323,9 @@ export default function SourcePage() {
                               loading={isImportingLocations}
                               variant="secondary"
                               size="sm"
+                              disabled={!subscriptionActive}
                               className="shadow-md hover:shadow-lg"
-                              title={endpointConfig?.locationEndpointUrl ? `Import from ${endpointConfig.locationEndpointUrl}` : 'Import from configured endpoint'}
+                              title={!subscriptionActive ? 'Select a plan to continue.' : (endpointConfig?.locationEndpointUrl ? `Import from ${endpointConfig.locationEndpointUrl}` : 'Import from configured endpoint')}
                             >
                               <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1829,7 +2385,7 @@ export default function SourcePage() {
                             <div>
                               <p className="text-sm font-semibold text-blue-900 mb-1">Sync Information</p>
                               <p className="text-xs text-blue-800 leading-relaxed">
-                                Click "Sync Locations" to sync your coverage from supplier adapter. Click "Import Branches" to import branches from your HTTP endpoint. Click "Configure Endpoint" to set up your location import endpoint, then click "Import Locations" to import locations/UN/LOCODEs from your HTTP endpoint (supports XML and JSON formats).
+                                Click "Sync Locations" to sync your coverage from supplier adapter. Click "Import Branches" to import branches from your HTTP endpoint. Click "Configure Endpoint" to set up your location import endpoint, then click "Import Locations" to import locations/UN/LOCODEs from your HTTP endpoint (supports JSON, XML, and PHP var_dump / OTA_VehLocSearchRS, same as branch import).
                         </p>
                       </div>
                     </div>
@@ -1884,6 +2440,7 @@ export default function SourcePage() {
                       </CardHeader>
                       <CardContent className="pt-6">
                       <AddLocationForm
+                        disabled={!subscriptionActive}
                         onSuccess={() => {
                           // Reload synced locations after adding
                           if (user?.company?.id) {
@@ -1964,61 +2521,180 @@ export default function SourcePage() {
                   {/* Location Endpoint Configuration Modal */}
                   <Modal
                     isOpen={isLocationEndpointConfigOpen}
-                    onClose={() => setIsLocationEndpointConfigOpen(false)}
+                    onClose={() => {
+                      setIsLocationEndpointConfigOpen(false)
+                      setLocationConfigTab('settings')
+                      setLocationSamplePaste('')
+                      setLocationSampleValidation(null)
+                    }}
                     title="Configure Location Import Endpoint"
-                    size="md"
+                    size="lg"
                   >
                     <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Location Endpoint URL
-                        </label>
-                        <Input
-                          value={locationEndpointUrl}
-                          onChange={(e) => setLocationEndpointUrl(e.target.value)}
-                          placeholder="https://example.com/locations.php"
-                          helperText="Enter the URL of your endpoint that returns location data in JSON or XML format"
-                        />
-                      </div>
-                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-sm text-blue-800">
-                          <strong>Supported formats:</strong>
-                        </p>
-                        <ul className="text-xs text-blue-700 mt-2 list-disc list-inside space-y-1">
-                          <li>JSON format: <code>{`{ Locations: [...] }`}</code> or <code>{`{ items: [...] }`}</code> or array</li>
-                          <li>XML format: <code>{`<Locations><Location>...</Location></Locations>`}</code></li>
-                          <li>Each location should have: unlocode (required), country, place, iataCode, latitude, longitude</li>
-                        </ul>
-                      </div>
-                      <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                        <Button
-                          variant="secondary"
-                          onClick={validateLocationEndpoint}
-                          loading={isValidatingLocationEndpoint}
-                          disabled={!locationEndpointUrl.trim()}
+                      {/* Tabs */}
+                      <div className="flex border-b border-gray-200">
+                        <button
                           type="button"
+                          onClick={() => setLocationConfigTab('settings')}
+                          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+                            locationConfigTab === 'settings'
+                              ? 'border-blue-600 text-blue-600'
+                              : 'border-transparent text-gray-500 hover:text-gray-700'
+                          }`}
                         >
-                          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Test Endpoint
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          onClick={() => setIsLocationEndpointConfigOpen(false)}
+                          Settings
+                        </button>
+                        <button
                           type="button"
+                          onClick={() => setLocationConfigTab('sample')}
+                          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+                            locationConfigTab === 'sample'
+                              ? 'border-blue-600 text-blue-600'
+                              : 'border-transparent text-gray-500 hover:text-gray-700'
+                          }`}
                         >
-                          Cancel
-                        </Button>
-                        <Button
-                          variant="primary"
-                          onClick={handleSaveLocationEndpointUrl}
-                          loading={isSavingLocationEndpoint}
-                          disabled={!locationEndpointUrl.trim()}
-                        >
-                          Save
-                        </Button>
+                          Sample & Validate
+                        </button>
                       </div>
+
+                      {locationConfigTab === 'settings' && (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Location Endpoint URL
+                            </label>
+                            <Input
+                              value={locationEndpointUrl}
+                              onChange={(e) => setLocationEndpointUrl(e.target.value)}
+                              placeholder="https://example.com/loctest.php"
+                              helperText="Enter the URL that returns location data in JSON, XML, or PHP var_dump (OTA_VehLocSearchRS) format"
+                            />
+                          </div>
+                          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-sm text-blue-800 font-semibold mb-2">Supported formats</p>
+                            <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
+                              <li>JSON: <code>{`{ Locations: [...] }`}</code>, <code>{`{ items: [...] }`}</code>, or array</li>
+                              <li>XML: <code>{`<Locations><Location>...</Location></Locations>`}</code></li>
+                              <li><strong>PHP var_dump / OTA:</strong> <code>OTA_VehLocSearchRS</code> with <code>VehMatchedLocs</code> and <code>LocationDetail</code> (attr: Code, Name, Latitude, Longitude; Address.CountryName.attr.Code). Unlocode derived as country + first 3 of Code (e.g. DXBA02 → AEDXB).</li>
+                            </ul>
+                            <p className="text-xs text-blue-600 mt-2">Use the <strong>Sample & Validate</strong> tab to see an example and paste your response to check format.</p>
+                          </div>
+                          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                            <Button
+                              variant="secondary"
+                              onClick={validateLocationEndpoint}
+                              loading={isValidatingLocationEndpoint}
+                              disabled={!locationEndpointUrl.trim()}
+                              type="button"
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Test Endpoint
+                            </Button>
+                            <Button variant="secondary" onClick={() => setIsLocationEndpointConfigOpen(false)} type="button">
+                              Cancel
+                            </Button>
+                            <Button
+                              variant="primary"
+                              onClick={handleSaveLocationEndpointUrl}
+                              loading={isSavingLocationEndpoint}
+                              disabled={!locationEndpointUrl.trim()}
+                            >
+                              Save
+                            </Button>
+                          </div>
+                        </>
+                      )}
+
+                      {locationConfigTab === 'sample' && (
+                        <>
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 mb-2">Expected sample (OTA PHP var_dump)</p>
+                            <p className="text-xs text-gray-600 mb-2">Your endpoint should return a structure like this. Each location has <code>LocationDetail</code> with <code>attr</code> (Code, Name, Latitude, Longitude) and <code>Address.CountryName.attr.Code</code> (e.g. AE).</p>
+                            <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto max-h-48 overflow-y-auto font-mono whitespace-pre">
+{`array(1) {
+  ["OTA_VehLocSearchRS"]=> array(4) {
+    ["VehMatchedLocs"]=> array(2) {
+      [0]=> array(1) {
+        ["VehMatchedLoc"]=> array(1) {
+          ["LocationDetail"]=> array(6) {
+            ["attr"]=> array(8) {
+              ["Code"]=> string(6) "DXBA02"
+              ["Name"]=> string(13) "Dubai Airport"
+              ["Latitude"]=> string(9) "25.236158"
+              ["Longitude"]=> string(9) "55.362354"
+              ["BranchType"]=> string(6) "DXBA02"
+            }
+            ["Address"]=> array(4) {
+              ["CountryName"]=> array(2) {
+                ["value"]=> string(20) "UNITED ARAB EMIRATES"
+                ["attr"]=> array(1) { ["Code"]=> string(2) "AE" }
+              }
+            }
+          }
+        }
+      }
+      [1]=> ... second location ...
+    }
+  }
+}`}
+                            </pre>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Paste your sample response</label>
+                            <p className="text-xs text-gray-500 mb-1">Paste JSON, XML, or PHP var_dump output here and click Validate to check format and location count.</p>
+                            <textarea
+                              value={locationSamplePaste}
+                              onChange={(e) => {
+                                setLocationSamplePaste(e.target.value)
+                                setLocationSampleValidation(null)
+                              }}
+                              placeholder="Paste endpoint response (JSON, XML, or PHP var_dump)..."
+                              className="w-full h-40 px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              spellCheck={false}
+                            />
+                            <div className="flex items-center gap-3 mt-2">
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={validateLocationSample}
+                                disabled={!locationSamplePaste.trim()}
+                              >
+                                Validate sample
+                              </Button>
+                              {locationSampleValidation && (
+                                <div className={`flex-1 text-sm ${locationSampleValidation.ok ? 'text-green-700' : 'text-red-700'}`}>
+                                  {locationSampleValidation.ok ? (
+                                    <span>
+                                      <CheckCircle2 className="w-4 h-4 inline mr-1 align-middle" />
+                                      Detected <strong>{locationSampleValidation.format}</strong>
+                                      {locationSampleValidation.count != null && ` — ${locationSampleValidation.count} location(s)`}.
+                                    </span>
+                                  ) : (
+                                    <span>
+                                      <XCircle className="w-4 h-4 inline mr-1 align-middle" />
+                                      {locationSampleValidation.errors?.join(' ') || 'Validation failed.'}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            {locationSampleValidation?.errors && locationSampleValidation.errors.length > 0 && (
+                              <ul className="mt-2 text-xs text-red-700 list-disc list-inside">
+                                {locationSampleValidation.errors.map((err, i) => (
+                                  <li key={i}>{err}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                          <div className="flex justify-end pt-2 border-t border-gray-200">
+                            <Button variant="secondary" onClick={() => setIsLocationEndpointConfigOpen(false)} type="button">
+                              Close
+                            </Button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </Modal>
 
@@ -2061,10 +2737,12 @@ export default function SourcePage() {
 
                   <div className="mt-6">
                     <BranchList
+                      subscriptionActive={subscriptionActive}
                       onEdit={(branch) => {
                         setSelectedBranch(branch)
                         setIsEditBranchModalOpen(true)
                       }}
+                      onQuotaExceeded={(payload, retry) => setQuotaModal({ payload, retry })}
                     />
                   </div>
                 </>
@@ -2094,6 +2772,137 @@ export default function SourcePage() {
                     <LocationRequestList />
                   </div>
                 </>
+              )}
+
+              {activeTab === 'pricing' && (
+                <>
+                  <div className="mb-8">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="p-3 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-xl shadow-sm">
+                        <svg className="w-8 h-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                          Pricing &amp; Availability
+                        </h1>
+                        <p className="mt-2 text-gray-600 font-medium">How your HTTP availability endpoint should return pricing data</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 space-y-6">
+                    {/* Availability endpoint configuration */}
+                    <Card className="border border-gray-200 shadow-sm">
+                      <CardHeader>
+                        <CardTitle className="text-lg">Availability endpoint</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <p className="text-sm text-gray-700">
+                          Set the URL of your availability/pricing endpoint (e.g. pricetest2.php). The middleware uses this (or <code className="bg-gray-100 px-1 rounded">httpEndpoint</code> + <code className="bg-gray-100 px-1 rounded">/availability</code>) when agents search. After saving, use &quot;Fetch &amp; Store&quot; to call the endpoint and store the result. The summary below shows whether data was <strong>stored</strong>, <strong>updated</strong>, or <strong>skipped</strong> (duplicate — same data already stored; no duplicate is saved).
+                        </p>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Endpoint URL</label>
+                          <Input
+                            value={availabilityEndpointUrl}
+                            onChange={(e) => setAvailabilityEndpointUrl(e.target.value)}
+                            placeholder="https://ota.example.com/pricetest2.php"
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-3">
+                          <Button
+                            variant="primary"
+                            onClick={handleSaveAvailabilityEndpointUrl}
+                            loading={isSavingAvailabilityEndpoint}
+                            disabled={!availabilityEndpointUrl.trim()}
+                          >
+                            Save endpoint
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={handleFetchAvailability}
+                            loading={isFetchingAvailability}
+                            disabled={!availabilityEndpointUrl.trim() && !endpointConfig?.availabilityEndpointUrl && !endpointConfig?.httpEndpoint}
+                          >
+                            Fetch &amp; Store
+                          </Button>
+                        </div>
+                        {fetchAvailabilityResult && (
+                          <AvailabilityFetchResultDisplay result={fetchAvailabilityResult} />
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border border-gray-200 shadow-sm">
+                      <CardHeader>
+                        <CardTitle className="text-lg">OTA VehAvailRSCore format</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <p className="text-sm text-gray-700">
+                          When agents search for availability, the middleware calls your <strong>HTTP availability endpoint</strong> (e.g. the URL you configure as <code className="bg-gray-100 px-1 rounded">httpEndpoint</code> + <code className="bg-gray-100 px-1 rounded">/availability</code>). Your endpoint must return <strong>JSON</strong> in the <strong>OTA VehAvailRSCore</strong> structure so the middleware can parse and store offers.
+                        </p>
+                        <p className="text-sm text-gray-700">
+                          Example endpoint: <a href="https://ota.tlinternationalgroup.com/pricetest2.php" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">pricetest2.php</a>-style APIs. Your response must be <strong>JSON</strong> (e.g. <code className="bg-gray-100 px-1 rounded">Content-Type: application/json</code> and <code className="bg-gray-100 px-1 rounded">json_encode($array)</code> in PHP). PHP <code className="bg-gray-100 px-1 rounded">var_dump()</code> text is not parsed for availability; only JSON is supported.
+                        </p>
+                        <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
+                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Expected root structure (JSON)</p>
+                          <pre className="text-xs font-mono text-gray-800 overflow-x-auto">{`{
+  "@attributes": { "TimeStamp", "Target", "Version", "CDCode" },
+  "Success": [],
+  "VehAvailRSCore": {
+    "VehRentalCore": { "@attributes": { "PickUpDateTime", "ReturnDateTime" }, "PickUpLocation", "ReturnLocation" },
+    "VehVendorAvails": { "VehVendorAvail": { "VehAvails": { "VehAvail": [ ... ] } } }
+  }
+}`}</pre>
+                          <p className="text-xs text-gray-600 mt-2">Each <code>VehAvail</code> item should include <code>VehAvailCore</code> (Status, RStatus, VehID), <code>Vehicle</code> (VehMakeModel, VehType, VehClass, VehTerms), <code>RentalRate</code>, <code>VehicleCharges</code>, <code>TotalCharge</code>, and optionally <code>PricedEquips</code>.</p>
+                        </div>
+                        <p className="text-sm text-gray-600">
+                          Full format details, element descriptions, and flow diagrams are in the application spec. Use the links below for the API reference (OTA format), Data Formats section, and SDK guide.
+                        </p>
+                        <div className="flex flex-wrap gap-3 mt-3">
+                          <Link
+                            to="/docs-fullscreen/api-reference#availability-endpoint"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm"
+                          >
+                            API reference &amp; OTA format
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </Link>
+                          <Link
+                            to="/docs-fullscreen/api-reference#data-formats"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm border border-gray-200"
+                          >
+                            Data formats
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </Link>
+                          <Link
+                            to="/docs-fullscreen/sdk"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm border border-gray-200"
+                          >
+                            SDK guide
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </Link>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'transactions' && (
+                <SourceTransactionsTab />
               )}
 
               {activeTab === 'health' && (
@@ -2928,6 +3737,8 @@ export default function SourcePage() {
                   )}
                 </>
               )}
+                </>
+                )}
               </div>
               </div>
             )}
@@ -2964,6 +3775,32 @@ export default function SourcePage() {
         type={errorModal.message?.toLowerCase().includes('warning') ? 'warning' : 
               errorModal.message?.toLowerCase().includes('info') ? 'info' : 'error'}
       />
+
+      {/* Branch quota exceeded modal: add more branches then retry */}
+      {quotaModal && (
+        <Modal
+          isOpen={!!quotaModal}
+          onClose={() => setQuotaModal(null)}
+          title="Add more branches"
+        >
+          <div className="space-y-4">
+            <p className="text-gray-700">
+              {quotaModal.payload.message}
+            </p>
+            <p className="text-sm text-gray-600">
+              Add <strong>{quotaModal.payload.needToAdd}</strong> more branch{quotaModal.payload.needToAdd !== 1 ? 'es' : ''} to your subscription. Your next invoice will be prorated.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setQuotaModal(null)} disabled={isAddingBranches}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleConfirmAddBranches} loading={isAddingBranches} disabled={isAddingBranches}>
+                Confirm and add branches
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
       
       {/* Notifications Drawer */}
       <NotificationsDrawer 
