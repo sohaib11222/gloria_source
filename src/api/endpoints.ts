@@ -211,6 +211,7 @@ export const endpointsApi = {
 
   fetchAvailability: async (params?: {
     url?: string
+    adapterType?: 'xml' | 'json' | 'grpc'
     pickupDateTime?: string
     returnDateTime?: string
     pickupLoc?: string
@@ -278,6 +279,7 @@ export interface StoredAvailabilitySample {
   pickupIso: string
   returnIso: string
   offersCount: number
+  adapterType?: 'xml' | 'json' | 'grpc'
   offersSummary?: OfferSummaryItem[] | null
   criteria?: {
     pickupLoc: string
@@ -287,6 +289,7 @@ export interface StoredAvailabilitySample {
     requestorId?: string
     driverAge?: number
     citizenCountry?: string
+    adapterType?: 'xml' | 'json' | 'grpc'
   } | null
   fetchedAt: string
   updatedAt: string
@@ -298,6 +301,7 @@ export interface FetchAvailabilityResponse {
   stored: boolean
   isNew: boolean
   duplicate?: boolean
+  adapterType?: 'xml' | 'json' | 'grpc'
   offersSummary?: OfferSummaryItem[]
   criteria?: {
     pickupLoc: string
@@ -307,8 +311,11 @@ export interface FetchAvailabilityResponse {
     requestorId?: string
     driverAge?: number
     citizenCountry?: string
+    adapterType?: 'xml' | 'json' | 'grpc'
   }
   rawResponsePreview?: string
   parsedPreview?: any
+  error?: string
+  details?: any
 }
 

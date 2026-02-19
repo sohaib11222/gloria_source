@@ -458,6 +458,12 @@ const StoredSampleCard: React.FC<{ sample: import('../api/endpoints').StoredAvai
               {sample.pickupLoc || '—'} → {sample.returnLoc || '—'}
             </span>
             <Badge variant="secondary" className="text-xs">{sample.offersCount} vehicle{sample.offersCount !== 1 ? 's' : ''}</Badge>
+            {(() => {
+              const fmt = (sample as any).adapterType || sample.criteria?.adapterType || 'xml'
+              const colors: Record<string, string> = { xml: 'bg-orange-100 text-orange-700', json: 'bg-green-100 text-green-700', grpc: 'bg-purple-100 text-purple-700' }
+              const labels: Record<string, string> = { xml: 'OTA XML', json: 'Gloria JSON', grpc: 'Gloria gRPC' }
+              return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[fmt] || colors.xml}`}>{labels[fmt] || fmt.toUpperCase()}</span>
+            })()}
             {sample.criteria?.requestorId && (
               <span className="text-xs text-gray-400">ID: {sample.criteria.requestorId}</span>
             )}
@@ -1391,6 +1397,8 @@ export default function SourcePage() {
   const [otaDriverAge, setOtaDriverAge] = useState(30)
   const [otaCitizenCountry, setOtaCitizenCountry] = useState('US')
   const [forceRefreshAvailability, setForceRefreshAvailability] = useState(false)
+  const [availabilityAdapterType, setAvailabilityAdapterType] = useState<'xml' | 'json' | 'grpc'>('xml')
+  const [grpcEndpointAddress, setGrpcEndpointAddress] = useState('')
   // Stored availability samples (loaded on pricing tab mount)
   const [storedSamples, setStoredSamples] = useState<import('../api/endpoints').StoredAvailabilitySample[]>([])
   const [isLoadingStoredSamples, setIsLoadingStoredSamples] = useState(false)
@@ -1655,6 +1663,9 @@ export default function SourcePage() {
     }
     if (endpointConfig?.availabilityEndpointUrl) {
       setAvailabilityEndpointUrl(endpointConfig.availabilityEndpointUrl)
+    }
+    if (endpointConfig?.grpcEndpoint) {
+      setGrpcEndpointAddress((endpointConfig.grpcEndpoint as string).replace(/^grpc:\/\//, ''))
     }
     if (endpointConfig?.locationListEndpointUrl != null) {
       setLocationListEndpointUrl(endpointConfig.locationListEndpointUrl || '')
@@ -2045,9 +2056,16 @@ export default function SourcePage() {
   }
 
   const handleFetchAvailability = async () => {
-    const urlToUse = availabilityEndpointUrl.trim() || endpointConfig?.availabilityEndpointUrl || endpointConfig?.httpEndpoint
+    const isGrpc = availabilityAdapterType === 'grpc'
+    const urlToUse = isGrpc
+      ? (grpcEndpointAddress.trim() || (endpointConfig as any)?.grpcEndpoint)
+      : (availabilityEndpointUrl.trim() || endpointConfig?.availabilityEndpointUrl || endpointConfig?.httpEndpoint)
     if (!urlToUse) {
-      toast.error('Configure an availability endpoint URL first (e.g. https://ota.tlinternationalgroup.com/pricetest.php)')
+      if (isGrpc) {
+        toast.error('Enter a gRPC endpoint address (e.g. localhost:50051)')
+      } else {
+        toast.error('Configure an availability endpoint URL first')
+      }
       return
     }
     if (!otaPickupLoc.trim() || !otaReturnLoc.trim()) {
@@ -2058,7 +2076,8 @@ export default function SourcePage() {
     setFetchAvailabilityResult(null)
     try {
       const result = await endpointsApi.fetchAvailability({
-        url: availabilityEndpointUrl.trim() || undefined,
+        url: isGrpc ? grpcEndpointAddress.trim() || undefined : availabilityEndpointUrl.trim() || undefined,
+        adapterType: availabilityAdapterType,
         pickupLoc: otaPickupLoc.trim(),
         returnLoc: otaReturnLoc.trim(),
         pickupDateTime: otaPickupDateTime ? `${otaPickupDateTime}:00` : undefined,
@@ -3586,54 +3605,101 @@ export default function SourcePage() {
                         <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                           Pricing &amp; Availability
                         </h1>
-                        <p className="mt-2 text-gray-600 font-medium">Test your OTA pricing endpoint and store availability samples</p>
+                        <p className="mt-2 text-gray-600 font-medium">Test your pricing endpoint and store availability samples (OTA XML · Gloria JSON · Gloria gRPC)</p>
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-6 space-y-6">
 
-                    {/* ── Endpoint URL ── */}
+                    {/* ── Format Selector + Endpoint + Request Parameters ── */}
                     <Card className="border border-gray-200 shadow-sm">
                       <CardHeader>
-                        <CardTitle className="text-lg">Availability endpoint URL</CardTitle>
+                        <CardTitle className="text-lg">Format &amp; Endpoint</CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-3">
-                        <p className="text-sm text-gray-700">
-                          Enter the URL of your OTA pricing endpoint (e.g. <code className="bg-gray-100 px-1 rounded">pricetest.php</code>). The middleware POSTs an <strong>OTA_VehAvailRateRQ XML</strong> request (<code className="bg-gray-100 px-1 rounded">Content-Type: text/xml</code>) and expects an <strong>OTA_VehAvailRateRS XML</strong> response in return.
-                        </p>
-                        <div className="flex gap-2 items-end">
-                          <div className="flex-1">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Endpoint URL</label>
-                            <Input
-                              value={availabilityEndpointUrl}
-                              onChange={(e) => setAvailabilityEndpointUrl(e.target.value)}
-                              placeholder="https://ota.tlinternationalgroup.com/pricetest.php"
-                            />
-                          </div>
-                          <Button
-                            variant="primary"
-                            onClick={handleSaveAvailabilityEndpointUrl}
-                            loading={isSavingAvailabilityEndpoint}
-                            disabled={!availabilityEndpointUrl.trim()}
-                          >
-                            Save
-                          </Button>
+                      <CardContent className="space-y-4">
+                        {/* Format tabs */}
+                        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
+                          {(['xml', 'json', 'grpc'] as const).map((fmt) => {
+                            const labels = { xml: 'OTA XML', json: 'Gloria JSON', grpc: 'Gloria gRPC' }
+                            const active = availabilityAdapterType === fmt
+                            return (
+                              <button
+                                key={fmt}
+                                onClick={() => setAvailabilityAdapterType(fmt)}
+                                className={`flex-1 py-2 px-3 transition-colors ${
+                                  active
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                {labels[fmt]}
+                              </button>
+                            )
+                          })}
                         </div>
-                        {endpointConfig?.availabilityEndpointUrl && (
-                          <p className="text-xs text-gray-500">Saved: <code className="bg-gray-100 px-1 rounded">{endpointConfig.availabilityEndpointUrl}</code></p>
+
+                        {/* Endpoint field — HTTP for xml/json, gRPC address for grpc */}
+                        {availabilityAdapterType !== 'grpc' ? (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-2">
+                              {availabilityAdapterType === 'xml'
+                                ? 'Gloria POSTs an OTA_VehAvailRateRQ XML body (Content-Type: text/xml) and expects OTA_VehAvailRateRS XML back.'
+                                : 'Gloria POSTs a JSON body with Gloria field names (Content-Type: application/json) and expects { vehicles: [...] } back.'}
+                            </p>
+                            <div className="flex gap-2 items-end">
+                              <div className="flex-1">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Endpoint URL</label>
+                                <Input
+                                  value={availabilityEndpointUrl}
+                                  onChange={(e) => setAvailabilityEndpointUrl(e.target.value)}
+                                  placeholder="https://ota.tlinternationalgroup.com/pricetest.php"
+                                />
+                              </div>
+                              <Button
+                                variant="secondary"
+                                onClick={handleSaveAvailabilityEndpointUrl}
+                                loading={isSavingAvailabilityEndpoint}
+                                disabled={!availabilityEndpointUrl.trim()}
+                              >
+                                Save
+                              </Button>
+                            </div>
+                            {endpointConfig?.availabilityEndpointUrl && (
+                              <p className="text-xs text-gray-500 mt-1">Saved: <code className="bg-gray-100 px-1 rounded">{endpointConfig.availabilityEndpointUrl}</code></p>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-2">
+                              Gloria connects to your gRPC source backend via <code className="bg-gray-100 px-1 rounded">source_provider.proto</code> — calls <code className="bg-gray-100 px-1 rounded">GetAvailability</code>.
+                            </p>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">gRPC Address <span className="font-normal text-gray-400">(host:port)</span></label>
+                            <Input
+                              value={grpcEndpointAddress}
+                              onChange={(e) => setGrpcEndpointAddress(e.target.value)}
+                              placeholder="localhost:50051"
+                            />
+                            {(endpointConfig as any)?.grpcEndpoint && (
+                              <p className="text-xs text-gray-500 mt-1">Saved: <code className="bg-gray-100 px-1 rounded">{(endpointConfig as any).grpcEndpoint}</code></p>
+                            )}
+                          </div>
                         )}
                       </CardContent>
                     </Card>
 
-                    {/* ── OTA Request Parameters ── */}
+                    {/* ── Request Parameters ── */}
                     <Card className="border border-gray-200 shadow-sm">
                       <CardHeader>
-                        <CardTitle className="text-lg">OTA_VehAvailRateRQ request parameters</CardTitle>
+                        <CardTitle className="text-lg">
+                          {availabilityAdapterType === 'xml' ? 'OTA_VehAvailRateRQ' : availabilityAdapterType === 'json' ? 'Gloria JSON' : 'Gloria gRPC'} request parameters
+                        </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 leading-relaxed">
-                          The middleware sends an <strong>OTA_VehAvailRateRQ XML POST</strong> to your endpoint. These fields populate the XML request. Fill them in and click <strong>Fetch &amp; Store</strong> to test your endpoint and store the result.
+                          {availabilityAdapterType === 'xml' && <>Gloria sends an <strong>OTA_VehAvailRateRQ XML POST</strong> to your endpoint. Fill in the fields below and click <strong>Fetch &amp; Store</strong>.</>}
+                          {availabilityAdapterType === 'json' && <>Gloria sends a <strong>JSON POST</strong> with Gloria field names (<code>pickup_unlocode</code>, <code>agreement_ref</code>, etc.) and expects <code className="bg-blue-100 px-1 rounded">{`{ "vehicles": [ ... ] }`}</code> back.</>}
+                          {availabilityAdapterType === 'grpc' && <>Gloria calls <strong>GetAvailability</strong> on your source backend using <code>source_provider.proto</code> (AvailabilityRequest → AvailabilityResponse).</>}
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3726,15 +3792,16 @@ export default function SourcePage() {
                           </div>
                         </div>
 
-                        {/* XML preview */}
+                        {/* Request preview — format specific */}
                         <details className="border border-gray-200 rounded-lg">
                           <summary className="px-4 py-2 text-xs font-semibold text-gray-600 cursor-pointer select-none hover:bg-gray-50">
-                            Preview OTA_VehAvailRateRQ XML that will be sent
+                            {availabilityAdapterType === 'xml' && 'Preview OTA_VehAvailRateRQ XML that will be sent'}
+                            {availabilityAdapterType === 'json' && 'Preview Gloria JSON request body that will be sent'}
+                            {availabilityAdapterType === 'grpc' && 'Preview Gloria gRPC AvailabilityRequest that will be sent'}
                           </summary>
-                          <pre className="text-xs font-mono text-gray-700 bg-gray-50 p-4 overflow-x-auto max-h-56 border-t border-gray-200">{`<?xml version="1.0" encoding="UTF-8"?>
+                          {availabilityAdapterType === 'xml' && (
+                            <pre className="text-xs font-mono text-gray-700 bg-gray-50 p-4 overflow-x-auto max-h-56 border-t border-gray-200">{`<?xml version="1.0" encoding="UTF-8"?>
 <OTA_VehAvailRateRQ xmlns="http://www.opentravel.org/OTA/2003/05"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://www.opentravel.org/OTA/2003/05 OTA_VehAvailRateRQ.xsd"
     TimeStamp="${new Date().toISOString().slice(0,19)}" Target="Production" Version="1.007">
   <POS>
     <Source>
@@ -3757,6 +3824,31 @@ export default function SourcePage() {
     </Customer>
   </VehAvailRQInfo>
 </OTA_VehAvailRateRQ>`}</pre>
+                          )}
+                          {availabilityAdapterType === 'json' && (
+                            <pre className="text-xs font-mono text-gray-700 bg-gray-50 p-4 overflow-x-auto max-h-56 border-t border-gray-200">{JSON.stringify({
+                              agreement_ref: otaRequestorId || '1000097',
+                              pickup_unlocode: otaPickupLoc || 'TIAA01',
+                              dropoff_unlocode: otaReturnLoc || 'TIAA01',
+                              pickup_iso: otaPickupDateTime ? otaPickupDateTime + ':00' : '2026-03-18T14:00:00',
+                              dropoff_iso: otaReturnDateTime ? otaReturnDateTime + ':00' : '2026-03-22T14:00:00',
+                              driver_age: otaDriverAge || 30,
+                              residency_country: otaCitizenCountry || 'US',
+                            }, null, 2)}</pre>
+                          )}
+                          {availabilityAdapterType === 'grpc' && (
+                            <pre className="text-xs font-mono text-gray-700 bg-gray-50 p-4 overflow-x-auto max-h-56 border-t border-gray-200">{`// source_provider.proto — AvailabilityRequest
+message AvailabilityRequest {
+  agreement_ref      = "${otaRequestorId || '1000097'}"
+  pickup_unlocode    = "${otaPickupLoc || 'TIAA01'}"
+  dropoff_unlocode   = "${otaReturnLoc || 'TIAA01'}"
+  pickup_iso         = "${otaPickupDateTime ? otaPickupDateTime + ':00' : '2026-03-18T14:00:00'}"
+  dropoff_iso        = "${otaReturnDateTime ? otaReturnDateTime + ':00' : '2026-03-22T14:00:00'}"
+  driver_age         = ${otaDriverAge || 30}
+  residency_country  = "${otaCitizenCountry || 'US'}"
+}
+// Endpoint: ${grpcEndpointAddress || 'host:port'} → GetAvailability`}</pre>
+                          )}
                         </details>
 
                         <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -3764,7 +3856,11 @@ export default function SourcePage() {
                             variant="primary"
                             onClick={handleFetchAvailability}
                             loading={isFetchingAvailability}
-                            disabled={!availabilityEndpointUrl.trim() && !endpointConfig?.availabilityEndpointUrl && !endpointConfig?.httpEndpoint}
+                            disabled={
+                              availabilityAdapterType === 'grpc'
+                                ? !grpcEndpointAddress.trim() && !(endpointConfig as any)?.grpcEndpoint
+                                : !availabilityEndpointUrl.trim() && !endpointConfig?.availabilityEndpointUrl && !endpointConfig?.httpEndpoint
+                            }
                           >
                             Fetch &amp; Store
                           </Button>
@@ -3778,7 +3874,9 @@ export default function SourcePage() {
                             <span className="text-xs text-gray-600">Force re-store</span>
                           </label>
                           <p className="text-xs text-gray-500 self-center">
-                            Sends OTA XML POST → parses OTA_VehAvailRateRS → stores in database
+                            {availabilityAdapterType === 'xml' && 'OTA XML POST → OTA_VehAvailRateRS → stored in Gloria'}
+                            {availabilityAdapterType === 'json' && 'JSON POST → Gloria vehicles[] → stored in Gloria'}
+                            {availabilityAdapterType === 'grpc' && 'gRPC GetAvailability → VehicleOffer[] → stored in Gloria'}
                           </p>
                         </div>
 
@@ -3832,19 +3930,25 @@ export default function SourcePage() {
                     </Card>
 
                     {/* ── OTA Format Reference ── */}
+                    {/* ── Format reference — switches with the format selector above ── */}
                     <Card className="border border-gray-200 shadow-sm">
                       <CardHeader>
-                        <CardTitle className="text-lg">OTA XML format reference</CardTitle>
+                        <CardTitle className="text-lg">
+                          {availabilityAdapterType === 'xml' && 'OTA XML format reference'}
+                          {availabilityAdapterType === 'json' && 'Gloria JSON format reference'}
+                          {availabilityAdapterType === 'grpc' && 'Gloria gRPC format reference'}
+                        </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <p className="text-sm text-gray-700">
-                          Your endpoint must accept an <strong>OTA_VehAvailRateRQ XML POST</strong> (<code className="bg-gray-100 px-1 rounded">Content-Type: text/xml</code>) and return <strong>OTA_VehAvailRateRS XML</strong>. The middleware automatically parses the XML response and extracts vehicle data, pricing, and terms.
-                        </p>
 
-                        {/* Request format */}
-                        <div>
-                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Request sent to your endpoint (OTA_VehAvailRateRQ)</p>
-                          <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-48">{`<?xml version="1.0" encoding="UTF-8"?>
+                        {/* ── OTA XML reference ── */}
+                        {availabilityAdapterType === 'xml' && (<>
+                          <p className="text-sm text-gray-700">
+                            Your endpoint must accept an <strong>OTA_VehAvailRateRQ XML POST</strong> (<code className="bg-gray-100 px-1 rounded">Content-Type: text/xml</code>) and return <strong>OTA_VehAvailRateRS XML</strong>. Gloria automatically parses the XML response and extracts vehicle data, pricing, and terms.
+                          </p>
+                          <div>
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Request sent to your endpoint (OTA_VehAvailRateRQ)</p>
+                            <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-48">{`<?xml version="1.0" encoding="UTF-8"?>
 <OTA_VehAvailRateRQ xmlns="http://www.opentravel.org/OTA/2003/05"
     TimeStamp="2026-03-18T14:31:15" Target="Production" Version="1.007">
   <POS>
@@ -3866,12 +3970,10 @@ export default function SourcePage() {
     </Primary></Customer>
   </VehAvailRQInfo>
 </OTA_VehAvailRateRQ>`}</pre>
-                        </div>
-
-                        {/* Response format */}
-                        <div>
-                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Expected response (OTA_VehAvailRateRS)</p>
-                          <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-64">{`<?xml version="1.0" encoding="UTF-8"?>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Expected response (OTA_VehAvailRateRS)</p>
+                            <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-64">{`<?xml version="1.0" encoding="UTF-8"?>
 <OTA_VehAvailRateRS xmlns="http://www.opentravel.org/OTA/2003/05"
     TimeStamp="2026-03-18T14:31:15" Target="Production" Version="1.007">
   <Success />
@@ -3916,20 +4018,185 @@ export default function SourcePage() {
     </VehVendorAvail>
   </VehVendorAvails>
 </OTA_VehAvailRateRS>`}</pre>
-                        </div>
+                          </div>
+                          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 space-y-1">
+                            <p className="font-semibold">What Gloria extracts from each VehAvailCore:</p>
+                            <ul className="list-disc list-inside space-y-0.5 mt-1">
+                              <li><code>VehID</code> — unique rate reference (used for booking)</li>
+                              <li><code>VehMakeModel Name</code> + <code>PictureURL</code> — car name and image</li>
+                              <li><code>TransmissionType</code>, <code>AirConditionInd</code>, <code>DoorCount</code>, <code>Baggage</code></li>
+                              <li><code>VehicleCategory</code> (ACRISS code), <code>VehClass Size</code></li>
+                              <li><code>TotalCharge RateTotalAmount</code> + <code>CurrencyCode</code> — total price</li>
+                              <li><code>VehTerms Included / NotIncluded</code> — insurance &amp; extras included/not</li>
+                              <li><code>PricedEquips</code> — optional add-on equipment with pricing</li>
+                            </ul>
+                          </div>
+                        </>)}
 
-                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 space-y-1">
-                          <p className="font-semibold">What the middleware extracts from each VehAvailCore:</p>
-                          <ul className="list-disc list-inside space-y-0.5 mt-1">
-                            <li>VehID — unique rate reference (used for booking)</li>
-                            <li>VehMakeModel Name + PictureURL — car name and image</li>
-                            <li>TransmissionType, AirConditionInd, DoorCount, Baggage</li>
-                            <li>VehicleCategory (ACRISS code), VehClass Size</li>
-                            <li>TotalCharge RateTotalAmount + CurrencyCode — total price</li>
-                            <li>VehTerms Included / NotIncluded — insurance &amp; extras included/not</li>
-                            <li>PricedEquips — optional add-on equipment with pricing</li>
-                          </ul>
-                        </div>
+                        {/* ── Gloria JSON reference ── */}
+                        {availabilityAdapterType === 'json' && (<>
+                          <p className="text-sm text-gray-700">
+                            Your endpoint must accept a <strong>JSON POST</strong> (<code className="bg-gray-100 px-1 rounded">Content-Type: application/json</code>) and return <code className="bg-gray-100 px-1 rounded">{`{ "vehicles": [ ... ] }`}</code>. Field names use Gloria's naming convention (matching <code className="bg-gray-100 px-1 rounded">source_provider.proto</code>).
+                          </p>
+                          <div>
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Request body Gloria sends (JSON POST)</p>
+                            <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-48">{`{
+  "agreement_ref":     "1000097",            // broker account number
+  "pickup_unlocode":   "TIAA01",             // pick-up location code
+  "dropoff_unlocode":  "TIAA01",             // return location code
+  "pickup_iso":        "2026-03-18T14:00:00",
+  "dropoff_iso":       "2026-03-22T14:00:00",
+  "driver_age":        35,
+  "residency_country": "US"                  // ISO 2-letter country code
+}`}</pre>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Expected response your endpoint returns</p>
+                            <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-72">{`{
+  "vehicles": [
+    {
+      "supplier_offer_ref":  "CDAR65505909190226",  // unique offer ID (required for booking)
+      "vehicle_class":       "CDAR",                // ACRISS code
+      "make_model":          "TOYOTA COROLLA",       // car name
+      "currency":            "EUR",
+      "total_price":         132.00,
+      "availability_status": "AVAILABLE",            // AVAILABLE | ON_REQUEST | SOLD_OUT
+      "picture_url":         "https://...corolla.png",
+      "door_count":          "5",
+      "baggage":             "2",
+      "vehicle_category":    "CDAR",
+      "veh_id":              "CDAR65505909190226",
+      // Optional: rich terms + pricing as a JSON string
+      "ota_vehicle_json": "{
+        \\"veh_terms_included\\": [
+          { \\"code\\": \\"CDW\\", \\"header\\": \\"Standard Insurance (CDW)\\",
+            \\"price\\": \\"0.00\\", \\"excess\\": \\"900.00\\", \\"deposit\\": \\"900.00\\" }
+        ],
+        \\"veh_terms_not_included\\": [
+          { \\"code\\": \\"PCDW\\", \\"header\\": \\"Premium Insurance (PCDW)\\",
+            \\"price\\": \\"60.00\\", \\"excess\\": \\"0.00\\" }
+        ],
+        \\"vehicle_charges\\": [
+          { \\"Amount\\": \\"110.00\\", \\"CurrencyCode\\": \\"EUR\\",
+            \\"UnitCharge\\": \\"33.00\\", \\"Quantity\\": \\"4\\" }
+        ],
+        \\"total_charge\\": { \\"RateTotalAmount\\": \\"132.00\\", \\"CurrencyCode\\": \\"EUR\\" },
+        \\"priced_equips\\": [
+          { \\"description\\": \\"GPS\\", \\"equip_type\\": \\"GPS\\",
+            \\"charge\\": { \\"Amount\\": 32.00 } }
+        ]
+      }"
+    }
+  ]
+}`}</pre>
+                          </div>
+                          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 space-y-1">
+                            <p className="font-semibold">What Gloria extracts from each vehicle object:</p>
+                            <ul className="list-disc list-inside space-y-0.5 mt-1">
+                              <li><code>supplier_offer_ref</code> — unique offer ID (required for booking)</li>
+                              <li><code>vehicle_class</code>, <code>make_model</code> — ACRISS code and car name</li>
+                              <li><code>total_price</code> + <code>currency</code> — price and currency</li>
+                              <li><code>availability_status</code> — AVAILABLE / ON_REQUEST / SOLD_OUT</li>
+                              <li><code>picture_url</code>, <code>door_count</code>, <code>baggage</code>, <code>vehicle_category</code>, <code>veh_id</code></li>
+                              <li><code>ota_vehicle_json</code> — optional JSON string for terms, charges, extras (same rich data as OTA XML)</li>
+                            </ul>
+                          </div>
+                        </>)}
+
+                        {/* ── Gloria gRPC reference ── */}
+                        {availabilityAdapterType === 'grpc' && (<>
+                          <p className="text-sm text-gray-700">
+                            Your source backend must implement <strong>SourceProviderService</strong> from <code className="bg-gray-100 px-1 rounded">source_provider.proto</code>. Gloria connects directly via gRPC and calls <code className="bg-gray-100 px-1 rounded">GetAvailability</code> — no HTTP needed.
+                          </p>
+                          <div>
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Proto definition (source_provider.proto)</p>
+                            <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-72">{`syntax = "proto3";
+package source_provider;
+
+// ── Request ──────────────────────────────────────────────────────────
+message AvailabilityRequest {
+  string agreement_ref     = 1;   // broker account number
+  string pickup_unlocode   = 2;   // pick-up location code  (e.g. TIAA01)
+  string dropoff_unlocode  = 3;   // return location code
+  string pickup_iso        = 4;   // ISO datetime  2026-03-18T14:00:00
+  string dropoff_iso       = 5;
+  int32  driver_age        = 6;
+  string residency_country = 7;   // ISO 2-letter  (e.g. US)
+  repeated string vehicle_classes = 8;  // optional ACRISS filter
+}
+
+// ── Response ─────────────────────────────────────────────────────────
+message VehicleOffer {
+  string supplier_offer_ref  = 1;   // unique offer ID — required for booking
+  string vehicle_class       = 2;   // ACRISS code (e.g. CDAR)
+  string make_model          = 3;   // car name  (e.g. TOYOTA COROLLA)
+  string currency            = 4;   // ISO 4217  (e.g. EUR)
+  double total_price         = 5;
+  string availability_status = 6;   // AVAILABLE | ON_REQUEST | SOLD_OUT
+  // Optional rich fields
+  string picture_url         = 7;
+  string door_count          = 8;
+  string baggage             = 9;
+  string vehicle_category    = 10;  // ACRISS (e.g. CDAR)
+  string veh_id              = 11;
+  string ota_vehicle_json    = 12;  // JSON: terms, charges, priced_equips
+}
+
+message AvailabilityResponse {
+  repeated VehicleOffer vehicles = 1;
+}
+
+// ── Service ──────────────────────────────────────────────────────────
+service SourceProviderService {
+  rpc GetHealth      (Empty)               returns (HealthResponse);
+  rpc GetLocations   (Empty)               returns (LocationsResponse);
+  rpc GetAvailability(AvailabilityRequest) returns (AvailabilityResponse);
+  rpc CreateBooking  (BookingCreateRequest)returns (BookingResponse);
+  rpc ModifyBooking  (BookingRef)          returns (BookingResponse);
+  rpc CancelBooking  (BookingRef)          returns (BookingResponse);
+  rpc CheckBooking   (BookingRef)          returns (BookingResponse);
+}`}</pre>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Example ota_vehicle_json value (rich terms &amp; pricing)</p>
+                            <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-48">{`// Set VehicleOffer.ota_vehicle_json to a JSON string like:
+{
+  "veh_terms_included": [
+    { "code": "CDW", "header": "Standard Insurance (CDW)",
+      "price": "0.00", "excess": "900.00", "deposit": "900.00",
+      "mandatory": "Yes", "details": "Collision damage waiver..." }
+  ],
+  "veh_terms_not_included": [
+    { "code": "PCDW", "header": "Premium Insurance (PCDW)",
+      "price": "60.00", "excess": "0.00", "mandatory": "No" }
+  ],
+  "vehicle_charges": [
+    { "Amount": "110.00", "CurrencyCode": "EUR",
+      "UnitCharge": "33.00", "Quantity": "4", "UnitName": "Day" }
+  ],
+  "total_charge": { "RateTotalAmount": "132.00", "CurrencyCode": "EUR" },
+  "priced_equips": [
+    { "description": "GPS", "equip_type": "GPS",
+      "charge": { "Amount": 32.00 } }
+  ]
+}`}</pre>
+                          </div>
+                          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 space-y-1">
+                            <p className="font-semibold">What Gloria extracts from each VehicleOffer:</p>
+                            <ul className="list-disc list-inside space-y-0.5 mt-1">
+                              <li><code>supplier_offer_ref</code> — unique offer ID (required for booking)</li>
+                              <li><code>vehicle_class</code>, <code>make_model</code> — ACRISS code and car name</li>
+                              <li><code>total_price</code> + <code>currency</code></li>
+                              <li><code>availability_status</code> — AVAILABLE / ON_REQUEST / SOLD_OUT</li>
+                              <li><code>picture_url</code>, <code>door_count</code>, <code>baggage</code>, <code>vehicle_category</code>, <code>veh_id</code></li>
+                              <li><code>ota_vehicle_json</code> — JSON string parsed for terms, charges, extras (same as OTA XML VehTerms / PricedEquips)</li>
+                            </ul>
+                            <p className="mt-2 font-semibold">gRPC address format:</p>
+                            <p className="font-mono">host:port &nbsp;(e.g. <strong>localhost:50051</strong> or <strong>source.example.com:443</strong>)</p>
+                            <p className="mt-1">No <code>grpc://</code> prefix needed — Gloria adds the insecure channel automatically.</p>
+                          </div>
+                        </>)}
+
                       </CardContent>
                     </Card>
                   </div>
