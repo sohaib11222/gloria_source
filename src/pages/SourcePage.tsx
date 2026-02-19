@@ -427,17 +427,198 @@ const LocationImportResultDisplay: React.FC<{ result: any }> = ({ result }) => {
   )
 }
 
-// Availability Fetch Result Display (Pricing tab) - like LocationImportResultDisplay
+// Availability Fetch Result Display (Pricing tab) — shows car cards with full OTA data
+const PAGE_SIZE = 6
+
+// Card for a single stored availability sample (in the "Stored samples" list)
+const StoredSampleCard: React.FC<{ sample: import('../api/endpoints').StoredAvailabilitySample }> = ({ sample }) => {
+  const [expanded, setExpanded] = useState(false)
+  const [page, setPage] = useState(0)
+  const [expandedCard, setExpandedCard] = useState<number | null>(null)
+
+  const offers: any[] = sample.offersSummary ?? []
+  const totalPages = Math.max(1, Math.ceil(offers.length / PAGE_SIZE))
+  const pageOffers = offers.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+  const pickupDate = sample.pickupIso?.slice(0, 16).replace('T', ' ') ?? '—'
+  const returnDate = sample.returnIso?.slice(0, 16).replace('T', ' ') ?? '—'
+  const fetchedDate = sample.fetchedAt ? new Date(sample.fetchedAt).toLocaleString() : '—'
+
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+      {/* Sample header */}
+      <button
+        type="button"
+        onClick={() => { setExpanded(e => !e); setPage(0); setExpandedCard(null) }}
+        className="w-full flex items-start justify-between gap-4 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-sm text-gray-900">
+              {sample.pickupLoc || '—'} → {sample.returnLoc || '—'}
+            </span>
+            <Badge variant="secondary" className="text-xs">{sample.offersCount} vehicle{sample.offersCount !== 1 ? 's' : ''}</Badge>
+            {sample.criteria?.requestorId && (
+              <span className="text-xs text-gray-400">ID: {sample.criteria.requestorId}</span>
+            )}
+          </div>
+          <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+            <span>Pick-up: {pickupDate}</span>
+            <span>Return: {returnDate}</span>
+            <span className="text-gray-400">Fetched: {fetchedDate}</span>
+          </div>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Expanded vehicle list */}
+      {expanded && (
+        <div className="border-t border-gray-100 px-4 py-3 space-y-3">
+          {offers.length === 0 ? (
+            <p className="text-sm text-gray-400 italic">No vehicle data stored for this sample (fetched before full data storage was enabled — re-fetch to update).</p>
+          ) : (
+            <>
+              {/* Pagination header */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500">{offers.length} vehicles — page {page + 1} of {totalPages}</p>
+                  <div className="flex items-center gap-1">
+                    <button type="button" onClick={() => { setPage(p => Math.max(0, p - 1)); setExpandedCard(null) }} disabled={page === 0}
+                      className="px-2 py-1 text-xs rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-50">‹</button>
+                    <span className="text-xs text-gray-500 px-1">{page + 1}/{totalPages}</span>
+                    <button type="button" onClick={() => { setPage(p => Math.min(totalPages - 1, p + 1)); setExpandedCard(null) }} disabled={page >= totalPages - 1}
+                      className="px-2 py-1 text-xs rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-50">›</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Vehicle cards */}
+              {pageOffers.map((offer: any, idx: number) => {
+                const globalIdx = page * PAGE_SIZE + idx
+                return (
+                  <div key={globalIdx} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="flex gap-3 p-3">
+                      {offer.picture_url ? (
+                        <img src={offer.picture_url} alt={offer.vehicle_make_model || 'Vehicle'}
+                          className="w-24 h-16 object-contain flex-shrink-0 rounded bg-gray-50 border border-gray-100"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      ) : (
+                        <div className="w-24 h-16 flex-shrink-0 rounded bg-gray-100 flex items-center justify-center">
+                          <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 .001M1 16h2m16 0h2M13 8h4l3 5-3 .001M13 8v8" />
+                          </svg>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-semibold text-sm text-gray-900 leading-tight">{offer.vehicle_make_model || '—'}</p>
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
+                              {offer.vehicle_class && <span className="text-xs font-mono bg-gray-100 text-gray-600 px-1 rounded">{offer.vehicle_class}</span>}
+                              {offer.transmission_type && <span className="text-xs text-gray-500">{offer.transmission_type}</span>}
+                              {offer.door_count && <span className="text-xs text-gray-500">{offer.door_count} doors</span>}
+                              {offer.baggage && <span className="text-xs text-gray-500">{offer.baggage} bags</span>}
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="font-bold text-emerald-700 text-base">
+                              {offer.total_price ? `${offer.currency || ''} ${Number(offer.total_price).toFixed(2)}` : '—'}
+                            </p>
+                            <Badge variant={offer.availability_status === 'Available' ? 'success' : 'default'} className="text-xs mt-0.5">
+                              {offer.availability_status || 'Available'}
+                            </Badge>
+                          </div>
+                        </div>
+                        {/* Included chips */}
+                        {(offer.included?.filter((t: any) => t.header || t.code).length ?? 0) > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {offer.included.filter((t: any) => t.header || t.code).slice(0, 4).map((t: any, i: number) => (
+                              <span key={i} className="text-xs bg-green-50 text-green-700 border border-green-200 rounded px-1.5 py-0.5">✓ {t.header || t.code}</span>
+                            ))}
+                            {offer.included.filter((t: any) => t.header || t.code).length > 4 && (
+                              <span className="text-xs text-gray-400">+{offer.included.filter((t: any) => t.header || t.code).length - 4} more</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {/* Expand detail */}
+                    <button type="button" onClick={() => setExpandedCard(expandedCard === globalIdx ? null : globalIdx)}
+                      className="w-full flex items-center justify-between px-3 py-1.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500 hover:bg-gray-100 transition-colors">
+                      <span>{expandedCard === globalIdx ? 'Hide details' : 'Details (terms, VehID)'}</span>
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expandedCard === globalIdx ? 'rotate-180' : ''}`} />
+                    </button>
+                    {expandedCard === globalIdx && (
+                      <div className="px-3 pb-3 pt-2 bg-gray-50 border-t border-gray-100 space-y-2 text-xs">
+                        {offer.veh_id && (
+                          <p><span className="text-gray-500">VehID:</span> <code className="bg-white border border-gray-200 px-1.5 py-0.5 rounded font-mono">{offer.veh_id}</code></p>
+                        )}
+                        {(offer.included?.filter((t: any) => t.header || t.code).length ?? 0) > 0 && (
+                          <div>
+                            <p className="font-semibold text-green-700 mb-1">Included</p>
+                            {offer.included.map((t: any, i: number) => (
+                              <p key={i} className="text-gray-700">✓ <strong>{t.header || t.code}</strong>{t.excess && t.excess !== '0.00' ? ` (excess ${t.excess})` : ''}</p>
+                            ))}
+                          </div>
+                        )}
+                        {(offer.not_included?.filter((t: any) => t.header || t.code).length ?? 0) > 0 && (
+                          <div>
+                            <p className="font-semibold text-blue-700 mb-1">Optional extras</p>
+                            {offer.not_included.map((t: any, i: number) => (
+                              <p key={i} className="text-gray-600">+ <strong>{t.header || t.code}</strong>{t.price && t.price !== '0.00' ? ` — ${t.price} ${offer.currency}` : ''}</p>
+                            ))}
+                          </div>
+                        )}
+                        {(offer.priced_equips?.length ?? 0) > 0 && (
+                          <div>
+                            <p className="font-semibold text-purple-700 mb-1">Equipment add-ons</p>
+                            {offer.priced_equips.map((eq: any, i: number) => (
+                              <p key={i} className="text-gray-600">• {eq.description || eq.equip_type || '—'}{eq.charge?.Amount ? ` — ${offer.currency} ${Number(eq.charge.Amount).toFixed(2)}` : ''}</p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {/* Bottom pagination */}
+              {totalPages > 1 && (
+                <div className="flex justify-center gap-1 pt-1">
+                  {Array.from({ length: totalPages }, (_, i) => (
+                    <button key={i} type="button" onClick={() => { setPage(i); setExpandedCard(null) }}
+                      className={`px-2.5 py-1 text-xs rounded border transition-colors ${i === page ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold' : 'border-gray-300 hover:bg-gray-50'}`}>
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) => {
   const isError = !!result.error
   const isDuplicate = !result.error && result.stored === false && result.duplicate === true
   const isStored = !result.error && result.stored === true
-  const isSuccess = isStored || isDuplicate
   const isFormatError = result.error === 'INVALID_FORMAT' || result.error === 'INVALID_RESPONSE_FORMAT'
   const [showSample, setShowSample] = useState(isFormatError)
+  const [expandedCard, setExpandedCard] = useState<number | null>(null)
+  const [page, setPage] = useState(0)
+
+  const allOffers: any[] = result.offersSummary ?? []
+  const totalPages = Math.max(1, Math.ceil(allOffers.length / PAGE_SIZE))
+  const pageOffers = allOffers.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   return (
     <div className="space-y-4">
+      {/* Status banner */}
       <Card className={`border-2 ${
         isError ? 'border-red-200 bg-red-50' :
         isDuplicate ? 'border-amber-200 bg-amber-50' :
@@ -461,7 +642,7 @@ const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) =
             </div>
             {!isError && (result.offersCount ?? 0) >= 0 && (
               <Badge variant={isDuplicate ? 'secondary' : 'success'} className="font-semibold">
-                {result.offersCount} offers
+                {result.offersCount} vehicle{result.offersCount !== 1 ? 's' : ''}
               </Badge>
             )}
           </div>
@@ -474,7 +655,7 @@ const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) =
           </p>
           {isStored && (
             <p className="text-xs text-green-700 mt-1">
-              {result.isNew ? 'New sample stored in database.' : 'Existing sample updated with new data.'}
+              {result.isNew ? 'New availability sample stored in database.' : 'Existing sample updated with new data.'}
             </p>
           )}
           {isDuplicate && (
@@ -482,48 +663,273 @@ const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) =
               Same data already stored for this criteria; no duplicate was saved.
             </p>
           )}
-          {result.criteria && (result.offersSummary?.length ?? 0) > 0 && (
-            <div className="mt-4 space-y-3">
-              <p className="text-xs font-semibold text-gray-700">
-                Criteria: {result.criteria.pickupLoc} → {result.criteria.returnLoc}
-                {result.criteria.pickupIso && result.criteria.returnIso && (
-                  <span className="text-gray-600 font-normal ml-1">
-                    ({result.criteria.pickupIso.slice(0, 10)} – {result.criteria.returnIso.slice(0, 10)})
-                  </span>
-                )}
-              </p>
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-700">#</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Vehicle class</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Make / Model</th>
-                      <th className="px-3 py-2 text-right font-semibold text-gray-700">Price</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {(result.offersSummary ?? []).map((offer, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 text-gray-600">{idx + 1}</td>
-                        <td className="px-3 py-2">{offer.vehicle_class || '—'}</td>
-                        <td className="px-3 py-2">{offer.vehicle_make_model || '—'}</td>
-                        <td className="px-3 py-2 text-right font-medium">
-                          {offer.currency && offer.total_price != null
-                            ? `${offer.currency} ${Number(offer.total_price).toFixed(2)}`
-                            : '—'}
-                        </td>
-                        <td className="px-3 py-2">{offer.availability_status || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          {result.criteria && (
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+              <span><strong>Pick-up:</strong> {result.criteria.pickupLoc} {result.criteria.pickupIso?.slice(0, 16)}</span>
+              <span><strong>Return:</strong> {result.criteria.returnLoc} {result.criteria.returnIso?.slice(0, 16)}</span>
+              {result.criteria.requestorId && <span><strong>Requestor ID:</strong> {result.criteria.requestorId}</span>}
+              {result.criteria.driverAge && <span><strong>Driver age:</strong> {result.criteria.driverAge}</span>}
+              {result.criteria.citizenCountry && <span><strong>Country:</strong> {result.criteria.citizenCountry}</span>}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Vehicle results cards */}
+      {!isError && allOffers.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-gray-700">
+              {allOffers.length} vehicle{allOffers.length !== 1 ? 's' : ''} available
+              {totalPages > 1 && (
+                <span className="font-normal text-gray-500 ml-1">(page {page + 1} of {totalPages})</span>
+              )}
+            </p>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setPage(p => Math.max(0, p - 1)); setExpandedCard(null) }}
+                  disabled={page === 0}
+                  className="px-2 py-1 text-xs rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-50 transition-colors"
+                >
+                  ‹ Prev
+                </button>
+                <span className="text-xs text-gray-500">{page + 1} / {totalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => { setPage(p => Math.min(totalPages - 1, p + 1)); setExpandedCard(null) }}
+                  disabled={page >= totalPages - 1}
+                  className="px-2 py-1 text-xs rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-50 transition-colors"
+                >
+                  Next ›
+                </button>
+              </div>
+            )}
+          </div>
+          {pageOffers.map((offer: any, idx: number) => {
+            const globalIdx = page * PAGE_SIZE + idx
+            return (
+              <div key={globalIdx} className="border border-gray-200 rounded-xl shadow-sm bg-white overflow-hidden">
+                <div className="flex gap-4 p-4">
+                  {/* Car image */}
+                  {offer.picture_url ? (
+                    <img
+                      src={offer.picture_url}
+                      alt={offer.vehicle_make_model || 'Vehicle'}
+                      className="w-32 h-20 object-contain flex-shrink-0 rounded-lg bg-gray-50 border border-gray-100"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                    />
+                  ) : (
+                    <div className="w-32 h-20 flex-shrink-0 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <svg className="w-10 h-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                    </div>
+                  )}
+
+                  {/* Car details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div>
+                        <h3 className="font-bold text-gray-900 text-base leading-tight">{offer.vehicle_make_model || '—'}</h3>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                          {offer.vehicle_class && (
+                            <span className="text-xs text-gray-500 font-mono bg-gray-100 px-1.5 py-0.5 rounded">{offer.vehicle_class}</span>
+                          )}
+                          {offer.vehicle_category && (
+                            <span className="text-xs text-gray-500">Cat {offer.vehicle_category}</span>
+                          )}
+                          {offer.transmission_type && (
+                            <span className="text-xs text-gray-600">{offer.transmission_type}</span>
+                          )}
+                          {offer.air_condition_ind && (
+                            <span className="text-xs text-gray-600">A/C: {offer.air_condition_ind}</span>
+                          )}
+                          {offer.door_count && (
+                            <span className="text-xs text-gray-600">{offer.door_count} doors</span>
+                          )}
+                          {offer.baggage && (
+                            <span className="text-xs text-gray-600">{offer.baggage} bags</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-xl font-bold text-emerald-700">
+                          {offer.total_price ? `${offer.currency || ''} ${Number(offer.total_price).toFixed(2)}` : '—'}
+                        </div>
+                        <div className="text-xs text-gray-500">total incl. tax</div>
+                        <Badge variant={offer.availability_status === 'Available' ? 'success' : 'default'} className="mt-1 text-xs">
+                          {offer.availability_status || 'Available'}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Included terms (brief chips) */}
+                    {(offer.included?.filter((t: any) => t.header || t.code).length ?? 0) > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {(offer.included ?? []).filter((t: any) => t.header || t.code).slice(0, 5).map((t: any, i: number) => (
+                          <span key={i} className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded px-2 py-0.5">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                            {t.header || t.code}
+                          </span>
+                        ))}
+                        {(offer.included?.filter((t: any) => t.header || t.code).length ?? 0) > 5 && (
+                          <span className="text-xs text-gray-500">+{offer.included.filter((t: any) => t.header || t.code).length - 5} more</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Expand/collapse for full details */}
+                <button
+                  type="button"
+                  onClick={() => setExpandedCard(expandedCard === globalIdx ? null : globalIdx)}
+                  className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 border-t border-gray-100 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+                >
+                  <span>{expandedCard === globalIdx ? 'Hide details' : 'Show full details (terms, extras, VehID)'}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${expandedCard === globalIdx ? 'rotate-180' : ''}`} />
+                </button>
+
+                {expandedCard === globalIdx && (
+                  <div className="px-4 pb-4 pt-3 border-t border-gray-100 space-y-4 bg-gray-50">
+                    {/* VehID */}
+                    {offer.veh_id && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-gray-500 font-medium">VehID:</span>
+                        <code className="bg-white border border-gray-200 px-2 py-0.5 rounded font-mono text-gray-800">{offer.veh_id}</code>
+                        <span className="text-gray-400">(booking reference)</span>
+                      </div>
+                    )}
+
+                    {/* Included terms */}
+                    {(offer.included?.filter((t: any) => t.header || t.code).length ?? 0) > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-green-700 mb-1.5">Included in price</p>
+                        <div className="space-y-1">
+                          {(offer.included ?? []).map((t: any, i: number) => (
+                            <div key={i} className="flex items-start gap-2 text-xs">
+                              <svg className="w-3.5 h-3.5 text-green-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                              <div>
+                                <span className="font-medium text-gray-800">{t.header || t.code}</span>
+                                {t.excess && t.excess !== '0.00' && <span className="text-gray-500 ml-1">(excess: {t.excess})</span>}
+                                {t.details && t.details !== t.header && <p className="text-gray-500 mt-0.5">{t.details}</p>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Optional extras */}
+                    {(offer.not_included?.filter((t: any) => t.header || t.code).length ?? 0) > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-blue-700 mb-1.5">Optional extras (available at desk)</p>
+                        <div className="space-y-1.5">
+                          {(offer.not_included ?? []).map((t: any, i: number) => (
+                            <div key={i} className="flex items-start gap-2 text-xs bg-blue-50 border border-blue-100 rounded p-2">
+                              <svg className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-medium text-gray-800">{t.header || t.code}</span>
+                                  {t.price && t.price !== '0.00' && (
+                                    <span className="text-blue-700 font-semibold">{t.price} {offer.currency}/rental</span>
+                                  )}
+                                </div>
+                                {t.excess && t.excess !== '0.00' && <span className="text-gray-500">Excess: {t.excess}</span>}
+                                {t.details && t.details !== t.header && <p className="text-gray-500 mt-0.5 leading-relaxed">{t.details}</p>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Priced equipment */}
+                    {(offer.priced_equips?.length ?? 0) > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-purple-700 mb-1.5">Equipment add-ons</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(offer.priced_equips ?? []).map((eq: any, i: number) => (
+                            <div key={i} className="text-xs bg-purple-50 border border-purple-100 rounded p-2">
+                              <div className="font-medium text-gray-800">{eq.description || eq.equip_type || eq.vendor_equip_id || '—'}</div>
+                              <div className="text-purple-700 font-semibold">
+                                {eq.charge?.Amount ? `${offer.currency || ''} ${Number(eq.charge.Amount).toFixed(2)}/rental` : ''}
+                                {eq.charge?.UnitCharge && eq.charge?.UnitName ? ` (${eq.charge.UnitCharge}/${eq.charge.UnitName})` : ''}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* Bottom pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => { setPage(p => Math.max(0, p - 1)); setExpandedCard(null) }}
+                disabled={page === 0}
+                className="px-3 py-1.5 text-sm rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-50 transition-colors"
+              >
+                ‹ Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => { setPage(i); setExpandedCard(null) }}
+                  className={`px-3 py-1.5 text-sm rounded border transition-colors ${i === page ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold' : 'border-gray-300 hover:bg-gray-50'}`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => { setPage(p => Math.min(totalPages - 1, p + 1)); setExpandedCard(null) }}
+                disabled={page >= totalPages - 1}
+                className="px-3 py-1.5 text-sm rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-50 transition-colors"
+              >
+                Next ›
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Raw XML response debug section — always shown when present */}
+      {(result.rawResponsePreview || result.parsedPreview) && (
+        <details className="border border-gray-200 rounded-lg bg-gray-50">
+          <summary className="px-4 py-2.5 text-xs font-semibold text-gray-600 cursor-pointer select-none hover:bg-gray-100 rounded-lg flex items-center gap-2">
+            <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+            Debug: raw endpoint response &amp; parsed XML structure
+          </summary>
+          <div className="p-4 space-y-3">
+            {result.parsedPreview && (
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-1">Parsed XML structure (first VehAvailCore):</p>
+                <pre className="text-xs font-mono bg-white border border-gray-200 rounded p-3 overflow-x-auto max-h-48 text-gray-800">
+                  {JSON.stringify(result.parsedPreview, null, 2)}
+                </pre>
+              </div>
+            )}
+            {result.rawResponsePreview && (
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-1">Raw endpoint response (first 3000 chars):</p>
+                <pre className="text-xs font-mono bg-white border border-gray-200 rounded p-3 overflow-x-auto max-h-64 text-gray-800">
+                  {result.rawResponsePreview}
+                </pre>
+              </div>
+            )}
+          </div>
+        </details>
+      )}
 
       {isFormatError && result.details && (
         <Card className="border-2 border-red-200">
@@ -533,10 +939,10 @@ const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) =
               <CardTitle className="text-lg font-bold text-red-900">Format Error</CardTitle>
             </div>
             <p className="text-sm text-red-700 mt-2">
-              The endpoint response format is not recognized. Your endpoint must return availability data in one of the supported formats below.
+              The endpoint response format is not recognized. The endpoint should return OTA_VehAvailRateRS XML in response to an OTA_VehAvailRateRQ XML POST.
             </p>
             <p className="text-xs text-red-600 mt-1 font-semibold">
-              Your response must contain <code className="bg-red-100 px-1 rounded">VehAvailRSCore</code> and <code className="bg-red-100 px-1 rounded">VehVendorAvails</code>.
+              Response must contain <code className="bg-red-100 px-1 rounded">VehAvailRSCore</code> and <code className="bg-red-100 px-1 rounded">VehVendorAvails</code>.
             </p>
           </CardHeader>
           <CardContent className="pt-6">
@@ -910,6 +1316,14 @@ export default function SourcePage() {
       loadSyncedLocations()
     }
   }, [activeTab, user?.company?.id])
+
+  // Auto-load stored availability samples whenever the pricing tab becomes active
+  useEffect(() => {
+    if (activeTab === 'pricing') {
+      loadStoredSamples()
+    }
+  }, [activeTab])
+
   const [agents, setAgents] = useState<Agent[]>([])
   const [isLoadingAgents, setIsLoadingAgents] = useState(false)
   const [isCreatingAgreement, setIsCreatingAgreement] = useState(false)
@@ -962,6 +1376,24 @@ export default function SourcePage() {
     error?: string
     details?: { expectedFormats?: string[]; help?: string; dataPreview?: string }
   } | null>(null)
+  // OTA request parameters for the pricing tab test form
+  const [otaRequestorId, setOtaRequestorId] = useState('')
+  const [otaPickupLoc, setOtaPickupLoc] = useState('TIAA01')
+  const [otaReturnLoc, setOtaReturnLoc] = useState('TIAA01')
+  const [otaPickupDateTime, setOtaPickupDateTime] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 30); d.setHours(14, 0, 0, 0)
+    return d.toISOString().slice(0, 16)
+  })
+  const [otaReturnDateTime, setOtaReturnDateTime] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 34); d.setHours(14, 0, 0, 0)
+    return d.toISOString().slice(0, 16)
+  })
+  const [otaDriverAge, setOtaDriverAge] = useState(30)
+  const [otaCitizenCountry, setOtaCitizenCountry] = useState('US')
+  const [forceRefreshAvailability, setForceRefreshAvailability] = useState(false)
+  // Stored availability samples (loaded on pricing tab mount)
+  const [storedSamples, setStoredSamples] = useState<import('../api/endpoints').StoredAvailabilitySample[]>([])
+  const [isLoadingStoredSamples, setIsLoadingStoredSamples] = useState(false)
   const queryClient = useQueryClient()
   
   // Branches state
@@ -1137,6 +1569,11 @@ export default function SourcePage() {
       setLocationListEndpointUrl(response.locationListEndpointUrl || '')
       setLocationListRequestRoot(response.locationListRequestRoot || '')
       setLocationListAccountId(response.locationListAccountId || '')
+      setAvailabilityEndpointUrl(response.availabilityEndpointUrl || '')
+      // Pre-fill OTA requestor ID from saved account ID
+      if (response.locationListAccountId) {
+        setOtaRequestorId(response.locationListAccountId)
+      }
       
       // Save endpoint to localStorage for validation
       if (user?.company?.id) {
@@ -1578,8 +2015,11 @@ export default function SourcePage() {
       await endpointsApi.updateConfig({
         httpEndpoint: endpointConfig?.httpEndpoint || '',
         grpcEndpoint: endpointConfig?.grpcEndpoint || '',
-        branchEndpointUrl: endpointConfig?.branchEndpointUrl,
-        locationEndpointUrl: endpointConfig?.locationEndpointUrl,
+        branchEndpointUrl: endpointConfig?.branchEndpointUrl || undefined,
+        locationEndpointUrl: endpointConfig?.locationEndpointUrl || undefined,
+        locationListEndpointUrl: endpointConfig?.locationListEndpointUrl || undefined,
+        locationListRequestRoot: endpointConfig?.locationListRequestRoot || undefined,
+        locationListAccountId: otaRequestorId.trim() || endpointConfig?.locationListAccountId || undefined,
         availabilityEndpointUrl: availabilityEndpointUrl.trim() || undefined,
       })
       queryClient.invalidateQueries({ queryKey: ['endpointConfig'] })
@@ -1592,10 +2032,26 @@ export default function SourcePage() {
     }
   }
 
+  const loadStoredSamples = async () => {
+    setIsLoadingStoredSamples(true)
+    try {
+      const { samples } = await endpointsApi.getAvailabilitySamples()
+      setStoredSamples(samples)
+    } catch {
+      // silently ignore — tab still works without historical data
+    } finally {
+      setIsLoadingStoredSamples(false)
+    }
+  }
+
   const handleFetchAvailability = async () => {
     const urlToUse = availabilityEndpointUrl.trim() || endpointConfig?.availabilityEndpointUrl || endpointConfig?.httpEndpoint
     if (!urlToUse) {
-      toast.error('Configure an availability endpoint URL first (e.g. https://ota.example.com/pricetest2.php)')
+      toast.error('Configure an availability endpoint URL first (e.g. https://ota.tlinternationalgroup.com/pricetest.php)')
+      return
+    }
+    if (!otaPickupLoc.trim() || !otaReturnLoc.trim()) {
+      toast.error('Pick-up and Return location codes are required')
       return
     }
     setIsFetchingAvailability(true)
@@ -1603,9 +2059,23 @@ export default function SourcePage() {
     try {
       const result = await endpointsApi.fetchAvailability({
         url: availabilityEndpointUrl.trim() || undefined,
+        pickupLoc: otaPickupLoc.trim(),
+        returnLoc: otaReturnLoc.trim(),
+        pickupDateTime: otaPickupDateTime ? `${otaPickupDateTime}:00` : undefined,
+        returnDateTime: otaReturnDateTime ? `${otaReturnDateTime}:00` : undefined,
+        requestorId: otaRequestorId.trim() || undefined,
+        driverAge: otaDriverAge || undefined,
+        citizenCountry: otaCitizenCountry.trim() || undefined,
+        force: forceRefreshAvailability || undefined,
       })
       setFetchAvailabilityResult(result)
-      toast.success(result.message)
+      if (result.duplicate) {
+        toast('Data unchanged — not stored (same data already exists)', { icon: 'ℹ️' })
+      } else {
+        toast.success(result.message)
+        // Reload stored samples so the new result appears in the stored-samples list
+        loadStoredSamples()
+      }
     } catch (error: any) {
       const errorData = error.response?.data || {}
       const errorMessage = errorData.message || 'Failed to fetch availability'
@@ -3116,113 +3586,349 @@ export default function SourcePage() {
                         <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                           Pricing &amp; Availability
                         </h1>
-                        <p className="mt-2 text-gray-600 font-medium">How your HTTP availability endpoint should return pricing data</p>
+                        <p className="mt-2 text-gray-600 font-medium">Test your OTA pricing endpoint and store availability samples</p>
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-6 space-y-6">
-                    {/* Availability endpoint configuration */}
+
+                    {/* ── Endpoint URL ── */}
                     <Card className="border border-gray-200 shadow-sm">
                       <CardHeader>
-                        <CardTitle className="text-lg">Availability endpoint</CardTitle>
+                        <CardTitle className="text-lg">Availability endpoint URL</CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-4">
+                      <CardContent className="space-y-3">
                         <p className="text-sm text-gray-700">
-                          Set the URL of your availability/pricing endpoint (e.g. pricetest2.php). The middleware uses this (or <code className="bg-gray-100 px-1 rounded">httpEndpoint</code> + <code className="bg-gray-100 px-1 rounded">/availability</code>) when agents search. After saving, use &quot;Fetch &amp; Store&quot; to call the endpoint and store the result. The summary below shows whether data was <strong>stored</strong>, <strong>updated</strong>, or <strong>skipped</strong> (duplicate — same data already stored; no duplicate is saved).
+                          Enter the URL of your OTA pricing endpoint (e.g. <code className="bg-gray-100 px-1 rounded">pricetest.php</code>). The middleware POSTs an <strong>OTA_VehAvailRateRQ XML</strong> request (<code className="bg-gray-100 px-1 rounded">Content-Type: text/xml</code>) and expects an <strong>OTA_VehAvailRateRS XML</strong> response in return.
                         </p>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Endpoint URL</label>
-                          <Input
-                            value={availabilityEndpointUrl}
-                            onChange={(e) => setAvailabilityEndpointUrl(e.target.value)}
-                            placeholder="https://ota.example.com/pricetest2.php"
-                          />
-                        </div>
-                        <div className="flex flex-wrap gap-3">
+                        <div className="flex gap-2 items-end">
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Endpoint URL</label>
+                            <Input
+                              value={availabilityEndpointUrl}
+                              onChange={(e) => setAvailabilityEndpointUrl(e.target.value)}
+                              placeholder="https://ota.tlinternationalgroup.com/pricetest.php"
+                            />
+                          </div>
                           <Button
                             variant="primary"
                             onClick={handleSaveAvailabilityEndpointUrl}
                             loading={isSavingAvailabilityEndpoint}
                             disabled={!availabilityEndpointUrl.trim()}
                           >
-                            Save endpoint
+                            Save
                           </Button>
+                        </div>
+                        {endpointConfig?.availabilityEndpointUrl && (
+                          <p className="text-xs text-gray-500">Saved: <code className="bg-gray-100 px-1 rounded">{endpointConfig.availabilityEndpointUrl}</code></p>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* ── OTA Request Parameters ── */}
+                    <Card className="border border-gray-200 shadow-sm">
+                      <CardHeader>
+                        <CardTitle className="text-lg">OTA_VehAvailRateRQ request parameters</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 leading-relaxed">
+                          The middleware sends an <strong>OTA_VehAvailRateRQ XML POST</strong> to your endpoint. These fields populate the XML request. Fill them in and click <strong>Fetch &amp; Store</strong> to test your endpoint and store the result.
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* RequestorID */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              RequestorID <span className="text-gray-400 font-normal">(broker account number)</span>
+                            </label>
+                            <Input
+                              value={otaRequestorId}
+                              onChange={(e) => setOtaRequestorId(e.target.value)}
+                              placeholder="1000097"
+                              helperText="The ID passed in <RequestorID Type='5' ID='...'>"
+                            />
+                          </div>
+
+                          {/* Citizen country */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              CitizenCountryName Code <span className="text-gray-400 font-normal">(ISO 2-letter)</span>
+                            </label>
+                            <Input
+                              value={otaCitizenCountry}
+                              onChange={(e) => setOtaCitizenCountry(e.target.value.toUpperCase())}
+                              placeholder="US"
+                              maxLength={2}
+                              helperText="e.g. US, GB, AE, IE"
+                            />
+                          </div>
+
+                          {/* PickUpLocation */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              PickUpLocation LocationCode
+                            </label>
+                            <Input
+                              value={otaPickupLoc}
+                              onChange={(e) => setOtaPickupLoc(e.target.value.toUpperCase())}
+                              placeholder="TIAA01"
+                              helperText="Branch location code (from your branches)"
+                            />
+                          </div>
+
+                          {/* ReturnLocation */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              ReturnLocation LocationCode
+                            </label>
+                            <Input
+                              value={otaReturnLoc}
+                              onChange={(e) => setOtaReturnLoc(e.target.value.toUpperCase())}
+                              placeholder="TIAA01"
+                              helperText="Same as pick-up for one-way or same-location rental"
+                            />
+                          </div>
+
+                          {/* PickUpDateTime */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">PickUpDateTime</label>
+                            <input
+                              type="datetime-local"
+                              value={otaPickupDateTime}
+                              onChange={(e) => setOtaPickupDateTime(e.target.value)}
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          {/* ReturnDateTime */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">ReturnDateTime</label>
+                            <input
+                              type="datetime-local"
+                              value={otaReturnDateTime}
+                              onChange={(e) => setOtaReturnDateTime(e.target.value)}
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          {/* Driver Age */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Driver Age</label>
+                            <input
+                              type="number"
+                              min={18}
+                              max={99}
+                              value={otaDriverAge}
+                              onChange={(e) => setOtaDriverAge(Number(e.target.value))}
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* XML preview */}
+                        <details className="border border-gray-200 rounded-lg">
+                          <summary className="px-4 py-2 text-xs font-semibold text-gray-600 cursor-pointer select-none hover:bg-gray-50">
+                            Preview OTA_VehAvailRateRQ XML that will be sent
+                          </summary>
+                          <pre className="text-xs font-mono text-gray-700 bg-gray-50 p-4 overflow-x-auto max-h-56 border-t border-gray-200">{`<?xml version="1.0" encoding="UTF-8"?>
+<OTA_VehAvailRateRQ xmlns="http://www.opentravel.org/OTA/2003/05"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.opentravel.org/OTA/2003/05 OTA_VehAvailRateRQ.xsd"
+    TimeStamp="${new Date().toISOString().slice(0,19)}" Target="Production" Version="1.007">
+  <POS>
+    <Source>
+      <RequestorID Type="5" ID="${otaRequestorId || '1000097'}"/>
+    </Source>
+  </POS>
+  <VehAvailRQCore Status="Available">
+    <VehRentalCore PickUpDateTime="${otaPickupDateTime ? otaPickupDateTime + ':00' : '2026-03-18T14:00:00'}"
+                   ReturnDateTime="${otaReturnDateTime ? otaReturnDateTime + ':00' : '2026-03-22T14:00:00'}">
+      <PickUpLocation LocationCode="${otaPickupLoc || 'TIAA01'}"/>
+      <ReturnLocation LocationCode="${otaReturnLoc || 'TIAA01'}"/>
+    </VehRentalCore>
+    <DriverType Age="${otaDriverAge || 30}"/>
+  </VehAvailRQCore>
+  <VehAvailRQInfo>
+    <Customer>
+      <Primary>
+        <CitizenCountryName Code="${otaCitizenCountry || 'US'}"/>
+      </Primary>
+    </Customer>
+  </VehAvailRQInfo>
+</OTA_VehAvailRateRQ>`}</pre>
+                        </details>
+
+                        <div className="flex flex-wrap items-center gap-3 pt-2">
                           <Button
-                            variant="secondary"
+                            variant="primary"
                             onClick={handleFetchAvailability}
                             loading={isFetchingAvailability}
                             disabled={!availabilityEndpointUrl.trim() && !endpointConfig?.availabilityEndpointUrl && !endpointConfig?.httpEndpoint}
                           >
                             Fetch &amp; Store
                           </Button>
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={forceRefreshAvailability}
+                              onChange={(e) => setForceRefreshAvailability(e.target.checked)}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-xs text-gray-600">Force re-store</span>
+                          </label>
+                          <p className="text-xs text-gray-500 self-center">
+                            Sends OTA XML POST → parses OTA_VehAvailRateRS → stores in database
+                          </p>
                         </div>
+
                         {fetchAvailabilityResult && (
                           <AvailabilityFetchResultDisplay result={fetchAvailabilityResult} />
                         )}
                       </CardContent>
                     </Card>
 
+                    {/* ── Stored Availability Samples ── */}
                     <Card className="border border-gray-200 shadow-sm">
                       <CardHeader>
-                        <CardTitle className="text-lg">OTA VehAvailRSCore format</CardTitle>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <CardTitle className="text-lg">Stored availability samples</CardTitle>
+                            <p className="text-sm text-gray-500 mt-1">
+                              All previously fetched results for this source — each unique search criteria is stored separately.
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            onClick={loadStoredSamples}
+                            loading={isLoadingStoredSamples}
+                            className="text-xs"
+                          >
+                            Refresh
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        {isLoadingStoredSamples && storedSamples.length === 0 ? (
+                          <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
+                            <svg className="animate-spin w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            </svg>
+                            Loading stored samples…
+                          </div>
+                        ) : storedSamples.length === 0 ? (
+                          <p className="text-sm text-gray-400 italic py-4">
+                            No stored samples yet. Click "Fetch &amp; Store" above to test your endpoint and save the result.
+                          </p>
+                        ) : (
+                          <div className="space-y-4">
+                            {storedSamples.map((sample) => (
+                              <StoredSampleCard key={sample.id} sample={sample} />
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* ── OTA Format Reference ── */}
+                    <Card className="border border-gray-200 shadow-sm">
+                      <CardHeader>
+                        <CardTitle className="text-lg">OTA XML format reference</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <p className="text-sm text-gray-700">
-                          When agents search for availability, the middleware calls your <strong>HTTP availability endpoint</strong> (e.g. the URL you configure as <code className="bg-gray-100 px-1 rounded">httpEndpoint</code> + <code className="bg-gray-100 px-1 rounded">/availability</code>). Your endpoint must return <strong>JSON</strong> in the <strong>OTA VehAvailRSCore</strong> structure so the middleware can parse and store offers.
+                          Your endpoint must accept an <strong>OTA_VehAvailRateRQ XML POST</strong> (<code className="bg-gray-100 px-1 rounded">Content-Type: text/xml</code>) and return <strong>OTA_VehAvailRateRS XML</strong>. The middleware automatically parses the XML response and extracts vehicle data, pricing, and terms.
                         </p>
-                        <p className="text-sm text-gray-700">
-                          Example endpoint: <a href="https://ota.tlinternationalgroup.com/pricetest2.php" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">pricetest2.php</a>-style APIs. Your response must be <strong>JSON</strong> (e.g. <code className="bg-gray-100 px-1 rounded">Content-Type: application/json</code> and <code className="bg-gray-100 px-1 rounded">json_encode($array)</code> in PHP). PHP <code className="bg-gray-100 px-1 rounded">var_dump()</code> text is not parsed for availability; only JSON is supported.
-                        </p>
-                        <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
-                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Expected root structure (JSON)</p>
-                          <pre className="text-xs font-mono text-gray-800 overflow-x-auto">{`{
-  "@attributes": { "TimeStamp", "Target", "Version", "CDCode" },
-  "Success": [],
-  "VehAvailRSCore": {
-    "VehRentalCore": { "@attributes": { "PickUpDateTime", "ReturnDateTime" }, "PickUpLocation", "ReturnLocation" },
-    "VehVendorAvails": { "VehVendorAvail": { "VehAvails": { "VehAvail": [ ... ] } } }
-  }
-}`}</pre>
-                          <p className="text-xs text-gray-600 mt-2">Each <code>VehAvail</code> item should include <code>VehAvailCore</code> (Status, RStatus, VehID), <code>Vehicle</code> (VehMakeModel, VehType, VehClass, VehTerms), <code>RentalRate</code>, <code>VehicleCharges</code>, <code>TotalCharge</code>, and optionally <code>PricedEquips</code>.</p>
+
+                        {/* Request format */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Request sent to your endpoint (OTA_VehAvailRateRQ)</p>
+                          <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-48">{`<?xml version="1.0" encoding="UTF-8"?>
+<OTA_VehAvailRateRQ xmlns="http://www.opentravel.org/OTA/2003/05"
+    TimeStamp="2026-03-18T14:31:15" Target="Production" Version="1.007">
+  <POS>
+    <Source>
+      <RequestorID Type="5" ID="1000097"/>   <!-- broker account number -->
+    </Source>
+  </POS>
+  <VehAvailRQCore Status="Available">
+    <VehRentalCore PickUpDateTime="2026-03-18T14:00:00"
+                   ReturnDateTime="2026-03-22T14:00:00">
+      <PickUpLocation LocationCode="TIAA01"/>
+      <ReturnLocation LocationCode="TIAA01"/>
+    </VehRentalCore>
+    <DriverType Age="35"/>
+  </VehAvailRQCore>
+  <VehAvailRQInfo>
+    <Customer><Primary>
+      <CitizenCountryName Code="US"/>
+    </Primary></Customer>
+  </VehAvailRQInfo>
+</OTA_VehAvailRateRQ>`}</pre>
                         </div>
-                        <p className="text-sm text-gray-600">
-                          Full format details, element descriptions, and flow diagrams are in the application spec. Use the links below for the API reference (OTA format), Data Formats section, and SDK guide.
-                        </p>
-                        <div className="flex flex-wrap gap-3 mt-3">
-                          <Link
-                            to="/docs-fullscreen/api-reference#availability-endpoint"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm"
-                          >
-                            API reference &amp; OTA format
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </Link>
-                          <Link
-                            to="/docs-fullscreen/api-reference#data-formats"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm border border-gray-200"
-                          >
-                            Data formats
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </Link>
-                          <Link
-                            to="/docs-fullscreen/sdk"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm border border-gray-200"
-                          >
-                            SDK guide
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </Link>
+
+                        {/* Response format */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Expected response (OTA_VehAvailRateRS)</p>
+                          <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-64">{`<?xml version="1.0" encoding="UTF-8"?>
+<OTA_VehAvailRateRS xmlns="http://www.opentravel.org/OTA/2003/05"
+    TimeStamp="2026-03-18T14:31:15" Target="Production" Version="1.007">
+  <Success />
+  <VehAvailRSCore>
+    <VehRentalCore PickUpDateTime="2026-03-18T14:00:00" ReturnDateTime="2026-03-22T14:00:00">
+      <PickUpLocation LocationCode="TIAA01" />
+      <ReturnLocation LocationCode="TIAA01" />
+    </VehRentalCore>
+  </VehAvailRSCore>
+  <VehVendorAvails>
+    <VehVendorAvail>
+      <VehAvails>
+        <VehAvail>
+          <VehAvailCore Status="Available" RStatus="Inc" VehID="CDAR65505909190226">
+            <Vehicle AirConditionInd="Yes" TransmissionType="Automatic">
+              <VehMakeModel Name="TOYOTA COROLLA"
+                PictureURL="https://...front-toyotacorollaestate.png" />
+              <VehType VehicleCategory="CDAR" DoorCount="5" Baggage="2" />
+              <VehClass Size="5" />
+              <VehTerms>
+                <Included code="CDW" mandatory="Yes" header="Standard Insurance (CDW)"
+                  price="0.00" excess="900.00" deposit="900.00" details="..." />
+                <NotIncluded code="PCDW" mandatory="No" header="Premium Insurance (PCDW)"
+                  price="60.00" excess="0.00" deposit="500.00" details="..." />
+              </VehTerms>
+            </Vehicle>
+            <VehicleCharges>
+              <VehicleCharge Amount="110.00" CurrencyCode="EUR" Purpose="1">
+                <Calculation UnitCharge="33.00" UnitName="Day" Quantity="4" />
+              </VehicleCharge>
+            </VehicleCharges>
+            <TotalCharge RateTotalAmount="132.00" CurrencyCode="EUR" taxInclusive="true" />
+            <PricedEquips>
+              <PricedEquip>
+                <Equipment Description="GPS" vendorEquipID="GPS" />
+                <Charge><Amount>32.00</Amount></Charge>
+              </PricedEquip>
+            </PricedEquips>
+          </VehAvailCore>
+        </VehAvail>
+      </VehAvails>
+    </VehVendorAvail>
+  </VehVendorAvails>
+</OTA_VehAvailRateRS>`}</pre>
+                        </div>
+
+                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 space-y-1">
+                          <p className="font-semibold">What the middleware extracts from each VehAvailCore:</p>
+                          <ul className="list-disc list-inside space-y-0.5 mt-1">
+                            <li>VehID — unique rate reference (used for booking)</li>
+                            <li>VehMakeModel Name + PictureURL — car name and image</li>
+                            <li>TransmissionType, AirConditionInd, DoorCount, Baggage</li>
+                            <li>VehicleCategory (ACRISS code), VehClass Size</li>
+                            <li>TotalCharge RateTotalAmount + CurrencyCode — total price</li>
+                            <li>VehTerms Included / NotIncluded — insurance &amp; extras included/not</li>
+                            <li>PricedEquips — optional add-on equipment with pricing</li>
+                          </ul>
                         </div>
                       </CardContent>
                     </Card>

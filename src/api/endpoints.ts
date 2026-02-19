@@ -215,10 +215,41 @@ export const endpointsApi = {
     returnDateTime?: string
     pickupLoc?: string
     returnLoc?: string
+    requestorId?: string
+    driverAge?: number
+    citizenCountry?: string
+    force?: boolean
   }): Promise<FetchAvailabilityResponse> => {
     const response = await api.post('/sources/fetch-availability', params ?? {})
     return response.data
   },
+
+  getAvailabilitySamples: async (): Promise<{ samples: StoredAvailabilitySample[] }> => {
+    const response = await api.get('/sources/availability-samples')
+    return response.data
+  },
+}
+
+export interface IncludedTerm {
+  code?: string
+  mandatory?: string
+  header?: string
+  price?: string
+  excess?: string
+  deposit?: string
+  details?: string
+}
+
+export interface PricedEquip {
+  description?: string
+  equip_type?: string
+  vendor_equip_id?: string
+  charge?: {
+    Amount?: string | number
+    UnitCharge?: string | number
+    Quantity?: string | number
+    TaxInclusive?: string
+  }
 }
 
 export interface OfferSummaryItem {
@@ -227,6 +258,38 @@ export interface OfferSummaryItem {
   total_price: number
   currency: string
   availability_status: string
+  picture_url?: string
+  transmission_type?: string
+  vehicle_category?: string
+  air_condition_ind?: string
+  veh_id?: string
+  door_count?: string
+  baggage?: string
+  included?: IncludedTerm[]
+  not_included?: IncludedTerm[]
+  priced_equips?: PricedEquip[]
+}
+
+export interface StoredAvailabilitySample {
+  id: string
+  criteriaHash: string
+  pickupLoc: string
+  returnLoc: string
+  pickupIso: string
+  returnIso: string
+  offersCount: number
+  offersSummary?: OfferSummaryItem[] | null
+  criteria?: {
+    pickupLoc: string
+    returnLoc: string
+    pickupIso: string
+    returnIso: string
+    requestorId?: string
+    driverAge?: number
+    citizenCountry?: string
+  } | null
+  fetchedAt: string
+  updatedAt: string
 }
 
 export interface FetchAvailabilityResponse {
@@ -236,6 +299,16 @@ export interface FetchAvailabilityResponse {
   isNew: boolean
   duplicate?: boolean
   offersSummary?: OfferSummaryItem[]
-  criteria?: { pickupLoc: string; returnLoc: string; pickupIso: string; returnIso: string }
+  criteria?: {
+    pickupLoc: string
+    returnLoc: string
+    pickupIso: string
+    returnIso: string
+    requestorId?: string
+    driverAge?: number
+    citizenCountry?: string
+  }
+  rawResponsePreview?: string
+  parsedPreview?: any
 }
 
