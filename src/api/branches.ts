@@ -19,6 +19,8 @@ export interface Branch {
   country?: string | null
   countryCode?: string | null
   natoLocode?: string | null
+  pickupTimes?: Record<string, any> | null
+  dropoffTimes?: Record<string, any> | null
   rawJson?: any
   createdAt: string
   updatedAt: string
@@ -66,6 +68,9 @@ export interface UpdateBranchRequest {
   country?: string | null
   countryCode?: string | null
   natoLocode?: string | null
+  pickupTimes?: Record<string, any> | null
+  dropoffTimes?: Record<string, any> | null
+  rawJson?: any
 }
 
 export const branchesApi = {

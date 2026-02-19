@@ -12,6 +12,9 @@ export interface EndpointConfig {
   branchEndpointFormat?: BranchEndpointFormat | null
   branchDefaultCountryCode?: string | null
   locationEndpointUrl?: string
+  locationListEndpointUrl?: string | null
+  locationListRequestRoot?: string | null
+  locationListAccountId?: string | null
   availabilityEndpointUrl?: string
   adapterType: string
   description: string
@@ -29,6 +32,9 @@ export interface UpdateEndpointRequest {
   branchEndpointFormat?: BranchEndpointFormat | null
   branchDefaultCountryCode?: string | null
   locationEndpointUrl?: string
+  locationListEndpointUrl?: string
+  locationListRequestRoot?: string
+  locationListAccountId?: string
   availabilityEndpointUrl?: string
 }
 
@@ -167,6 +173,11 @@ export const endpointsApi = {
 
   importLocations: async (): Promise<ImportLocationsResponse> => {
     const response = await api.post('/sources/import-locations')
+    return response.data
+  },
+
+  importLocationList: async (): Promise<ImportLocationsResponse & { branchesImported?: number; branchesUpdated?: number }> => {
+    const response = await api.post('/sources/import-location-list')
     return response.data
   },
 

@@ -754,8 +754,8 @@ export default function SourcePage() {
   const [user, setUser] = useState<any>(null)
   
   // Get active tab from URL or default to dashboard
-  const tabFromUrl = searchParams.get('tab') as 'dashboard' | 'agreements' | 'locations' | 'branches' | 'pricing' | 'transactions' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings' | null
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'agreements' | 'locations' | 'branches' | 'pricing' | 'transactions' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings'>(
+  const tabFromUrl = searchParams.get('tab') as 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-branches' | 'pricing' | 'transactions' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings' | null
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-branches' | 'pricing' | 'transactions' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings'>(
     tabFromUrl || 'dashboard'
   )
   
@@ -858,7 +858,7 @@ export default function SourcePage() {
   }, [selectedAgreementFilterId, user?.company?.id])
   
   // Sync URL when tab changes
-  const handleTabChange = (tab: 'dashboard' | 'agreements' | 'locations' | 'branches' | 'pricing' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings') => {
+  const handleTabChange = (tab: 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-branches' | 'pricing' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings') => {
     setActiveTab(tab)
     setSearchParams({ tab })
     // When switching to locations tab, refresh the locations data
@@ -878,7 +878,7 @@ export default function SourcePage() {
   // Sync tab when URL changes (back/forward button)
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['dashboard', 'agreements', 'locations', 'branches', 'pricing', 'location-requests', 'health', 'verification', 'support', 'docs', 'settings'].includes(tab)) {
+    if (tab && ['dashboard', 'agreements', 'locations', 'branches', 'location-branches', 'pricing', 'location-requests', 'health', 'verification', 'support', 'docs', 'settings'].includes(tab)) {
       setActiveTab(tab as any)
     } else if (!tab) {
       // If no tab in URL, set to dashboard and update URL
@@ -935,6 +935,15 @@ export default function SourcePage() {
   const [locationImportResult, setLocationImportResult] = useState<any>(null)
   const [locationConfigTab, setLocationConfigTab] = useState<'settings' | 'sample'>('settings')
   const [locationSamplePaste, setLocationSamplePaste] = useState('')
+  const [locationListEndpointUrl, setLocationListEndpointUrl] = useState('')
+  const [locationListRequestRoot, setLocationListRequestRoot] = useState('')
+  const [locationListAccountId, setLocationListAccountId] = useState('')
+  const [isLocationListConfigOpen, setIsLocationListConfigOpen] = useState(false)
+  const [isSavingLocationListConfig, setIsSavingLocationListConfig] = useState(false)
+  const [isImportingLocationList, setIsImportingLocationList] = useState(false)
+  const [locationListImportResult, setLocationListImportResult] = useState<any>(null)
+  const [showLocationListImportResult, setShowLocationListImportResult] = useState(false)
+  const [locationListConfigTab, setLocationListConfigTab] = useState<'settings' | 'sample'>('settings')
   const [locationSampleValidation, setLocationSampleValidation] = useState<{
     ok: boolean
     format?: string
@@ -1125,6 +1134,9 @@ export default function SourcePage() {
       setHttpEndpoint(response.httpEndpoint)
       setGrpcEndpoint(response.grpcEndpoint)
       setLocationEndpointUrl(response.locationEndpointUrl || '')
+      setLocationListEndpointUrl(response.locationListEndpointUrl || '')
+      setLocationListRequestRoot(response.locationListRequestRoot || '')
+      setLocationListAccountId(response.locationListAccountId || '')
       
       // Save endpoint to localStorage for validation
       if (user?.company?.id) {
@@ -1206,6 +1218,15 @@ export default function SourcePage() {
     }
     if (endpointConfig?.availabilityEndpointUrl) {
       setAvailabilityEndpointUrl(endpointConfig.availabilityEndpointUrl)
+    }
+    if (endpointConfig?.locationListEndpointUrl != null) {
+      setLocationListEndpointUrl(endpointConfig.locationListEndpointUrl || '')
+    }
+    if (endpointConfig?.locationListRequestRoot != null) {
+      setLocationListRequestRoot(endpointConfig.locationListRequestRoot || '')
+    }
+    if (endpointConfig?.locationListAccountId != null) {
+      setLocationListAccountId(endpointConfig.locationListAccountId || '')
     }
   }, [endpointConfig])
 
@@ -1485,6 +1506,69 @@ export default function SourcePage() {
       toast.error(error.response?.data?.message || 'Failed to save endpoint URL')
     } finally {
       setIsSavingLocationEndpoint(false)
+    }
+  }
+
+  const handleSaveLocationListConfig = async () => {
+    setIsSavingLocationListConfig(true)
+    try {
+      await endpointsApi.updateConfig({
+        httpEndpoint: endpointConfig?.httpEndpoint || '',
+        grpcEndpoint: endpointConfig?.grpcEndpoint || '',
+        branchEndpointUrl: endpointConfig?.branchEndpointUrl,
+        locationEndpointUrl: endpointConfig?.locationEndpointUrl,
+        locationListEndpointUrl: locationListEndpointUrl.trim() || undefined,
+        locationListRequestRoot: locationListRequestRoot.trim() || undefined,
+        locationListAccountId: locationListAccountId.trim() || undefined,
+        availabilityEndpointUrl: endpointConfig?.availabilityEndpointUrl,
+      })
+      queryClient.invalidateQueries({ queryKey: ['endpointConfig'] })
+      await loadEndpointConfig()
+      setIsLocationListConfigOpen(false)
+      toast.success('Location list endpoint configuration saved')
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to save configuration')
+    } finally {
+      setIsSavingLocationListConfig(false)
+    }
+  }
+
+  const importLocationList = async () => {
+    setIsImportingLocationList(true)
+    setLocationListImportResult(null)
+    setShowLocationListImportResult(false)
+    try {
+      const result = await endpointsApi.importLocationList()
+      setLocationListImportResult(result)
+      setShowLocationListImportResult(true)
+      if (result.errors && result.errors.length > 0) {
+        if ((result.imported || 0) > 0 || (result.updated || 0) > 0) {
+          toast.success(`Location list imported: ${result.imported || 0} new, ${result.updated || 0} updated locations; ${result.branchesImported || 0} new, ${result.branchesUpdated || 0} updated branches`)
+        } else {
+          toast.warning(`Import completed with issues. ${result.skipped || 0} skipped.`)
+        }
+      } else {
+        toast.success(`Location list imported: ${result.imported || 0} locations, ${result.branchesImported || 0} branches created, ${result.branchesUpdated || 0} branches updated`)
+      }
+      queryClient.invalidateQueries({ queryKey: ['branches'] })
+      await loadEndpointConfig()
+      if (user?.company?.id) loadSyncedLocations()
+    } catch (error: any) {
+      const errorData = error.response?.data || {}
+      setLocationListImportResult({
+        message: errorData.message || 'Failed to import location list',
+        error: errorData.error,
+        imported: 0,
+        updated: 0,
+        skipped: 0,
+        total: 0,
+        errors: [{ index: 0, error: errorData.message || error.message }],
+        details: errorData.details ? { dataPreview: errorData.details } : undefined,
+      })
+      setShowLocationListImportResult(true)
+      toast.error(errorData.message || 'Failed to import location list')
+    } finally {
+      setIsImportingLocationList(false)
     }
   }
 
@@ -1881,7 +1965,7 @@ export default function SourcePage() {
                     </Button>
                   </div>
                 )}
-                {(searchParams.get('renew') === '1' || (!isLoadingSubscription && !subscriptionActive && ['dashboard', 'locations', 'branches', 'location-requests'].includes(activeTab))) ? (
+                {(searchParams.get('renew') === '1' || (!isLoadingSubscription && !subscriptionActive && ['dashboard', 'locations', 'branches', 'location-branches', 'location-requests'].includes(activeTab))) ? (
                   <PlanPicker />
                 ) : (
                 <>
@@ -2745,6 +2829,251 @@ export default function SourcePage() {
                       onQuotaExceeded={(payload, retry) => setQuotaModal({ payload, retry })}
                     />
                   </div>
+                </>
+              )}
+
+              {activeTab === 'location-branches' && (
+                <>
+                  <div className="mb-8">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl shadow-sm">
+                        <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                          Location &amp; Branches
+                        </h1>
+                        <p className="mt-2 text-gray-600 font-medium">Import locations and branches from your GLORIA location list endpoint</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Card className="mb-6 border border-gray-200 shadow-sm">
+                    <CardHeader className="bg-gray-50 border-b border-gray-200">
+                      <CardTitle className="text-lg">Endpoint</CardTitle>
+                      <p className="text-sm text-gray-600 mt-1">Configure the endpoint URL, request root element (e.g. GLORIA_locationlistrq), and Account ID. A POST request with XML body is sent; the response should be XML containing CountryList &gt; Country &gt; VehMatchedLocs &gt; VehMatchedLoc &gt; LocationDetail.</p>
+                    </CardHeader>
+                    <CardContent className="pt-4 flex flex-wrap items-center gap-3">
+                      <Button
+                        variant="secondary"
+                        onClick={() => setIsLocationListConfigOpen(true)}
+                        type="button"
+                      >
+                        Configure Endpoint
+                      </Button>
+                      <Button
+                        variant="primary"
+                        onClick={importLocationList}
+                        loading={isImportingLocationList}
+                        disabled={!locationListEndpointUrl.trim()}
+                        type="button"
+                      >
+                        Import from endpoint
+                      </Button>
+                      {locationListEndpointUrl && (
+                        <span className="text-sm text-gray-500 truncate max-w-md" title={locationListEndpointUrl}>
+                          {locationListEndpointUrl}
+                        </span>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <div className="mt-6">
+                    <BranchList
+                      subscriptionActive={subscriptionActive}
+                      onEdit={(branch) => {
+                        setSelectedBranch(branch)
+                        setIsEditBranchModalOpen(true)
+                      }}
+                      onQuotaExceeded={(payload, retry) => setQuotaModal({ payload, retry })}
+                      hideHeader={true}
+                    />
+                  </div>
+
+                  <Modal
+                    isOpen={isLocationListConfigOpen}
+                    onClose={() => setIsLocationListConfigOpen(false)}
+                    title="Configure Location List Endpoint"
+                    size="lg"
+                  >
+                    <div className="space-y-4">
+                      <div className="flex border-b border-gray-200">
+                        <button
+                          type="button"
+                          onClick={() => setLocationListConfigTab('settings')}
+                          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${locationListConfigTab === 'settings' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        >
+                          Settings
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLocationListConfigTab('sample')}
+                          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${locationListConfigTab === 'sample' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        >
+                          Sample &amp; Validate
+                        </button>
+                      </div>
+                      {locationListConfigTab === 'settings' && (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Endpoint URL</label>
+                            <Input
+                              value={locationListEndpointUrl}
+                              onChange={(e) => setLocationListEndpointUrl(e.target.value)}
+                              placeholder="https://example.com/locationlist.php"
+                              helperText="URL that accepts POST XML with your request root (e.g. GLORIA_locationlistrq)"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Request root element name</label>
+                            <Input
+                              value={locationListRequestRoot}
+                              onChange={(e) => setLocationListRequestRoot(e.target.value)}
+                              placeholder="GLORIA_locationlistrq"
+                              helperText="Root element of the XML request body; response is expected to use the same name with 'rs' suffix (e.g. GLORIA_locationlistrs)"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Account ID (optional)</label>
+                            <Input
+                              value={locationListAccountId}
+                              onChange={(e) => setLocationListAccountId(e.target.value)}
+                              placeholder="e.g. Gloria001"
+                              helperText='Used in request as <AccountID ID="..."/>'
+                            />
+                          </div>
+                          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                            <Button variant="secondary" onClick={() => setIsLocationListConfigOpen(false)} type="button">Cancel</Button>
+                            <Button variant="primary" onClick={handleSaveLocationListConfig} loading={isSavingLocationListConfig} disabled={!locationListEndpointUrl.trim()} type="button">Save</Button>
+                          </div>
+                        </>
+                      )}
+                      {locationListConfigTab === 'sample' && (
+                        <>
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 mb-2">Sample request (POST body)</p>
+                            <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto max-h-40 font-mono whitespace-pre">{`<?xml version="1.0" encoding="UTF-8"?>
+<${locationListRequestRoot || 'GLORIA_locationlistrq'} TimeStamp="${new Date().toISOString().slice(0, 19)}" Target="Production" Version="1.00">
+  <ACC>
+    <Source>
+      <AccountID ID="${locationListAccountId || 'Gloria001'}"/>
+    </Source>
+  </ACC>
+</${locationListRequestRoot || 'GLORIA_locationlistrq'}>`}</pre>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 mb-2">Expected response structure</p>
+                            <p className="text-xs text-gray-500 mb-1">The endpoint returns XML. Below is the JSON schema showing the expected structure and field types. Country code is taken from the <code className="bg-gray-200 px-1 rounded">CountryCode</code> element inside each <code className="bg-gray-200 px-1 rounded">Country</code>.</p>
+                            <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto max-h-[28rem] font-mono whitespace-pre">{`{
+  "${locationListRequestRoot ? locationListRequestRoot.replace(/rq$/i, 'rs') : 'GLORIA_locationlistrs'}": {
+    "@attributes": {
+      "TimeStamp": "string",
+      "Target": "string",
+      "Version": "string"
+    },
+    "Success": {},
+    "RentalBrand": "string",
+    "CountryList": [
+      {
+        "Country": "string",
+        "CountryCode": "string (2-letter ISO)",
+        "VehMatchedLocs": [
+          {
+            "VehMatchedLoc": [
+              {
+                "LocationDetail": {
+                  "@attributes": {
+                    "BranchType": "string",
+                    "AtAirport": "true | false",
+                    "LocationType": "string",
+                    "Code": "string",
+                    "Brand": "string",
+                    "Name": "string",
+                    "Latitude": "number",
+                    "Longitude": "number"
+                  },
+                  "Address": {
+                    "AddressLine": "string",
+                    "CityName": "string",
+                    "PostalCode": "string",
+                    "CountryName": {
+                      "@attributes": { "Code": "string" },
+                      "value": "string"
+                    }
+                  },
+                  "Telephone": {
+                    "@attributes": { "PhoneNumber": "string" }
+                  },
+                  "Opening": {
+                    "monday":    { "@attributes": { "Open": "HH:mm - HH:mm | Closed" } },
+                    "tuesday":   { "@attributes": { "Open": "HH:mm - HH:mm | Closed" } },
+                    "wednesday": { "@attributes": { "Open": "HH:mm - HH:mm | Closed" } },
+                    "thursday":  { "@attributes": { "Open": "HH:mm - HH:mm | Closed" } },
+                    "friday":    { "@attributes": { "Open": "HH:mm - HH:mm | Closed" } },
+                    "saturday":  { "@attributes": { "Open": "HH:mm - HH:mm | Closed" } },
+                    "sunday":    { "@attributes": { "Open": "HH:mm - HH:mm | Closed" } }
+                  },
+                  "PickupInstructions": {
+                    "@attributes": { "Pickup": "string" }
+                  },
+                  "Cars": {
+                    "Code": [
+                      {
+                        "@attributes": {
+                          "Acrisscode": "string",
+                          "Group": "string",
+                          "Make": "string",
+                          "Model": "string",
+                          "Doors": "number",
+                          "Seats": "number",
+                          "DepositAmount": "number | empty"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}`}</pre>
+                            <p className="text-xs text-gray-400 mt-2 italic">The actual response is XML; this JSON schema shows the structure and field types.</p>
+                          </div>
+                          <div className="flex justify-end pt-2 border-t border-gray-200">
+                            <Button variant="secondary" onClick={() => setIsLocationListConfigOpen(false)} type="button">Close</Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </Modal>
+
+                  <Modal
+                    isOpen={showLocationListImportResult && locationListImportResult !== null}
+                    onClose={() => { setShowLocationListImportResult(false); setLocationListImportResult(null); }}
+                    title="Location List Import Results"
+                    size="xl"
+                  >
+                    {locationListImportResult && (
+                      <div className="max-h-[85vh] overflow-y-auto -mx-6 -mt-6 px-6 pt-6">
+                        <LocationImportResultDisplay result={locationListImportResult} />
+                        {(locationListImportResult.branchesImported != null || locationListImportResult.branchesUpdated != null) && (
+                          <div className="mt-4 flex gap-2">
+                            {(locationListImportResult.branchesImported || 0) > 0 && (
+                              <Badge variant="success">{locationListImportResult.branchesImported} branches created</Badge>
+                            )}
+                            {(locationListImportResult.branchesUpdated || 0) > 0 && (
+                              <Badge variant="info">{locationListImportResult.branchesUpdated} branches updated</Badge>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </Modal>
                 </>
               )}
 
