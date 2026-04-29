@@ -186,13 +186,13 @@ export const Support: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 pb-6">
         <div>
-          <h1 className="text-3xl font-bold text-white">Support</h1>
-          <p className="text-slate-300 mt-1">Get help from our support team</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Support</h1>
+          <p className="text-gray-600 mt-1 text-sm sm:text-base">Get help from our support team</p>
         </div>
         {!showCreateForm && (
-          <Button onClick={() => setShowCreateForm(true)}>
+          <Button onClick={() => setShowCreateForm(true)} className="shrink-0 w-full sm:w-auto">
             <Plus className="h-5 w-5 mr-2" />
             New Ticket
           </Button>
@@ -206,7 +206,7 @@ export const Support: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-200 mb-1">Title *</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
               <Input
                 placeholder="Brief description of your issue..."
                 value={newTicketTitle}
@@ -214,9 +214,9 @@ export const Support: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-200 mb-1">Message</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Message</label>
               <textarea
-                className="w-full px-3 py-2 border border-slate-600 bg-slate-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 rows={4}
                 placeholder="Describe your issue in detail..."
                 value={newTicketMessage}
@@ -238,21 +238,22 @@ export const Support: React.FC = () => {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-300px)]">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:h-[calc(100vh-280px)] min-h-0">
         {/* Ticket List */}
-        <Card className="lg:col-span-1 flex flex-col">
+        <Card className="lg:col-span-1 flex flex-col min-h-0 overflow-hidden">
           <CardHeader>
             <CardTitle>My Tickets</CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto">
+          <CardContent className="flex-1 overflow-y-auto min-h-0">
             {ticketsLoading ? (
               <div className="flex justify-center py-8">
                 <Loader />
               </div>
             ) : tickets.length === 0 ? (
-              <div className="text-center py-8 text-slate-400">
-                <MessageCircle className="h-12 w-12 mx-auto mb-2 text-slate-600" />
-                <p>No tickets yet</p>
+              <div className="text-center py-8 text-gray-600">
+                <MessageCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                <p className="font-medium text-gray-900">No tickets yet</p>
+                <p className="text-sm text-gray-500 mt-1">Open a ticket to reach the support team.</p>
                 <Button
                   variant="outline"
                   className="mt-4"
@@ -272,12 +273,12 @@ export const Support: React.FC = () => {
                     }}
                     className={`w-full text-left p-3 rounded-lg border transition-colors ${
                       selectedTicketId === ticket.id
-                        ? 'border-blue-500 bg-blue-900/20'
-                        : 'border-slate-600 hover:border-slate-500 hover:bg-slate-700/50'
+                        ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex items-start justify-between mb-1">
-                      <h3 className="font-medium text-sm text-white truncate flex-1">{ticket.title}</h3>
+                      <h3 className="font-medium text-sm text-gray-900 truncate flex-1">{ticket.title}</h3>
                       {ticket.unreadCount && ticket.unreadCount > 0 && (
                         <Badge className="bg-blue-500 text-white text-xs ml-2">{ticket.unreadCount}</Badge>
                       )}
@@ -285,7 +286,7 @@ export const Support: React.FC = () => {
                     <div className="flex items-center justify-between mt-2">
                       <Badge className={`text-xs ${getStatusColor(ticket.status)}`}>{ticket.status}</Badge>
                       {ticket.lastMessage && (
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-gray-500">
                           {formatDistanceToNow(new Date(ticket.lastMessage.createdAt), { addSuffix: true })}
                         </span>
                       )}
@@ -298,31 +299,34 @@ export const Support: React.FC = () => {
         </Card>
 
         {/* Ticket Detail */}
-        <Card className="lg:col-span-2 flex flex-col">
+        <Card className="lg:col-span-2 flex flex-col min-h-0 overflow-hidden">
           {!selectedTicketId ? (
-            <CardContent className="flex-1 flex items-center justify-center">
-              <div className="text-center text-slate-400">
-                <MessageCircle className="h-16 w-16 mx-auto mb-4 text-slate-600" />
-                <p>Select a ticket to view messages</p>
+            <CardContent className="flex-1 flex items-center justify-center min-h-[280px] lg:min-h-0">
+              <div className="text-center text-gray-600 px-4">
+                <MessageCircle className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                <p className="font-medium text-gray-900">Select a ticket to view messages</p>
+                <p className="text-sm text-gray-500 mt-1 max-w-sm mx-auto">
+                  Choose a conversation from the list or create a new ticket.
+                </p>
               </div>
             </CardContent>
           ) : ticketLoading || messagesLoading ? (
-            <CardContent className="flex-1 flex items-center justify-center">
+            <CardContent className="flex-1 flex items-center justify-center min-h-[200px]">
               <Loader />
             </CardContent>
           ) : !selectedTicket ? (
             <CardContent className="flex-1 flex items-center justify-center">
-              <div className="text-center text-slate-400">
-                <p>Ticket not found</p>
+              <div className="text-center text-gray-600">
+                <p className="font-medium text-gray-900">Ticket not found</p>
               </div>
             </CardContent>
           ) : (
             <>
-              <CardHeader className="border-b border-slate-700">
+              <CardHeader className="border-b border-gray-200">
                 <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="mb-2">{selectedTicket.title}</CardTitle>
-                    <div className="flex items-center gap-4 text-sm text-slate-300">
+                  <div className="flex-1 min-w-0 pr-2">
+                    <CardTitle className="mb-2 break-words">{selectedTicket.title}</CardTitle>
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
                       <div className="flex items-center gap-1">
                         <Clock className="h-4 w-4" />
                         <span>{formatDistanceToNow(new Date(selectedTicket.createdAt), { addSuffix: true })}</span>
@@ -332,12 +336,13 @@ export const Support: React.FC = () => {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="flex-1 flex flex-col overflow-hidden">
+              <CardContent className="flex-1 flex flex-col overflow-hidden min-h-0">
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto space-y-4 p-4">
+                <div className="flex-1 overflow-y-auto space-y-4 p-4 min-h-0 bg-gray-50/80">
                   {messages.length === 0 ? (
-                    <div className="text-center py-8 text-slate-400">
-                      <p>No messages yet</p>
+                    <div className="text-center py-8 text-gray-600">
+                      <p className="font-medium text-gray-900">No messages yet</p>
+                      <p className="text-sm text-gray-500 mt-1">Send a message below to start the thread.</p>
                     </div>
                   ) : (
                     messages.map((message) => (
@@ -346,22 +351,22 @@ export const Support: React.FC = () => {
                         className={`flex ${message.senderType === 'ADMIN' ? 'justify-start' : 'justify-end'}`}
                       >
                         <div
-                          className={`max-w-[70%] rounded-lg p-3 ${
+                          className={`max-w-[85%] sm:max-w-[70%] rounded-lg px-3 py-2 shadow-sm border ${
                             message.senderType === 'ADMIN'
-                              ? 'bg-slate-700 text-white'
-                              : 'bg-blue-600 text-white'
+                              ? 'bg-white text-gray-900 border-gray-200'
+                              : 'bg-blue-600 text-white border-blue-700'
                           }`}
                         >
                           {message.senderType === 'ADMIN' && (
-                            <div className="text-xs font-medium mb-1 opacity-75">Support Team</div>
+                            <div className="text-xs font-semibold mb-1 text-blue-700">Support Team</div>
                           )}
-                          {message.content && <p className="text-sm whitespace-pre-wrap">{message.content}</p>}
+                          {message.content && <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>}
                           {message.imageUrl && (
                             <div className="mt-2">
                               <img
                                 src={message.imageUrl}
                                 alt="Attachment"
-                                className="rounded-lg max-w-full h-auto max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity border border-slate-600 shadow-sm"
+                                className="rounded-lg max-w-full h-auto max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity border border-gray-200 shadow-sm"
                                 onClick={() => {
                                   // Open image in new window for full view
                                   const newWindow = window.open('', '_blank')
@@ -390,7 +395,7 @@ export const Support: React.FC = () => {
                           )}
                           <div
                             className={`text-xs mt-2 ${
-                              message.senderType === 'ADMIN' ? 'text-slate-300' : 'text-blue-100'
+                              message.senderType === 'ADMIN' ? 'text-gray-500' : 'text-blue-100'
                             }`}
                           >
                             {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
@@ -403,7 +408,7 @@ export const Support: React.FC = () => {
                 </div>
 
                 {/* Message Input */}
-                <div className="border-t border-slate-700 p-4 space-y-3">
+                <div className="border-t border-gray-200 bg-white p-4 space-y-3 shrink-0">
                   {imagePreview && (
                     <div className="relative inline-block group">
                       <img 
@@ -452,7 +457,7 @@ export const Support: React.FC = () => {
                     <Button 
                       type="button" 
                       variant="outline" 
-                      className="px-3 hover:bg-blue-600/20 hover:border-blue-400 hover:text-blue-300 transition-colors"
+                      className="px-3 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors shrink-0"
                       onClick={handleImageButtonClick}
                       title="Attach image"
                     >

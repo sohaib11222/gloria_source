@@ -4,6 +4,7 @@ import { Location } from '../api/endpoints'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { endpointsApi } from '../api/endpoints'
 import toast from 'react-hot-toast'
+import { Badge } from './ui/Badge'
 
 interface AvailableLocationsProps {
   locations: Location[]
@@ -11,6 +12,17 @@ interface AvailableLocationsProps {
   showLocations: boolean
   loadLocations: () => void
   showRemoveButton?: boolean
+  agreementFilterActive?: boolean
+  listMeta?: { inherited?: boolean; hasMockData?: boolean } | null
+}
+
+function formatCoordinates(loc: Location): string | null {
+  if (loc.coordinatesMissing) return null
+  const lat = loc.latitude
+  const lon = loc.longitude
+  if (lat === 0 && lon === 0) return null
+  if (Number.isNaN(lat) || Number.isNaN(lon)) return null
+  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`
 }
 
 export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
@@ -19,6 +31,8 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
   showLocations,
   loadLocations,
   showRemoveButton = false,
+  agreementFilterActive = false,
+  listMeta,
 }) => {
   const queryClient = useQueryClient()
 
@@ -28,7 +42,6 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
       toast.success(`Location ${data.unlocode} removed successfully!`)
       queryClient.invalidateQueries({ queryKey: ['locations'] })
       queryClient.invalidateQueries({ queryKey: ['syncedLocations'] })
-      // Reload locations after removal
       setTimeout(() => {
         loadLocations()
       }, 500)
@@ -44,6 +57,9 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
       removeLocationMutation.mutate(unlocode)
     }
   }
+
+  const showLinkedCol = locations.some((l) => !!l.synced_at)
+
   return (
     <Card className="transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100">
       <CardHeader className="bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 border-b border-gray-200">
@@ -56,11 +72,11 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
             </div>
             <div>
               <CardTitle className="text-xl font-bold text-gray-900">Available Locations</CardTitle>
-              <p className="text-sm text-gray-600 mt-1">View available pickup and drop-off locations</p>
+              <p className="text-sm text-gray-600 mt-1">UN/LOCODE coverage for pickups and drop-offs</p>
             </div>
           </div>
           <Button
-            onClick={loadLocations}
+            onClick={() => loadLocations()}
             loading={isLoadingLocations}
             variant="secondary"
             size="sm"
@@ -74,7 +90,6 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
         </div>
       </CardHeader>
       <CardContent className="pt-6">
-        {/* Info Note */}
         <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-l-4 border-blue-400 rounded-lg">
           <div className="flex items-start gap-3">
             <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
@@ -83,8 +98,30 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
             <div>
               <p className="text-sm font-semibold text-blue-900 mb-1">About Locations</p>
               <p className="text-xs text-blue-800 leading-relaxed">
-                These locations are added manually in the database for testing and connection purposes. 
-                They are used to verify that the system integration is working correctly.
+                {agreementFilterActive ? (
+                  <>
+                    Codes allowed for the selected agreement (including overrides). Place, country, IATA, and coordinates
+                    come from the Gloria UN/LOCODE master record when it exists.
+                    {listMeta?.inherited ? (
+                      <span className="block mt-1 font-medium">
+                        This source has no dedicated coverage rows yet — the full global UN/LOCODE list is shown
+                        (inherited mode).
+                      </span>
+                    ) : null}
+                    {listMeta?.hasMockData ? (
+                      <span className="block mt-1">Some rows may be marked as mock when the source uses mock data.</span>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    Rows are your source <strong>coverage</strong> from <strong>Sync Locations</strong>,{' '}
+                    <strong>Import Locations</strong>, <strong>Location &amp; Branches</strong> (list import), or manual adds.
+                    Display fields use the Gloria <strong>UN/LOCODE</strong> master when it exists; otherwise we map from an
+                    imported <strong>branch</strong> whose <code className="bg-white px-1 rounded text-[11px]">natoLocode</code> (or{' '}
+                    <code className="bg-white px-1 rounded text-[11px]">branchCode</code>) matches the code. Set{' '}
+                    <strong>Master</strong> to <strong>Gloria</strong> vs <strong>Branch</strong> accordingly; <strong>Pending</strong> means no master row and no matching branch yet.
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -96,66 +133,132 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">UN/LOCODE</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Country</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">IATA</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Coordinates</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      UN/LOCODE
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Country
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      IATA
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Coordinates
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Master
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Data
+                    </th>
+                    {showLinkedCol && (
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        Linked
+                      </th>
+                    )}
                     {showRemoveButton && (
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        Actions
+                      </th>
                     )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {locations.map((location, index) => (
-                    <tr key={location.unlocode} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <code className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-mono">{location.unlocode}</code>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm text-gray-900">{location.place}</div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                          {location.country}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {location.iata_code ? (
-                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                            {location.iata_code}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {(location.latitude !== 0 || location.longitude !== 0) ? (
-                          <span className="text-xs text-gray-600 font-mono">
-                            {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </td>
-                      {showRemoveButton && (
+                  {locations.map((location) => {
+                    const coords = formatCoordinates(location)
+                    return (
+                      <tr key={location.unlocode} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <Button
-                            onClick={() => handleRemoveLocation(location.unlocode, location.place)}
-                            loading={removeLocationMutation.isPending}
-                            variant="secondary"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                          >
-                            <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            Remove
-                          </Button>
+                          <code className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-mono">
+                            {location.unlocode}
+                          </code>
                         </td>
-                      )}
-                    </tr>
-                  ))}
+                        <td className="px-4 py-3">
+                          <div className="text-sm text-gray-900">{location.place || '—'}</div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {location.country ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                              {location.country}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {location.iata_code ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                              {location.iata_code}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {coords ? (
+                            <span className="text-xs text-gray-600 font-mono">{coords}</span>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {location.hasMasterRecord === false ? (
+                            <Badge variant="warning" className="text-[10px]">
+                              Pending
+                            </Badge>
+                          ) : location.enrichedFromBranch ? (
+                            <Badge variant="info" className="text-[10px]" title="Filled from an imported branch (natoLocode or branch code)">
+                              Branch
+                            </Badge>
+                          ) : (
+                            <Badge variant="success" className="text-[10px]" title="Gloria UN/LOCODE master record">
+                              Gloria
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {location.isMock ? (
+                            <Badge variant="default" className="text-[10px]">
+                              Mock
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-gray-500">Live</span>
+                          )}
+                        </td>
+                        {showLinkedCol && (
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
+                            {location.synced_at
+                              ? new Date(location.synced_at).toLocaleString(undefined, {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : '—'}
+                          </td>
+                        )}
+                        {showRemoveButton && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <Button
+                              onClick={() => handleRemoveLocation(location.unlocode, location.place)}
+                              loading={removeLocationMutation.isPending}
+                              variant="secondary"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              Remove
+                            </Button>
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -169,7 +272,7 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No locations found</h3>
               <p className="text-sm text-gray-500 mb-4">No locations are configured for this agreement.</p>
-              <Button onClick={loadLocations} variant="secondary" size="sm">
+              <Button onClick={() => loadLocations()} variant="secondary" size="sm">
                 Try Loading Again
               </Button>
             </div>
@@ -183,8 +286,8 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
               </svg>
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to Load Locations</h3>
-            <p className="text-sm text-gray-500 mb-4">Select an agreement and click "Load Locations" to view available locations</p>
-            <Button onClick={loadLocations} variant="primary" size="sm">
+            <p className="text-sm text-gray-500 mb-4">Select an agreement and click &quot;Load Locations&quot; to view available locations</p>
+            <Button onClick={() => loadLocations()} variant="primary" size="sm">
               Load Locations
             </Button>
           </div>
@@ -193,4 +296,3 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
     </Card>
   )
 }
-

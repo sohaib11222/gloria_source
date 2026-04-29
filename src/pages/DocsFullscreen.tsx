@@ -46,6 +46,11 @@ const DocsFullscreen: React.FC = () => {
   const { endpointId, view } = useParams<{ endpointId?: string; view?: string }>();
   const navigate = useNavigate();
   const [categories, setCategories] = useState<DocCategory[]>([]);
+
+  const isSdkPath = view === 'sdk' || endpointId === 'sdk';
+  const isApiRefPath = view === 'api-reference' || endpointId === 'api-reference';
+  const isGettingStartedPath =
+    view === 'getting-started' || endpointId === 'getting-started' || (!view && !endpointId);
   
   // Safe setter that always ensures categories is an array
   const setCategoriesSafe = (data: any) => {
@@ -61,12 +66,10 @@ const DocsFullscreen: React.FC = () => {
   };
   const [selectedEndpoint, setSelectedEndpoint] = useState<DocEndpoint | null>(null);
   const [activeCode, setActiveCode] = useState<string>('curl');
-  // Default to "Getting Started" if no view or endpointId specified
-  const [showSdkGuide, setShowSdkGuide] = useState<boolean>(view === 'sdk');
-  const [showApiReference, setShowApiReference] = useState<boolean>(view === 'api-reference');
-  const [showGettingStarted, setShowGettingStarted] = useState<boolean>(
-    view === 'getting-started' || (!view && !endpointId)
-  );
+  // Align initial tab with URL (/docs-fullscreen/sdk → SDK Guide) before first fetch completes
+  const [showSdkGuide, setShowSdkGuide] = useState<boolean>(isSdkPath);
+  const [showApiReference, setShowApiReference] = useState<boolean>(isApiRefPath);
+  const [showGettingStarted, setShowGettingStarted] = useState<boolean>(isGettingStartedPath && !isSdkPath && !isApiRefPath);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<any>(null);
 

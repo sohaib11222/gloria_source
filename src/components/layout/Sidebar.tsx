@@ -5,6 +5,9 @@ import {
   MapPin, 
   Store, 
   DollarSign,
+  CalendarDays,
+  CalendarRange,
+  Ban,
   Receipt,
   HeartPulse, 
   CheckCircle, 
@@ -13,7 +16,8 @@ import {
   Menu,
   X,
   LogOut,
-  MessageCircle
+  MessageCircle,
+  Sparkles,
 } from 'lucide-react'
 import { User } from '../../types/api'
 import logoImage from '../../assets/logo.jpg'
@@ -23,19 +27,33 @@ interface SidebarProps {
   onTabChange: (tab: string) => void
   user: User
   onLogout: () => void
+  /** Keeps the drawer visible on small screens while a spotlight tour runs */
+  keepOpenForTour?: boolean
+  onRequestPanelTour?: () => void
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, user, onLogout }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  activeTab,
+  onTabChange,
+  user,
+  onLogout,
+  keepOpenForTour,
+  onRequestPanelTour,
+}) => {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const showDrawer = mobileOpen || !!keepOpenForTour
 
   const navItems = [
     { key: 'dashboard', label: 'Overview', icon: LayoutDashboard },
     { key: 'agreements', label: 'Agreements', icon: FileText },
     { key: 'locations', label: 'Locations', icon: MapPin },
-    { key: 'branches', label: 'Branches', icon: Store },
+    { key: 'branches', label: 'Manual Branch import', icon: Store },
     { key: 'location-branches', label: 'Location & Branches', icon: Store },
     { key: 'pricing', label: 'Pricing', icon: DollarSign },
+    { key: 'daily-pricing', label: 'Daily Prices', icon: CalendarDays },
     { key: 'transactions', label: 'Transactions', icon: Receipt },
+    { key: 'reservations', label: 'Reservations', icon: CalendarRange },
+    { key: 'cancellations', label: 'Cancellations', icon: Ban },
     { key: 'location-requests', label: 'Location Requests', icon: MapPin },
     { key: 'health', label: 'Health', icon: HeartPulse },
     { key: 'verification', label: 'Verification', icon: CheckCircle },
@@ -66,18 +84,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, user, 
             />
             <h1 className="text-lg font-bold text-gray-900">Gloria Connect - Source</h1>
           </div>
-          <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
-            aria-label="Toggle menu"
-          >
-            {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </button>
+          <div className="flex items-center gap-1">
+            {onRequestPanelTour && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRequestPanelTour()
+                  setMobileOpen(true)
+                }}
+                className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                aria-label="Start panel tour"
+                title="Panel tour"
+              >
+                <Sparkles className="h-5 w-5 text-blue-600" />
+              </button>
+            )}
+            <button
+              onClick={() => setMobileOpen(!mobileOpen)}
+              className="p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              aria-label="Toggle menu"
+            >
+              {showDrawer ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Mobile overlay */}
-      {mobileOpen && (
+      {showDrawer && !keepOpenForTour && (
         <div
           className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
           onClick={() => setMobileOpen(false)}
@@ -90,7 +124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, user, 
           fixed lg:static inset-y-0 left-0 z-50
           w-64 bg-slate-800 border-r border-slate-700
           transform transition-transform duration-200
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          ${showDrawer ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           flex flex-col h-screen lg:h-auto
         `}
       >
@@ -122,6 +156,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, user, 
               return (
                 <a
                   key={item.key}
+                  data-tour="nav-docs"
                   href={docsPath}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -142,6 +177,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, user, 
             return (
               <button
                 key={item.key}
+                type="button"
+                data-tour={`nav-${item.key}`}
                 onClick={() => handleTabChange(item.key)}
                 className={`
                   flex items-center w-full px-3 py-2 text-sm font-medium rounded transition-colors

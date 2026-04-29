@@ -1,18 +1,29 @@
 import React from 'react';
 import CodeBlock from '../CodeBlock';
 
-type SectionType = 'quick-start' | 'installation' | 'error-handling' | 'best-practices' | 'api-reference' | 'grpc-implementation';
+type SectionType =
+  | 'quick-start'
+  | 'architecture-flow'
+  | 'installation'
+  | 'error-handling'
+  | 'best-practices'
+  | 'api-reference'
+  | 'grpc-implementation';
 
 interface PhpGuideProps {
   activeSection: SectionType;
   role?: 'agent' | 'source' | 'admin';
   companyId?: string;
+  downloadingProto?: boolean;
+  onDownloadProto?: () => void;
 }
 
-const PhpGuide: React.FC<PhpGuideProps> = ({ 
-  activeSection, 
+const PhpGuide: React.FC<PhpGuideProps> = ({
+  activeSection,
   role = 'source',
-  companyId = 'YOUR_COMPANY_ID'
+  companyId = 'YOUR_COMPANY_ID',
+  downloadingProto = false,
+  onDownloadProto,
 }) => {
   const quickStartCode = `<?php
 
@@ -126,7 +137,97 @@ curl_close($ch);`;
         return (
           <div id="quick-start" style={{ scrollMarginTop: '2rem' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem', color: '#1f2937' }}>PHP Quick Start</h2>
+            <p style={{ color: '#64748b', marginBottom: '1rem', fontSize: '0.9375rem', lineHeight: 1.55 }}>
+              These examples call the Gloria <strong>Source REST API</strong> with plain PHP and cURL (login, branches, agreements). They do not use the OTA adapter package. For the supplier OTA + Laravel + gRPC bundle, use{' '}
+              <strong>Download Source PHP bundle</strong> in the SDK header (ZIP <code>php-source</code>).
+            </p>
             <CodeBlock code={quickStartCode} />
+          </div>
+        );
+
+      case 'architecture-flow':
+        return (
+          <div id="architecture-flow" style={{ scrollMarginTop: '2rem' }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem', color: '#1f2937' }}>Architecture & flow</h2>
+            <p style={{ color: '#64748b', marginBottom: '1rem', fontSize: '0.9375rem', lineHeight: 1.55 }}>
+              You have <strong>two</strong> integration surfaces: (1) <strong>Gloria Source REST</strong> — this portal and the cURL examples in Quick Start; (2){' '}
+              <strong>Source PHP bundle</strong> — OTA XML to your fleet, Laravel routes under <code>/glora</code>, optional Node gRPC bridge, and{' '}
+              <code>gloria_client_supplier.proto</code> for inbound calls from Gloria.
+            </p>
+            <div
+              style={{
+                marginBottom: '1.5rem',
+                padding: '1rem',
+                backgroundColor: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '0.5rem',
+              }}
+            >
+              <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8125rem', fontWeight: 600, color: '#475569' }}>
+                End-to-end (Mermaid — use{' '}
+                <a href="https://mermaid.live" style={{ color: '#2563eb' }}>
+                  mermaid.live
+                </a>{' '}
+                to render)
+              </p>
+              <pre
+                style={{
+                  margin: 0,
+                  fontSize: '0.75rem',
+                  lineHeight: 1.5,
+                  fontFamily: 'ui-monospace, monospace',
+                  whiteSpace: 'pre-wrap',
+                  color: '#0f172a',
+                }}
+              >
+                {`flowchart TB
+  subgraph Portal["Gloria Source portal"]
+    UI[Branches / coverage / agreements]
+  end
+  subgraph GloriaAPI["Gloria Source API"]
+    REST[REST JSON]
+    IMP[Import branches / locations]
+  end
+  subgraph YourStack["Your supplier stack (PHP bundle)"]
+    LRV[Laravel /glora HTTP]
+    OTA[OTA XML adapter]
+    GRPC[Optional gRPC server]
+    FLT[Fleet / PMS]
+  end
+  UI -->|JWT| REST
+  REST --> IMP
+  IMP -->|HTTP XML or gRPC GetLocations| LRV
+  LRV --> OTA
+  OTA --> FLT
+  GloriaAPI -->|When adapterType grpc| GRPC
+  GRPC --> OTA`}
+              </pre>
+            </div>
+            <div style={{ backgroundColor: '#1f2937', color: '#e2e8f0', padding: '1rem', borderRadius: '0.5rem', marginBottom: '1rem' }}>
+              <pre style={{ margin: 0, fontSize: '0.75rem', lineHeight: 1.5, fontFamily: 'ui-monospace, monospace', whiteSpace: 'pre-wrap' }}>
+                {`Location list import (conceptual)
+
+  Gloria UI          Gloria API              Your endpoint
+      |                   |                        |
+      |-- save transport->| PUT .../config         |
+      |-- import -------->| POST import-location-* |--> HTTP XML or gRPC
+      |<-- branches/locs -|                        |`}
+              </pre>
+            </div>
+            <ol style={{ margin: 0, paddingLeft: '1.25rem', color: '#475569', fontSize: '0.875rem', lineHeight: 1.65 }}>
+              <li>
+                <strong>REST first</strong> — Login, <code>PUT /endpoints/config</code>, health checks, and branch/agreement flows match the Quick Start script (replace <code>$API_BASE</code> and credentials).
+              </li>
+              <li>
+                <strong>Company id</strong> — Use your Gloria source company id on coverage paths and agreement payloads (shown in the SDK shell when logged in).
+              </li>
+              <li>
+                <strong>Location transport</strong> — Under Location & Branches, choose HTTP POST XML or gRPC <code>GetLocations</code>; Gloria calls the endpoint you registered.
+              </li>
+              <li>
+                <strong>Bundle</strong> — Unzip <code>gloria-php-source-supplier.zip</code> (<code>php-source</code>), run <code>composer install</code> in the bundle, wire env for your fleet URLs, then align OTA RQ/RS with <code>MAPPING.md</code> in the ZIP.
+              </li>
+            </ol>
           </div>
         );
 
@@ -134,8 +235,18 @@ curl_close($ch);`;
         return (
           <div id="installation" style={{ scrollMarginTop: '2rem' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem', color: '#1f2937' }}>Installation</h2>
-            <div style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '0.25rem', padding: '1rem', marginTop: '1rem' }}>
-              <pre style={{ margin: 0, fontSize: '0.875rem', fontFamily: 'Monaco, Menlo, monospace' }}>{`composer require carhire/middleware-php`}</pre>
+            <p style={{ color: '#64748b', marginBottom: '1rem', fontSize: '0.9375rem', lineHeight: 1.55 }}>
+              <strong>Path A — Source REST (this tab):</strong> no Composer package is required; PHP 8+ and cURL are enough. <strong>Path B — Supplier OTA bridge:</strong> unzip the Source PHP bundle, then install the adapter library.
+            </p>
+            <div style={{ backgroundColor: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: '0.375rem', padding: '1rem', marginBottom: '1rem' }}>
+              <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: 600, color: '#065f46' }}>Supplier OTA bundle (from portal download)</p>
+              <pre style={{ margin: 0, fontSize: '0.8125rem', fontFamily: 'Monaco, Menlo, monospace', whiteSpace: 'pre-wrap' }}>{`# After unzipping gloria-php-source-supplier.zip:
+cd php
+composer install`}</pre>
+            </div>
+            <div style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '0.25rem', padding: '1rem' }}>
+              <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: 600, color: '#1f2937' }}>REST-only integration</p>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>Use the Quick Start cURL patterns; wire your own HTTP client or framework as needed.</p>
             </div>
           </div>
         );
@@ -144,7 +255,9 @@ curl_close($ch);`;
         return (
           <div id="error-handling" style={{ scrollMarginTop: '2rem' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem', color: '#1f2937' }}>Error Handling</h2>
-            <p>All errors are thrown as <code>CarHireException</code> with structured information:</p>
+            <p style={{ color: '#64748b', marginBottom: '1rem', fontSize: '0.9375rem', lineHeight: 1.55 }}>
+              For Source REST calls, inspect the HTTP status code and JSON body (<code>error</code>, <code>message</code>, <code>details</code>). The OTA adapter bundle uses PHP exceptions from <code>gloria/client-supplier-adapter</code> — see that package&apos;s README.
+            </p>
             <CodeBlock code={errorHandlingCode} />
           </div>
         );
@@ -191,7 +304,7 @@ curl_close($ch);`;
             </div>
             <div style={{ padding: '1rem', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '0.25rem' }}>
               <p style={{ margin: 0, fontSize: '0.875rem', color: '#1f2937' }}>
-                📖 <strong>Full API Reference:</strong> See the TypeScript guide for complete endpoint documentation.
+                📖 <strong>Full API Reference:</strong> See Gloria OpenAPI / backend docs for every route; this PHP guide lists the main Source paths above.
               </p>
             </div>
           </div>
@@ -200,21 +313,35 @@ curl_close($ch);`;
       case 'grpc-implementation':
         return (
           <div id="grpc-implementation" style={{ scrollMarginTop: '2rem' }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem', color: '#1f2937' }}>gRPC Server Implementation</h2>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem', color: '#1f2937' }}>gRPC implementation</h2>
             <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>
-              PHP has limited native gRPC server support. Consider using a different language (Node.js, Go, Python, Java) for gRPC server implementation, 
-              or use PHP extensions like <code>grpc</code> if available.
+              The <strong>Source PHP bundle</strong> ships an optional small Node (or similar) gRPC server that implements <code>SourceProviderService</code> from{' '}
+              <code>gloria_client_supplier.proto</code>, forwards to your Laravel <code>/glora/*</code> routes, and returns normalized payloads. Native PHP gRPC servers are possible but uncommon; the bundle path is the supported default.
             </p>
-            <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '0.25rem' }}>
-              <p style={{ margin: 0, fontSize: '0.875rem', color: '#92400e', fontWeight: 500 }}>
-                ⚠️ <strong>Note:</strong> PHP gRPC server implementation is complex and not widely supported. 
-                We recommend implementing your gRPC server in Node.js, Go, Python, or Java. See those guides for complete examples.
-              </p>
-            </div>
-            <div style={{ padding: '1rem', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '0.25rem' }}>
-              <p style={{ margin: 0, fontSize: '0.875rem', color: '#1f2937' }}>
-                💡 <strong>Alternative:</strong> If you must use PHP, consider using a microservice architecture where a separate service (Node.js/Go) handles gRPC 
-                and communicates with your PHP application via REST API.
+            {onDownloadProto && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <button
+                  type="button"
+                  onClick={onDownloadProto}
+                  disabled={downloadingProto}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    backgroundColor: downloadingProto ? '#9ca3af' : '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    cursor: downloadingProto ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {downloadingProto ? 'Downloading…' : 'Download source_provider.proto'}
+                </button>
+              </div>
+            )}
+            <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '0.25rem' }}>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#1e3a8a', fontWeight: 500 }}>
+                Wire <code>adapterType</code> and <code>grpcEndpoint</code> in <code>PUT /endpoints/config</code> so Gloria dials your listener; keep TLS and whitelist entries aligned with ops.
               </p>
             </div>
           </div>
@@ -225,7 +352,30 @@ curl_close($ch);`;
     }
   };
 
-  return <div>{renderSection()}</div>;
+  const sourcePhpIntro =
+    role === 'source' ? (
+      <div
+        style={{
+          marginBottom: '1.5rem',
+          padding: '1rem 1.25rem',
+          backgroundColor: '#f0fdf4',
+          border: '1px solid #86efac',
+          borderRadius: '0.5rem',
+        }}
+      >
+        <p style={{ margin: 0, fontSize: '0.875rem', color: '#166534', lineHeight: 1.55 }}>
+          <strong>Two different &quot;PHP&quot; integrations:</strong> (1) <strong>This guide</strong> — HTTP/cURL against Gloria Source APIs. (2){' '}
+          <strong>Source PHP bundle ZIP</strong> — OTA XML adapter, Laravel routes, optional Node gRPC server, and <code>gloria_client_supplier.proto</code> for suppliers connecting fleet systems to Gloria.
+        </p>
+      </div>
+    ) : null;
+
+  return (
+    <div>
+      {sourcePhpIntro}
+      {renderSection()}
+    </div>
+  );
 };
 
 export default PhpGuide;

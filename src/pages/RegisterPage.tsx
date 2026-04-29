@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { RegisterSchema, RegisterForm } from '../lib/validators'
 import { authApi } from '../api/auth'
 import { Button } from '../components/ui/Button'
@@ -9,10 +9,47 @@ import { Input } from '../components/ui/Input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import toast from 'react-hot-toast'
 import logoImage from '../assets/logo.jpg'
+import api from '../lib/api'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
+  const [referralSlug, setReferralSlug] = useState<string | null>(null)
+  const [referralLabel, setReferralLabel] = useState<string | null>(null)
+
+  useEffect(() => {
+    const raw = searchParams.get('ref') || searchParams.get('referral')
+    const trimmed = raw?.trim()
+    if (trimmed) setReferralSlug(trimmed)
+  }, [searchParams])
+
+  useEffect(() => {
+    if (!referralSlug) return
+    const ac = new AbortController()
+    ;(async () => {
+      try {
+        const { data } = await api.get<{ ok?: boolean; label?: string | null; restrictToType?: 'AGENT' | 'SOURCE' | null }>(
+          `/auth/referral/${encodeURIComponent(referralSlug)}`,
+          { signal: ac.signal }
+        )
+        if (data.restrictToType === 'AGENT') {
+          toast.error('This referral link is for Agent accounts only.')
+          setReferralSlug(null)
+          setReferralLabel(null)
+          return
+        }
+        setReferralLabel(data.label ?? null)
+      } catch {
+        if (!ac.signal.aborted) {
+          toast.error('Referral code was not recognized; continuing without it.')
+          setReferralSlug(null)
+          setReferralLabel(null)
+        }
+      }
+    })()
+    return () => ac.abort()
+  }, [referralSlug])
 
   const {
     register,
@@ -20,13 +57,25 @@ export default function RegisterPage() {
     formState: { errors },
   } = useForm<RegisterForm>({
     resolver: zodResolver(RegisterSchema),
+    defaultValues: {
+      type: 'SOURCE',
+      companyName: '',
+      email: '',
+      password: '',
+      registrationBranchName: '',
+      companyAddress: '',
+      companyWebsiteUrl: '',
+    },
   })
 
   const onSubmit = async (data: RegisterForm) => {
     setIsLoading(true)
     try {
       console.log('📝 Starting registration for:', data.email)
-      const response = await authApi.register(data)
+      const response = await authApi.register({
+        ...data,
+        ...(referralSlug ? { referralSlug } : {}),
+      })
       console.log('✅ Registration response:', response)
       
       // Check if response is valid
@@ -123,6 +172,12 @@ export default function RegisterPage() {
             <p className="text-sm text-gray-600 mt-1">Enter your details to create an account</p>
           </CardHeader>
           <CardContent className="pt-6 pb-6">
+            {referralSlug && (
+              <div className="mb-5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                Referral code <span className="font-mono font-semibold">{referralSlug}</span>
+                {referralLabel ? ` — ${referralLabel}` : ''} will be attached when you create this account.
+              </div>
+            )}
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
               <div>
                 <Input
@@ -150,6 +205,36 @@ export default function RegisterPage() {
                 </div>
               </div>
               <input type="hidden" {...register('type')} value="SOURCE" />
+
+              <div>
+                <Input
+                  label="Primary branch name"
+                  placeholder="e.g. Main depot — City Centre"
+                  {...register('registrationBranchName')}
+                  error={errors.registrationBranchName?.message}
+                  helperText="The main branch or office name you operate from (shown to admins during review)."
+                />
+              </div>
+
+              <div>
+                <Input
+                  label="Company address"
+                  placeholder="Street, city, postal code, country"
+                  {...register('companyAddress')}
+                  error={errors.companyAddress?.message}
+                />
+              </div>
+
+              <div>
+                <Input
+                  label="Company website"
+                  type="url"
+                  placeholder="https://www.example.com"
+                  {...register('companyWebsiteUrl')}
+                  error={errors.companyWebsiteUrl?.message}
+                  helperText="Public URL of your rental company (include https://)."
+                />
+              </div>
 
               <div>
                 <Input

@@ -15,6 +15,7 @@ export interface EndpointConfig {
   locationListEndpointUrl?: string | null
   locationListRequestRoot?: string | null
   locationListAccountId?: string | null
+  locationListTransport?: 'http' | 'grpc' | null
   availabilityEndpointUrl?: string
   adapterType: string
   description: string
@@ -35,6 +36,7 @@ export interface UpdateEndpointRequest {
   locationListEndpointUrl?: string
   locationListRequestRoot?: string
   locationListAccountId?: string
+  locationListTransport?: 'http' | 'grpc'
   availabilityEndpointUrl?: string
 }
 
@@ -54,11 +56,98 @@ export interface Location {
   iata_code: string
   latitude: number
   longitude: number
+  /** Coverage row synced from mock adapter */
+  isMock?: boolean
+  /** UN/LOCODE exists in Gloria master table (nested `location` from coverage API) */
+  hasMasterRecord?: boolean
+  /** When present (alternate coverage API), last link time */
+  synced_at?: string | null
+  /** True when master row exists but lat/lon not set */
+  coordinatesMissing?: boolean
+  /** Display fields filled from imported Branch when Gloria UN/LOCODE master is missing */
+  enrichedFromBranch?: boolean
+}
+
+/** Normalize GET /api/coverage/source/:id rows (nested `location`) or flat rows into Location. */
+function mapCoverageApiItemToLocation(row: Record<string, unknown>): Location {
+  const provenance = row.locationProvenance as string | undefined
+  const enrichedFromBranch = provenance === 'BRANCH'
+  const loc = row.location as Record<string, unknown> | null | undefined
+  if (loc && typeof loc === 'object') {
+    const latRaw = loc.latitude != null ? Number(loc.latitude) : NaN
+    const lonRaw = loc.longitude != null ? Number(loc.longitude) : NaN
+    const hasCoords = !Number.isNaN(latRaw) && !Number.isNaN(lonRaw)
+    const unlocode = String(row.unlocode || loc.unlocode || '')
+      .toUpperCase()
+      .trim()
+    return {
+      unlocode,
+      country: String(loc.country ?? ''),
+      place: String(loc.place ?? '').trim() || '—',
+      iata_code: String(loc.iataCode ?? loc.iata_code ?? ''),
+      latitude: hasCoords ? latRaw : 0,
+      longitude: hasCoords ? lonRaw : 0,
+      isMock: Boolean(row.isMock),
+      hasMasterRecord: true,
+      coordinatesMissing: !hasCoords,
+      enrichedFromBranch,
+      synced_at: (row.synced_at as string) || null,
+    }
+  }
+  if (row.unlocode) {
+    return {
+      unlocode: String(row.unlocode).toUpperCase().trim(),
+      country: '',
+      place: '—',
+      iata_code: '',
+      latitude: 0,
+      longitude: 0,
+      isMock: Boolean(row.isMock),
+      hasMasterRecord: false,
+      coordinatesMissing: true,
+      synced_at: (row.synced_at as string) || null,
+    }
+  }
+  const lat = row.latitude != null ? Number(row.latitude) : NaN
+  const lon = row.longitude != null ? Number(row.longitude) : NaN
+  const hasCoords = !Number.isNaN(lat) && !Number.isNaN(lon)
+  return {
+    unlocode: String(row.unlocode || '').toUpperCase().trim(),
+    country: String(row.country ?? ''),
+    place: String(row.place ?? '').trim() || '—',
+    iata_code: String(row.iata_code ?? row.iataCode ?? ''),
+    latitude: hasCoords ? lat : 0,
+    longitude: hasCoords ? lon : 0,
+    isMock: Boolean(row.isMock),
+    hasMasterRecord: true,
+    coordinatesMissing: !hasCoords,
+    synced_at: (row.synced_at as string) || null,
+  }
+}
+
+function mapAgreementApiItemToLocation(row: Record<string, unknown>): Location {
+  const lat = row.latitude != null ? Number(row.latitude) : NaN
+  const lon = row.longitude != null ? Number(row.longitude) : NaN
+  const hasCoords = !Number.isNaN(lat) && !Number.isNaN(lon)
+  return {
+    unlocode: String(row.unlocode || '').toUpperCase().trim(),
+    country: String(row.country ?? ''),
+    place: String(row.place ?? '').trim() || '—',
+    iata_code: String(row.iataCode ?? row.iata_code ?? ''),
+    latitude: hasCoords ? lat : 0,
+    longitude: hasCoords ? lon : 0,
+    isMock: Boolean(row.isMock),
+    hasMasterRecord: row.hasMasterRecord !== undefined ? Boolean(row.hasMasterRecord) : true,
+    coordinatesMissing: !hasCoords,
+  }
 }
 
 export interface LocationsResponse {
   items: Location[]
   next_cursor: string
+  /** Present on GET /agreements/:id/locations */
+  inherited?: boolean
+  hasMockData?: boolean
 }
 
 export interface SourceGrpcTestRequest {
@@ -137,18 +226,16 @@ export const endpointsApi = {
     return response.data
   },
 
-  getLocationsByAgreement: async (agreementId: string): Promise<LocationsResponse | { items: Location[] }> => {
+  getLocationsByAgreement: async (agreementId: string): Promise<LocationsResponse> => {
     const response = await api.get(`/agreements/${agreementId}/locations`)
     const data = response.data
-    const items = (data?.items || []).map((i: any) => ({
-      unlocode: i.unlocode,
-      country: '',
-      place: '',
-      iata_code: '',
-      latitude: 0,
-      longitude: 0,
-    }))
-    return { items }
+    const items = (data?.items || []).map((i: Record<string, unknown>) => mapAgreementApiItemToLocation(i))
+    return {
+      items,
+      next_cursor: '',
+      inherited: Boolean(data?.inherited),
+      hasMockData: Boolean(data?.hasMockData),
+    }
   },
 
   testSourceGrpc: async (data: SourceGrpcTestRequest): Promise<SourceGrpcTestResponse> => {
@@ -163,7 +250,13 @@ export const endpointsApi = {
 
   getSyncedLocations: async (sourceId: string): Promise<LocationsResponse> => {
     const response = await api.get(`/coverage/source/${sourceId}`)
-    return response.data
+    const data = response.data || {}
+    const raw = Array.isArray(data.items) ? data.items : []
+    const items: Location[] = raw.map((row: Record<string, unknown>) => mapCoverageApiItemToLocation(row))
+    return {
+      items,
+      next_cursor: typeof data.next_cursor === 'string' ? data.next_cursor : '',
+    }
   },
 
   importBranches: async (): Promise<ImportBranchesResponse> => {
@@ -227,6 +320,36 @@ export const endpointsApi = {
 
   getAvailabilitySamples: async (): Promise<{ samples: StoredAvailabilitySample[] }> => {
     const response = await api.get('/sources/availability-samples')
+    return response.data
+  },
+
+  getDailyPricing: async (params: DailyPricingQuery): Promise<{ items: DailyPricingRow[]; meta: any }> => {
+    const response = await api.get('/sources/daily-pricing', { params })
+    return response.data
+  },
+
+  applyDailyPricingDefault: async (payload: {
+    startDate: string
+    endDate: string
+    pickupLoc: string
+    returnLoc: string
+    acrissCode: string
+    defaultPrice: number
+    dayStart: number
+    dayEnd: number
+    currency?: string
+  }): Promise<{ message: string; upserted: number }> => {
+    const response = await api.put('/sources/daily-pricing/default', payload)
+    return response.data
+  },
+
+  updateDailyPricingCell: async (payload: DailyPricingCellUpdate): Promise<{ message: string; item: any }> => {
+    const response = await api.patch('/sources/daily-pricing/cell', payload)
+    return response.data
+  },
+
+  bulkUpdateDailyPricing: async (payload: { cells: DailyPricingCellUpdate[] }): Promise<{ message: string; upserted: number }> => {
+    const response = await api.put('/sources/daily-pricing/bulk', payload)
     return response.data
   },
 }
@@ -317,5 +440,30 @@ export interface FetchAvailabilityResponse {
   parsedPreview?: any
   error?: string
   details?: any
+}
+
+export interface DailyPricingQuery {
+  startDate: string
+  endDate: string
+  pickupLoc: string
+  returnLoc: string
+  acrissCode: string
+  maxDays?: number
+}
+
+export interface DailyPricingRow {
+  pickupDate: string
+  acrissCode: string
+  [key: string]: string | number | null
+}
+
+export interface DailyPricingCellUpdate {
+  pickupDate: string
+  pickupLoc: string
+  returnLoc: string
+  acrissCode: string
+  dayOffset: number
+  price: number
+  currency?: string
 }
 

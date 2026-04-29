@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import React, { useState, useEffect, useRef } from 'react'
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { Modal } from './ui/Modal'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Select } from './ui/Select'
 import { branchesApi, Branch, UpdateBranchRequest } from '../api/branches'
+import { locationsApi, UNLocode } from '../api/locations'
 import toast from 'react-hot-toast'
 import {
   MapPin, Mail, Globe, Clock, Plane, Navigation, Tag,
@@ -156,7 +157,34 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
     cars: false,
   })
 
+  const [locodeSearchQuery, setLocodeSearchQuery] = useState('')
+  const [showLocodeDropdown, setShowLocodeDropdown] = useState(false)
+  const [selectedLocode, setSelectedLocode] = useState<UNLocode | null>(null)
+  const locodeInputRef = useRef<HTMLInputElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
   const queryClient = useQueryClient()
+
+  const { data: locodeResults, isLoading: isLoadingLocodes } = useQuery({
+    queryKey: ['unlocodes', locodeSearchQuery],
+    queryFn: () => locationsApi.searchUNLocodes({ query: locodeSearchQuery, limit: 12 }),
+    enabled: locodeSearchQuery.length >= 2 && showLocodeDropdown,
+  })
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        locodeInputRef.current &&
+        !locodeInputRef.current.contains(event.target as Node)
+      ) {
+        setShowLocodeDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     if (branch) {
@@ -176,6 +204,9 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
         countryCode: branch.countryCode || '',
         natoLocode: branch.natoLocode || '',
       })
+      setLocodeSearchQuery(branch.natoLocode || '')
+      setSelectedLocode(null)
+      setShowLocodeDropdown(false)
       setOpeningHours(extractOpeningHours(branch))
       setPickupInstructions(extractPickupInstructions(branch))
       setAtAirport(extractAtAirport(branch))
@@ -207,6 +238,9 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
       if (data.longitude !== undefined && data.longitude !== null) {
         updateData.longitude = typeof data.longitude === 'string' ? parseFloat(data.longitude) || null : data.longitude
       }
+
+      const trimmedLoc = ((data as any).natoLocode ?? '').toString().trim()
+      updateData.natoLocode = trimmedLoc === '' ? null : trimmedLoc.toUpperCase()
 
       // Build rawJson updates using the same format as imported data
       const rawJsonUpdates: any = {}
@@ -249,13 +283,41 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
       onClose()
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to update branch')
+      const code = error.response?.data?.error
+      const msg = error.response?.data?.message || 'Failed to update branch'
+      if (code === 'INVALID_UNLOCODE_FORMAT') {
+        toast.error(msg)
+      } else {
+        toast.error(msg)
+      }
     },
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     updateMutation.mutate(formData as any)
+  }
+
+  const handleLocodeInput = (query: string) => {
+    const upper = query.toUpperCase()
+    setLocodeSearchQuery(upper)
+    setFormData((prev) => ({ ...prev, natoLocode: upper }))
+    setSelectedLocode(null)
+    setShowLocodeDropdown(upper.length >= 2)
+  }
+
+  const handleSelectLocode = (locode: UNLocode) => {
+    setFormData((prev) => ({
+      ...prev,
+      natoLocode: locode.unlocode,
+      city: locode.place || prev.city,
+      country: locode.country || prev.country,
+      latitude: locode.latitude != null ? String(locode.latitude) : prev.latitude,
+      longitude: locode.longitude != null ? String(locode.longitude) : prev.longitude,
+    }))
+    setLocodeSearchQuery(locode.unlocode)
+    setSelectedLocode(locode)
+    setShowLocodeDropdown(false)
   }
 
   const cars = extractCars(branch)
@@ -419,15 +481,52 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
                   maxLength={3}
                 />
               </div>
-              {/* UN/LOCODE (read-only, auto-assigned during import) */}
-              <div>
+              <div className="sm:col-span-2 relative">
                 <label className="block text-xs font-medium text-gray-600 mb-1">UN/LOCODE</label>
                 <Input
-                  value={formData.natoLocode}
-                  disabled
-                  className="bg-gray-100 text-gray-700 cursor-not-allowed font-mono"
+                  ref={locodeInputRef}
+                  value={locodeSearchQuery}
+                  onChange={(e) => handleLocodeInput(e.target.value)}
+                  onFocus={() => locodeSearchQuery.length >= 2 && setShowLocodeDropdown(true)}
+                  placeholder="Type code or place (e.g. GBMAN, Dubai) — pick a suggestion or enter 4–5 chars"
+                  className="font-mono"
+                  maxLength={8}
                 />
-                <p className="text-xs text-gray-400 mt-0.5">Auto-assigned during import. Re-import to update.</p>
+                {showLocodeDropdown && (
+                  <div
+                    ref={dropdownRef}
+                    className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto"
+                  >
+                    {isLoadingLocodes ? (
+                      <div className="p-2 text-xs text-gray-500">Searching…</div>
+                    ) : locodeResults?.items && locodeResults.items.length > 0 ? (
+                      locodeResults.items.map((locode) => (
+                        <button
+                          key={locode.unlocode}
+                          type="button"
+                          className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-gray-100 last:border-0 text-sm"
+                          onClick={() => handleSelectLocode(locode)}
+                        >
+                          <span className="font-mono font-semibold text-gray-900">{locode.unlocode}</span>
+                          <span className="text-gray-600 text-xs block">
+                            {locode.place}, {locode.country}
+                            {(locode as any).iata_code ? ` · IATA ${(locode as any).iata_code}` : ''}
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-2 text-xs text-gray-500">No matches — you can still save a 4–5 character code; Gloria will register it.</div>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Search the built-in UN/LOCODE list (no API key). If your code is missing, type it and save — re-import will keep it when the supplier does not send a code.
+                </p>
+                {selectedLocode && (
+                  <p className="text-xs text-blue-700 mt-0.5">
+                    Selected: {selectedLocode.unlocode} — {selectedLocode.place}, {selectedLocode.country}
+                  </p>
+                )}
               </div>
             </div>
           </div>

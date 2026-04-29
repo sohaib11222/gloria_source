@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Edit, MapPin, X, Plus, Filter, Store, Building2, Globe, Upload, Settings, RefreshCw, Phone, Clock, ChevronDown, ChevronUp, Plane, Navigation, Info } from 'lucide-react'
+import { Search, Edit, MapPin, X, Plus, Filter, Store, Building2, Globe, Upload, RefreshCw, Phone, Clock, ChevronDown, ChevronUp, Plane, Navigation, Info } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -288,12 +288,6 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
   const [isImporting, setIsImporting] = useState(false)
   const [showImportResult, setShowImportResult] = useState(false)
   const [importResult, setImportResult] = useState<ImportBranchesResponse | null>(null)
-  const [isEndpointConfigOpen, setIsEndpointConfigOpen] = useState(false)
-  const [endpointUrl, setEndpointUrl] = useState('')
-  const [branchEndpointFormat, setBranchEndpointFormat] = useState<string>('')
-  const [branchDefaultCountryCode, setBranchDefaultCountryCode] = useState('')
-  const [isSavingEndpoint, setIsSavingEndpoint] = useState(false)
-  const [showStructureHelp, setShowStructureHelp] = useState(false)
   const limit = 25
 
   const queryClient = useQueryClient()
@@ -303,15 +297,6 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
     queryKey: ['endpointConfig'],
     queryFn: () => endpointsApi.getConfig(),
   })
-
-  // Set endpoint config when it loads
-  useEffect(() => {
-    if (endpointConfig) {
-      if (endpointConfig.branchEndpointUrl) setEndpointUrl(endpointConfig.branchEndpointUrl)
-      setBranchEndpointFormat(endpointConfig.branchEndpointFormat || '')
-      setBranchDefaultCountryCode(endpointConfig.branchDefaultCountryCode || '')
-    }
-  }, [endpointConfig])
 
   // Debounce search input
   useEffect(() => {
@@ -484,26 +469,6 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
     }
   }
 
-  const handleSaveEndpointUrl = async () => {
-    setIsSavingEndpoint(true)
-    try {
-      await endpointsApi.updateConfig({
-        httpEndpoint: endpointConfig?.httpEndpoint || '',
-        grpcEndpoint: endpointConfig?.grpcEndpoint || '',
-        branchEndpointUrl: endpointUrl,
-        branchEndpointFormat: branchEndpointFormat || undefined,
-        branchDefaultCountryCode: branchDefaultCountryCode.trim() || undefined,
-      })
-      queryClient.invalidateQueries({ queryKey: ['endpointConfig'] })
-      setIsEndpointConfigOpen(false)
-      toast.success('Branch endpoint configured successfully')
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to save endpoint configuration')
-    } finally {
-      setIsSavingEndpoint(false)
-    }
-  }
-
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -614,6 +579,7 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
                 <Button
                   variant="secondary"
                   size="sm"
+                  data-tour="branches-upload-file"
                   onClick={() => setIsUploadModalOpen(true)}
                   className="flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
@@ -623,28 +589,7 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setIsEndpointConfigOpen(true)}
-                  className="flex items-center gap-2 shadow-md hover:shadow-lg"
-                  title="Configure branch import endpoint URL"
-                >
-                  <Settings className="w-4 h-4" />
-                  Configure Endpoint
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleImportBranches}
-                  loading={isImporting}
-                  disabled={isImporting}
-                  className="flex items-center gap-2 shadow-md hover:shadow-lg"
-                  title={endpointConfig?.branchEndpointUrl ? `Import from ${endpointConfig.branchEndpointUrl}` : 'Import from configured endpoint'}
-                >
-                  <Upload className="w-4 h-4" />
-                  Import from Endpoint
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
+                  data-tour="branches-sync-endpoint"
                   onClick={handleImportBranches}
                   loading={isImporting}
                   disabled={isImporting}
@@ -657,6 +602,7 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
                 <Button
                   variant="primary"
                   size="sm"
+                  data-tour="branches-add-branch"
                   onClick={() => setIsCreateModalOpen(true)}
                   className="flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
@@ -681,7 +627,7 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
                   <p className="text-sm text-gray-500 max-w-md mx-auto mb-6">
                     {hasActiveFilters 
                       ? 'Try adjusting your filters to see more results.'
-                      : 'Get started by uploading a JSON file, importing from your endpoint, or creating a new branch.'}
+                      : 'Get started by uploading a file, syncing from your configured endpoint (Location & Branches), or creating a new branch.'}
                   </p>
                   {!hasActiveFilters && (
                     <div className="flex items-center justify-center gap-2">
@@ -793,104 +739,6 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
             />
           </div>
         )}
-      </Modal>
-
-      {/* Endpoint Configuration Modal */}
-      <Modal
-        isOpen={isEndpointConfigOpen}
-        onClose={() => setIsEndpointConfigOpen(false)}
-        title="Configure Branch Import Endpoint"
-        size="md"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Branch Endpoint URL
-            </label>
-            <Input
-              value={endpointUrl}
-              onChange={(e) => setEndpointUrl(e.target.value)}
-              placeholder="https://example.com/loctest.php"
-              helperText="URL that returns branch data (XML, JSON, PHP, CSV, or Excel)"
-            />
-          </div>
-          <div>
-            <Select
-              label="Response / file format"
-              value={branchEndpointFormat}
-              onChange={(e) => setBranchEndpointFormat(e.target.value)}
-              options={[
-                { value: '', label: 'Auto-detect' },
-                { value: 'XML', label: 'OTA XML (OTA_VehLocSearchRS)' },
-                { value: 'JSON', label: 'JSON (Branches array or OTA)' },
-                { value: 'PHP', label: 'PHP var_dump' },
-                { value: 'CSV', label: 'CSV' },
-                { value: 'EXCEL', label: 'Excel (.xlsx / .xls)' },
-              ]}
-              helperText="Set when your endpoint or file type is known"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Default country code
-            </label>
-            <Input
-              value={branchDefaultCountryCode}
-              onChange={(e) => setBranchDefaultCountryCode(e.target.value.toUpperCase().slice(0, 3))}
-              placeholder="e.g. AE, US"
-              maxLength={3}
-              helperText="ISO 2–3 letter code used to map branches to a country when not in the data"
-            />
-          </div>
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800">
-              <strong>Supported formats:</strong> OTA XML, PHP var_dump, JSON, CSV, Excel (.xlsx/.xls)
-            </p>
-          </div>
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 text-left text-sm font-medium text-gray-700 hover:bg-gray-100"
-              onClick={() => setShowStructureHelp(!showStructureHelp)}
-            >
-              <span>Expected structure / column mapping</span>
-              <span className="text-gray-500">{showStructureHelp ? '▼' : '▶'}</span>
-            </button>
-            {showStructureHelp && (
-              <div className="p-4 bg-white border-t border-gray-200 text-sm text-gray-600 space-y-3">
-                <p><strong>CSV / Excel columns</strong> (case-insensitive; first row = headers):</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li><code>Branchcode</code> or <code>Code</code> – branch identifier</li>
-                  <li><code>Name</code> – branch name</li>
-                  <li><code>CountryCode</code>, <code>Country</code> – country (or use default above)</li>
-                  <li><code>City</code>, <code>AddressLine</code>, <code>PostalCode</code></li>
-                  <li><code>Latitude</code>, <code>Longitude</code></li>
-                  <li><code>AtAirport</code> (true/false), <code>LocationType</code>, <code>CollectionType</code></li>
-                  <li><code>Phone</code>, <code>Email</code></li>
-                </ul>
-                <p><strong>JSON</strong>: <code>Branches</code> array or OTA <code>OTA_VehLocSearchRS</code> / <code>gloria</code>.</p>
-                <p><strong>XML / PHP</strong>: OTA VehLocSearchRS structure (VehMatchedLocs / LocationDetail).</p>
-              </div>
-            )}
-          </div>
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-            <Button
-              variant="secondary"
-              onClick={() => setIsEndpointConfigOpen(false)}
-              type="button"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleSaveEndpointUrl}
-              loading={isSavingEndpoint}
-              disabled={!endpointUrl.trim()}
-            >
-              Save
-            </Button>
-          </div>
-        </div>
       </Modal>
     </div>
   )

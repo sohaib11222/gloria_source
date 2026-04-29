@@ -15,14 +15,17 @@ import { AvailableAgents } from '../components/AvailableAgents'
 import { BranchList } from '../components/BranchList'
 import { PlanPicker } from '../components/PlanPicker'
 import { BranchEditModal } from '../components/BranchEditModal'
+import { SourceBookingsPanel } from '../components/SourceBookingsPanel'
 import { LocationRequestForm } from '../components/LocationRequestForm'
 import { LocationRequestList } from '../components/LocationRequestList'
 import { AddLocationForm } from '../components/AddLocationForm'
 import { AgreementDetailModal } from '../components/AgreementDetailModal'
 import { MyAgreements } from '../components/MyAgreements'
-import { SettingsPage } from './SettingsPage'
+import { DailyPricingCalendar } from '../components/DailyPricingCalendar'
+import { SettingsPage, PROFILE_UPDATED_EVENT } from './SettingsPage'
 import { ErrorModal } from '../components/ErrorModal'
 import { Sidebar } from '../components/layout/Sidebar'
+import { SourcePanelTour, SOURCE_PANEL_TOUR_STORAGE_KEY } from '../components/SourcePanelTour'
 import { Support } from '../components/Support'
 import { Badge } from '../components/ui/Badge'
 import toast from 'react-hot-toast'
@@ -39,7 +42,7 @@ import { Input } from '../components/ui/Input'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader } from '../components/ui/Loader'
 import { formatDate } from '../lib/utils'
-import { AlertCircle, XCircle, CheckCircle2, ChevronDown, ChevronUp, FileText, Info, Receipt, RefreshCw, ExternalLink } from 'lucide-react'
+import { AlertCircle, XCircle, CheckCircle2, ChevronDown, ChevronUp, FileText, Info, Receipt, RefreshCw, ExternalLink, Sparkles } from 'lucide-react'
 
 // Location Import Result Display Component
 const LocationImportResultDisplay: React.FC<{ result: any }> = ({ result }) => {
@@ -444,161 +447,314 @@ const StoredSampleCard: React.FC<{ sample: import('../api/endpoints').StoredAvai
   const returnDate = sample.returnIso?.slice(0, 16).replace('T', ' ') ?? '—'
   const fetchedDate = sample.fetchedAt ? new Date(sample.fetchedAt).toLocaleString() : '—'
 
+  const adapterFmt = String((sample as any).adapterType || sample.criteria?.adapterType || 'xml').toLowerCase()
+  const adapterChipClass: Record<string, string> = {
+    xml: 'bg-orange-50 text-orange-800 border-orange-200',
+    json: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    grpc: 'bg-violet-50 text-violet-800 border-violet-200',
+  }
+  const adapterLabel: Record<string, string> = { xml: 'OTA XML', json: 'Gloria JSON', grpc: 'Gloria gRPC' }
+
+  const goPage = (next: number) => {
+    setPage(Math.max(0, Math.min(totalPages - 1, next)))
+    setExpandedCard(null)
+  }
+
+  const termFilter = (t: any) => !!(t?.header || t?.code)
+
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-gray-100/80">
       {/* Sample header */}
       <button
         type="button"
-        onClick={() => { setExpanded(e => !e); setPage(0); setExpandedCard(null) }}
-        className="w-full flex items-start justify-between gap-4 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+        aria-expanded={expanded}
+        onClick={() => {
+          setExpanded((e) => !e)
+          setPage(0)
+          setExpandedCard(null)
+        }}
+        className="w-full flex items-start gap-3 px-4 py-4 sm:px-5 text-left hover:bg-gray-50/90 transition-colors"
       >
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-sm text-gray-900">
+            <span className="text-base font-semibold text-gray-900 tracking-tight break-words">
               {sample.pickupLoc || '—'} → {sample.returnLoc || '—'}
             </span>
-            <Badge variant="secondary" className="text-xs">{sample.offersCount} vehicle{sample.offersCount !== 1 ? 's' : ''}</Badge>
-            {(() => {
-              const fmt = (sample as any).adapterType || sample.criteria?.adapterType || 'xml'
-              const colors: Record<string, string> = { xml: 'bg-orange-100 text-orange-700', json: 'bg-green-100 text-green-700', grpc: 'bg-purple-100 text-purple-700' }
-              const labels: Record<string, string> = { xml: 'OTA XML', json: 'Gloria JSON', grpc: 'Gloria gRPC' }
-              return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[fmt] || colors.xml}`}>{labels[fmt] || fmt.toUpperCase()}</span>
-            })()}
+            <Badge variant="secondary" className="text-xs shrink-0">
+              {sample.offersCount} vehicle{sample.offersCount !== 1 ? 's' : ''}
+            </Badge>
+            <span
+              className={`text-xs px-2 py-0.5 rounded-md font-medium border shrink-0 ${adapterChipClass[adapterFmt] || adapterChipClass.xml}`}
+            >
+              {adapterLabel[adapterFmt] || adapterFmt.toUpperCase()}
+            </span>
             {sample.criteria?.requestorId && (
-              <span className="text-xs text-gray-400">ID: {sample.criteria.requestorId}</span>
+              <span className="text-xs text-gray-700 bg-gray-100 border border-gray-200 rounded-md px-2 py-0.5 font-mono shrink-0">
+                ID: {sample.criteria.requestorId}
+              </span>
             )}
           </div>
-          <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
-            <span>Pick-up: {pickupDate}</span>
-            <span>Return: {returnDate}</span>
-            <span className="text-gray-400">Fetched: {fetchedDate}</span>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs sm:text-sm">
+            <div className="min-w-0 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Pick-up</p>
+              <p className="text-gray-900 font-medium mt-0.5 tabular-nums break-all">{pickupDate}</p>
+            </div>
+            <div className="min-w-0 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Return</p>
+              <p className="text-gray-900 font-medium mt-0.5 tabular-nums break-all">{returnDate}</p>
+            </div>
+            <div className="min-w-0 col-span-2 lg:col-span-2 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Fetched</p>
+              <p className="text-gray-800 mt-0.5 tabular-nums break-words">{fetchedDate}</p>
+            </div>
           </div>
         </div>
-        <ChevronDown className={`w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          className={`w-5 h-5 text-gray-500 shrink-0 mt-0.5 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
       </button>
 
       {/* Expanded vehicle list */}
       {expanded && (
-        <div className="border-t border-gray-100 px-4 py-3 space-y-3">
+        <div className="border-t border-gray-200 bg-gray-50/60 px-3 py-4 sm:px-5 sm:py-5 space-y-4">
           {offers.length === 0 ? (
-            <p className="text-sm text-gray-400 italic">No vehicle data stored for this sample (fetched before full data storage was enabled — re-fetch to update).</p>
+            <p className="text-sm text-gray-600 italic leading-relaxed">
+              No vehicle data stored for this sample (fetched before full data storage was enabled — re-fetch to update).
+            </p>
           ) : (
             <>
-              {/* Pagination header */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500">{offers.length} vehicles — page {page + 1} of {totalPages}</p>
-                  <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => { setPage(p => Math.max(0, p - 1)); setExpandedCard(null) }} disabled={page === 0}
-                      className="px-2 py-1 text-xs rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-50">‹</button>
-                    <span className="text-xs text-gray-500 px-1">{page + 1}/{totalPages}</span>
-                    <button type="button" onClick={() => { setPage(p => Math.min(totalPages - 1, p + 1)); setExpandedCard(null) }} disabled={page >= totalPages - 1}
-                      className="px-2 py-1 text-xs rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-50">›</button>
+              {totalPages > 1 ? (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-gray-200">
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    <span className="font-semibold text-gray-900">{offers.length}</span> vehicles
+                    <span className="text-gray-500"> · page </span>
+                    <span className="font-semibold tabular-nums">{page + 1}</span>
+                    <span className="text-gray-500"> of </span>
+                    <span className="font-semibold tabular-nums">{totalPages}</span>
+                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Previous page"
+                      onClick={() => goPage(page - 1)}
+                      disabled={page === 0}
+                      className="min-h-9 min-w-9 px-3 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      ‹
+                    </button>
+                    <span className="text-xs text-gray-500 tabular-nums min-w-[3rem] text-center">
+                      {page + 1} / {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Next page"
+                      onClick={() => goPage(page + 1)}
+                      disabled={page >= totalPages - 1}
+                      className="min-h-9 min-w-9 px-3 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      ›
+                    </button>
                   </div>
                 </div>
+              ) : (
+                <p className="text-xs sm:text-sm text-gray-600 pb-2 border-b border-gray-200">
+                  <span className="font-semibold text-gray-900">{offers.length}</span> vehicle{offers.length !== 1 ? 's' : ''} in this sample
+                </p>
               )}
 
-              {/* Vehicle cards */}
-              {pageOffers.map((offer: any, idx: number) => {
-                const globalIdx = page * PAGE_SIZE + idx
-                return (
-                  <div key={globalIdx} className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="flex gap-3 p-3">
-                      {offer.picture_url ? (
-                        <img src={offer.picture_url} alt={offer.vehicle_make_model || 'Vehicle'}
-                          className="w-24 h-16 object-contain flex-shrink-0 rounded bg-gray-50 border border-gray-100"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                      ) : (
-                        <div className="w-24 h-16 flex-shrink-0 rounded bg-gray-100 flex items-center justify-center">
-                          <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 .001M1 16h2m16 0h2M13 8h4l3 5-3 .001M13 8v8" />
-                          </svg>
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="font-semibold text-sm text-gray-900 leading-tight">{offer.vehicle_make_model || '—'}</p>
-                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
-                              {offer.vehicle_class && <span className="text-xs font-mono bg-gray-100 text-gray-600 px-1 rounded">{offer.vehicle_class}</span>}
-                              {offer.transmission_type && <span className="text-xs text-gray-500">{offer.transmission_type}</span>}
-                              {offer.door_count && <span className="text-xs text-gray-500">{offer.door_count} doors</span>}
-                              {offer.baggage && <span className="text-xs text-gray-500">{offer.baggage} bags</span>}
+              <div className="space-y-4">
+                {pageOffers.map((offer: any, idx: number) => {
+                  const globalIdx = page * PAGE_SIZE + idx
+                  const includedList = (offer.included ?? []).filter(termFilter)
+                  const notIncludedList = (offer.not_included ?? []).filter(termFilter)
+                  return (
+                    <article
+                      key={globalIdx}
+                      className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-stretch gap-4 p-4 sm:p-5">
+                        {offer.picture_url ? (
+                          <img
+                            src={offer.picture_url}
+                            alt=""
+                            className="w-full max-w-[200px] sm:w-36 sm:h-24 h-32 sm:h-auto mx-auto sm:mx-0 object-contain rounded-lg bg-gray-50 border border-gray-100 self-center sm:self-start"
+                            onError={(e) => {
+                              ;(e.target as HTMLImageElement).style.display = 'none'
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full max-w-[200px] sm:w-36 h-28 sm:h-24 mx-auto sm:mx-0 rounded-lg bg-gray-100 border border-gray-100 flex items-center justify-center shrink-0 self-center sm:self-start">
+                            <svg className="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 .001M1 16h2m16 0h2M13 8h4l3 5-3 .001M13 8v8" />
+                            </svg>
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0 flex flex-col gap-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
+                            <div className="min-w-0">
+                              <h3 className="text-base font-semibold text-gray-900 leading-snug break-words">
+                                {offer.vehicle_make_model || '—'}
+                              </h3>
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                {offer.vehicle_class && (
+                                  <span className="inline-flex items-center text-xs font-mono bg-gray-100 text-gray-800 px-2 py-0.5 rounded-md border border-gray-200">
+                                    {offer.vehicle_class}
+                                  </span>
+                                )}
+                                {offer.transmission_type && (
+                                  <span className="inline-flex items-center text-xs text-gray-700 bg-white px-2 py-0.5 rounded-md border border-gray-200">
+                                    {offer.transmission_type}
+                                  </span>
+                                )}
+                                {offer.door_count && (
+                                  <span className="inline-flex items-center text-xs text-gray-700 bg-white px-2 py-0.5 rounded-md border border-gray-200">
+                                    {offer.door_count} doors
+                                  </span>
+                                )}
+                                {offer.baggage && (
+                                  <span className="inline-flex items-center text-xs text-gray-700 bg-white px-2 py-0.5 rounded-md border border-gray-200">
+                                    {offer.baggage} bags
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 sm:text-right shrink-0 border-t border-gray-100 pt-3 sm:border-0 sm:pt-0 sm:pl-4">
+                              <p className="text-lg sm:text-xl font-bold text-emerald-700 tabular-nums">
+                                {offer.total_price
+                                  ? `${offer.currency ? `${offer.currency} ` : ''}${Number(offer.total_price).toFixed(2)}`
+                                  : '—'}
+                              </p>
+                              <Badge variant={offer.availability_status === 'Available' ? 'success' : 'default'} className="text-xs">
+                                {offer.availability_status || 'Available'}
+                              </Badge>
                             </div>
                           </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="font-bold text-emerald-700 text-base">
-                              {offer.total_price ? `${offer.currency || ''} ${Number(offer.total_price).toFixed(2)}` : '—'}
-                            </p>
-                            <Badge variant={offer.availability_status === 'Available' ? 'success' : 'default'} className="text-xs mt-0.5">
-                              {offer.availability_status || 'Available'}
-                            </Badge>
-                          </div>
+                          {includedList.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {includedList.slice(0, 5).map((t: any, i: number) => (
+                                <span
+                                  key={i}
+                                  className="text-xs bg-emerald-50 text-emerald-900 border border-emerald-200/80 rounded-md px-2 py-1 max-w-full break-words"
+                                >
+                                  ✓ {t.header || t.code}
+                                </span>
+                              ))}
+                              {includedList.length > 5 && (
+                                <span className="text-xs text-gray-500 self-center px-1">+{includedList.length - 5} more</span>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        {/* Included chips */}
-                        {(offer.included?.filter((t: any) => t.header || t.code).length ?? 0) > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {offer.included.filter((t: any) => t.header || t.code).slice(0, 4).map((t: any, i: number) => (
-                              <span key={i} className="text-xs bg-green-50 text-green-700 border border-green-200 rounded px-1.5 py-0.5">✓ {t.header || t.code}</span>
-                            ))}
-                            {offer.included.filter((t: any) => t.header || t.code).length > 4 && (
-                              <span className="text-xs text-gray-400">+{offer.included.filter((t: any) => t.header || t.code).length - 4} more</span>
-                            )}
-                          </div>
-                        )}
                       </div>
-                    </div>
-                    {/* Expand detail */}
-                    <button type="button" onClick={() => setExpandedCard(expandedCard === globalIdx ? null : globalIdx)}
-                      className="w-full flex items-center justify-between px-3 py-1.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500 hover:bg-gray-100 transition-colors">
-                      <span>{expandedCard === globalIdx ? 'Hide details' : 'Details (terms, VehID)'}</span>
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expandedCard === globalIdx ? 'rotate-180' : ''}`} />
-                    </button>
-                    {expandedCard === globalIdx && (
-                      <div className="px-3 pb-3 pt-2 bg-gray-50 border-t border-gray-100 space-y-2 text-xs">
-                        {offer.veh_id && (
-                          <p><span className="text-gray-500">VehID:</span> <code className="bg-white border border-gray-200 px-1.5 py-0.5 rounded font-mono">{offer.veh_id}</code></p>
-                        )}
-                        {(offer.included?.filter((t: any) => t.header || t.code).length ?? 0) > 0 && (
-                          <div>
-                            <p className="font-semibold text-green-700 mb-1">Included</p>
-                            {offer.included.map((t: any, i: number) => (
-                              <p key={i} className="text-gray-700">✓ <strong>{t.header || t.code}</strong>{t.excess && t.excess !== '0.00' ? ` (excess ${t.excess})` : ''}</p>
-                            ))}
-                          </div>
-                        )}
-                        {(offer.not_included?.filter((t: any) => t.header || t.code).length ?? 0) > 0 && (
-                          <div>
-                            <p className="font-semibold text-blue-700 mb-1">Optional extras</p>
-                            {offer.not_included.map((t: any, i: number) => (
-                              <p key={i} className="text-gray-600">+ <strong>{t.header || t.code}</strong>{t.price && t.price !== '0.00' ? ` — ${t.price} ${offer.currency}` : ''}</p>
-                            ))}
-                          </div>
-                        )}
-                        {(offer.priced_equips?.length ?? 0) > 0 && (
-                          <div>
-                            <p className="font-semibold text-purple-700 mb-1">Equipment add-ons</p>
-                            {offer.priced_equips.map((eq: any, i: number) => (
-                              <p key={i} className="text-gray-600">• {eq.description || eq.equip_type || '—'}{eq.charge?.Amount ? ` — ${offer.currency} ${Number(eq.charge.Amount).toFixed(2)}` : ''}</p>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                      <button
+                        type="button"
+                        aria-expanded={expandedCard === globalIdx}
+                        onClick={() => setExpandedCard(expandedCard === globalIdx ? null : globalIdx)}
+                        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-gray-50 border-t border-gray-200 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        <span className="font-medium">{expandedCard === globalIdx ? 'Hide details' : 'Details (terms, VehID)'}</span>
+                        <ChevronDown
+                          className={`w-4 h-4 text-gray-500 shrink-0 transition-transform ${expandedCard === globalIdx ? 'rotate-180' : ''}`}
+                          aria-hidden
+                        />
+                      </button>
+                      {expandedCard === globalIdx && (
+                        <div className="px-4 pb-4 pt-3 sm:px-5 border-t border-gray-200 bg-gray-50/90 space-y-4 text-sm text-gray-800">
+                          {offer.veh_id && (
+                            <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">VehID</p>
+                              <code className="text-xs sm:text-sm font-mono text-gray-900 break-all block bg-gray-50 border border-gray-100 rounded-md px-2 py-1.5">
+                                {offer.veh_id}
+                              </code>
+                            </div>
+                          )}
+                          {includedList.length > 0 && (
+                            <div className="rounded-lg border border-emerald-200/80 bg-white p-3 shadow-sm">
+                              <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide mb-2">Included</p>
+                              <ul className="space-y-1.5 text-sm text-gray-800">
+                                {includedList.map((t: any, i: number) => (
+                                  <li key={i} className="flex gap-2">
+                                    <span className="text-emerald-600 shrink-0">✓</span>
+                                    <span className="min-w-0 break-words">
+                                      <span className="font-medium">{t.header || t.code}</span>
+                                      {t.excess && t.excess !== '0.00' ? (
+                                        <span className="text-gray-600"> (excess {t.excess})</span>
+                                      ) : null}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {notIncludedList.length > 0 && (
+                            <div className="rounded-lg border border-blue-200/80 bg-white p-3 shadow-sm">
+                              <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-2">Optional extras</p>
+                              <ul className="space-y-1.5 text-sm text-gray-800">
+                                {notIncludedList.map((t: any, i: number) => (
+                                  <li key={i} className="flex gap-2">
+                                    <span className="text-blue-600 shrink-0">+</span>
+                                    <span className="min-w-0 break-words">
+                                      <span className="font-medium">{t.header || t.code}</span>
+                                      {t.price && t.price !== '0.00' ? (
+                                        <span className="text-gray-600"> — {t.price} {offer.currency || ''}</span>
+                                      ) : null}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {(offer.priced_equips?.length ?? 0) > 0 && (
+                            <div className="rounded-lg border border-violet-200/80 bg-white p-3 shadow-sm">
+                              <p className="text-xs font-semibold text-violet-900 uppercase tracking-wide mb-2">Equipment add-ons</p>
+                              <ul className="space-y-1.5 text-sm text-gray-800">
+                                {(offer.priced_equips as any[]).map((eq: any, i: number) => (
+                                  <li key={i} className="flex gap-2">
+                                    <span className="text-violet-600 shrink-0">•</span>
+                                    <span className="min-w-0 break-words">
+                                      {eq.description || eq.equip_type || '—'}
+                                      {eq.charge?.Amount ? (
+                                        <span className="text-gray-600">
+                                          {' '}
+                                          — {offer.currency || ''} {Number(eq.charge.Amount).toFixed(2)}
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </article>
+                  )
+                })}
+              </div>
 
-              {/* Bottom pagination */}
               {totalPages > 1 && (
-                <div className="flex justify-center gap-1 pt-1">
-                  {Array.from({ length: totalPages }, (_, i) => (
-                    <button key={i} type="button" onClick={() => { setPage(i); setExpandedCard(null) }}
-                      className={`px-2.5 py-1 text-xs rounded border transition-colors ${i === page ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold' : 'border-gray-300 hover:bg-gray-50'}`}>
-                      {i + 1}
-                    </button>
-                  ))}
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2 border-t border-gray-200">
+                  <p className="text-xs text-gray-500 sm:mr-2">Jump to page</p>
+                  <div className="flex flex-wrap justify-center gap-1.5">
+                    {Array.from({ length: totalPages }, (_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        aria-label={`Page ${i + 1}`}
+                        aria-current={i === page ? 'page' : undefined}
+                        onClick={() => goPage(i)}
+                        className={`min-h-9 min-w-9 px-2.5 text-xs sm:text-sm rounded-lg border transition-colors font-medium ${
+                          i === page
+                            ? 'border-blue-500 bg-blue-50 text-blue-800 shadow-sm'
+                            : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </>
@@ -945,10 +1101,10 @@ const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) =
               <CardTitle className="text-lg font-bold text-red-900">Format Error</CardTitle>
             </div>
             <p className="text-sm text-red-700 mt-2">
-              The endpoint response format is not recognized. The endpoint should return OTA_VehAvailRateRS XML in response to an OTA_VehAvailRateRQ XML POST.
+              The endpoint response format is not recognized. For XML mode, the endpoint can return either OTA_VehAvailRateRS or GLORIA_availabilityrs (with VehAvairsdetails/availcars) in response to the request.
             </p>
             <p className="text-xs text-red-600 mt-1 font-semibold">
-              Response must contain <code className="bg-red-100 px-1 rounded">VehAvailRSCore</code> and <code className="bg-red-100 px-1 rounded">VehVendorAvails</code>.
+              Expected keys: <code className="bg-red-100 px-1 rounded">VehAvailRSCore + VehVendorAvails</code> (OTA) or <code className="bg-red-100 px-1 rounded">VehAvairsdetails + availcars</code> (GLORIA).
             </p>
           </CardHeader>
           <CardContent className="pt-6">
@@ -1166,11 +1322,12 @@ export default function SourcePage() {
   const [user, setUser] = useState<any>(null)
   
   // Get active tab from URL or default to dashboard
-  const tabFromUrl = searchParams.get('tab') as 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-branches' | 'pricing' | 'transactions' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings' | null
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-branches' | 'pricing' | 'transactions' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings'>(
+  const tabFromUrl = searchParams.get('tab') as 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-branches' | 'pricing' | 'daily-pricing' | 'transactions' | 'reservations' | 'cancellations' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings' | null
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-branches' | 'pricing' | 'daily-pricing' | 'transactions' | 'reservations' | 'cancellations' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings'>(
     tabFromUrl || 'dashboard'
   )
-  
+  const [panelTourOpen, setPanelTourOpen] = useState(false)
+
   // Agreement detail modal state
   const [selectedAgreementId, setSelectedAgreementId] = useState<string | null>(null)
   const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false)
@@ -1197,6 +1354,10 @@ export default function SourcePage() {
   const [locations, setLocations] = useState<Location[]>([])
   const [isLoadingLocations, setIsLoadingLocations] = useState(false)
   const [showLocations, setShowLocations] = useState(false)
+  const [locationsListMeta, setLocationsListMeta] = useState<{
+    inherited?: boolean
+    hasMockData?: boolean
+  } | null>(null)
   
   // Selected agreement for filtering locations (defined early for use in loadLocations)
   const [selectedAgreementFilterId, setSelectedAgreementFilterId] = useState<string>('')
@@ -1229,11 +1390,14 @@ export default function SourcePage() {
     setIsLoadingLocations(true)
     try {
       if (selectedAgreementFilterId) {
-        // Load locations for specific agreement
         const response = await endpointsApi.getLocationsByAgreement(selectedAgreementFilterId)
-        const items = (response as any)?.items ?? (response as any) ?? []
-        setLocations(items)
+        setLocations(response.items || [])
+        setLocationsListMeta({
+          inherited: response.inherited,
+          hasMockData: response.hasMockData,
+        })
       } else {
+        setLocationsListMeta(null)
         // Load synced locations (source coverage) when no agreement filter
         if (user?.company?.id) {
           const response = await endpointsApi.getSyncedLocations(user.company.id)
@@ -1270,7 +1434,7 @@ export default function SourcePage() {
   }, [selectedAgreementFilterId, user?.company?.id])
   
   // Sync URL when tab changes
-  const handleTabChange = (tab: 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-branches' | 'pricing' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings') => {
+  const handleTabChange = (tab: 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-branches' | 'pricing' | 'daily-pricing' | 'transactions' | 'reservations' | 'cancellations' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings') => {
     setActiveTab(tab)
     setSearchParams({ tab })
     // When switching to locations tab, refresh the locations data
@@ -1290,7 +1454,7 @@ export default function SourcePage() {
   // Sync tab when URL changes (back/forward button)
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['dashboard', 'agreements', 'locations', 'branches', 'location-branches', 'pricing', 'location-requests', 'health', 'verification', 'support', 'docs', 'settings'].includes(tab)) {
+    if (tab && ['dashboard', 'agreements', 'locations', 'branches', 'location-branches', 'pricing', 'daily-pricing', 'transactions', 'reservations', 'cancellations', 'location-requests', 'health', 'verification', 'support', 'docs', 'settings'].includes(tab)) {
       setActiveTab(tab as any)
     } else if (!tab) {
       // If no tab in URL, set to dashboard and update URL
@@ -1364,6 +1528,15 @@ export default function SourcePage() {
   const [locationListImportResult, setLocationListImportResult] = useState<any>(null)
   const [showLocationListImportResult, setShowLocationListImportResult] = useState(false)
   const [locationListConfigTab, setLocationListConfigTab] = useState<'settings' | 'sample'>('settings')
+  const [locationListTransport, setLocationListTransport] = useState<'http' | 'grpc'>('http')
+  const [locationListSampleFormat, setLocationListSampleFormat] = useState<'xml' | 'grpc'>('xml')
+  const [locationListSamplePaste, setLocationListSamplePaste] = useState('')
+  const [locationListSampleValidation, setLocationListSampleValidation] = useState<{
+    ok: boolean
+    format?: string
+    count?: number
+    errors?: string[]
+  } | null>(null)
   const [locationSampleValidation, setLocationSampleValidation] = useState<{
     ok: boolean
     format?: string
@@ -1465,10 +1638,24 @@ export default function SourcePage() {
   useEffect(() => {
     if (searchParams.get('checkout') === 'success') {
       queryClient.invalidateQueries({ queryKey: ['subscription'] })
+      sessionStorage.setItem('source_panel_tour_pending_checkout', '1')
       const tab = searchParams.get('tab') || 'dashboard'
       setSearchParams({ tab }, { replace: true })
     }
   }, [searchParams, queryClient, setSearchParams])
+
+  useEffect(() => {
+    const companyId = user?.company?.id
+    if (!companyId || isLoadingSubscription) return
+    if (sessionStorage.getItem('source_panel_tour_pending_checkout') !== '1') return
+    if (localStorage.getItem(SOURCE_PANEL_TOUR_STORAGE_KEY(companyId))) {
+      sessionStorage.removeItem('source_panel_tour_pending_checkout')
+      return
+    }
+    if (!subscriptionActive) return
+    sessionStorage.removeItem('source_panel_tour_pending_checkout')
+    setPanelTourOpen(true)
+  }, [user?.company?.id, isLoadingSubscription, subscriptionActive])
 
   // Form state for creating agreement
   const [selectedAgentId, setSelectedAgentId] = useState('')
@@ -1526,6 +1713,20 @@ export default function SourcePage() {
     }
   }, [])
 
+  useEffect(() => {
+    const applyUserFromStorage = () => {
+      const userData = localStorage.getItem('user')
+      if (!userData) return
+      try {
+        setUser(JSON.parse(userData))
+      } catch {
+        /* ignore */
+      }
+    }
+    window.addEventListener(PROFILE_UPDATED_EVENT, applyUserFromStorage)
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, applyUserFromStorage)
+  }, [])
+
   const loadVerificationStatus = async () => {
     try {
       const result = await verificationApi.getStatus()
@@ -1577,6 +1778,7 @@ export default function SourcePage() {
       setLocationListEndpointUrl(response.locationListEndpointUrl || '')
       setLocationListRequestRoot(response.locationListRequestRoot || '')
       setLocationListAccountId(response.locationListAccountId || '')
+      setLocationListTransport(response.locationListTransport === 'grpc' ? 'grpc' : 'http')
       setAvailabilityEndpointUrl(response.availabilityEndpointUrl || '')
       // Pre-fill OTA requestor ID from saved account ID
       if (response.locationListAccountId) {
@@ -1675,6 +1877,9 @@ export default function SourcePage() {
     }
     if (endpointConfig?.locationListAccountId != null) {
       setLocationListAccountId(endpointConfig.locationListAccountId || '')
+    }
+    if (endpointConfig?.locationListTransport != null && endpointConfig?.locationListTransport !== undefined) {
+      setLocationListTransport(endpointConfig.locationListTransport === 'grpc' ? 'grpc' : 'http')
     }
   }, [endpointConfig])
 
@@ -1968,6 +2173,7 @@ export default function SourcePage() {
         locationListEndpointUrl: locationListEndpointUrl.trim() || undefined,
         locationListRequestRoot: locationListRequestRoot.trim() || undefined,
         locationListAccountId: locationListAccountId.trim() || undefined,
+        locationListTransport,
         availabilityEndpointUrl: endpointConfig?.availabilityEndpointUrl,
       })
       queryClient.invalidateQueries({ queryKey: ['endpointConfig'] })
@@ -1981,22 +2187,32 @@ export default function SourcePage() {
     }
   }
 
-  const importLocationList = async () => {
+  /** Re-fetch location list (+ branch rows from XML/JSON). Upserts only — server does not delete existing branches. */
+  const runLocationListImport = async (mode: 'import' | 'sync') => {
     setIsImportingLocationList(true)
     setLocationListImportResult(null)
     setShowLocationListImportResult(false)
+    const failTitle = mode === 'sync' ? 'Failed to sync from endpoint' : 'Failed to import location list'
     try {
       const result = await endpointsApi.importLocationList()
       setLocationListImportResult(result)
       setShowLocationListImportResult(true)
       if (result.errors && result.errors.length > 0) {
         if ((result.imported || 0) > 0 || (result.updated || 0) > 0) {
-          toast.success(`Location list imported: ${result.imported || 0} new, ${result.updated || 0} updated locations; ${result.branchesImported || 0} new, ${result.branchesUpdated || 0} updated branches`)
+          toast.success(
+            mode === 'sync'
+              ? `Synced: ${result.imported || 0} new, ${result.updated || 0} updated locations; ${result.branchesImported || 0} new, ${result.branchesUpdated || 0} updated branches`
+              : `Location list imported: ${result.imported || 0} new, ${result.updated || 0} updated locations; ${result.branchesImported || 0} new, ${result.branchesUpdated || 0} updated branches`
+          )
         } else {
-          toast.warning(`Import completed with issues. ${result.skipped || 0} skipped.`)
+          toast.warning(`${mode === 'sync' ? 'Sync' : 'Import'} completed with issues. ${result.skipped || 0} skipped.`)
         }
       } else {
-        toast.success(`Location list imported: ${result.imported || 0} locations, ${result.branchesImported || 0} branches created, ${result.branchesUpdated || 0} branches updated`)
+        toast.success(
+          mode === 'sync'
+            ? `Synced: ${result.imported || 0} locations, ${result.branchesImported || 0} branches created, ${result.branchesUpdated || 0} branches updated`
+            : `Location list imported: ${result.imported || 0} locations, ${result.branchesImported || 0} branches created, ${result.branchesUpdated || 0} branches updated`
+        )
       }
       queryClient.invalidateQueries({ queryKey: ['branches'] })
       await loadEndpointConfig()
@@ -2004,7 +2220,7 @@ export default function SourcePage() {
     } catch (error: any) {
       const errorData = error.response?.data || {}
       setLocationListImportResult({
-        message: errorData.message || 'Failed to import location list',
+        message: errorData.message || failTitle,
         error: errorData.error,
         imported: 0,
         updated: 0,
@@ -2014,11 +2230,14 @@ export default function SourcePage() {
         details: errorData.details ? { dataPreview: errorData.details } : undefined,
       })
       setShowLocationListImportResult(true)
-      toast.error(errorData.message || 'Failed to import location list')
+      toast.error(errorData.message || failTitle)
     } finally {
       setIsImportingLocationList(false)
     }
   }
+
+  const importLocationList = () => runLocationListImport('import')
+  const syncLocationListFromEndpoint = () => runLocationListImport('sync')
 
   const handleSaveAvailabilityEndpointUrl = async () => {
     setIsSavingAvailabilityEndpoint(true)
@@ -2227,6 +2446,90 @@ export default function SourcePage() {
     setLocationSampleValidation({ ok: false, errors })
   }
 
+  /** Validate pasted sample for Location & Branches (GLORIA XML response or gRPC GetLocations JSON). */
+  const validateLocationListSample = () => {
+    const pasted = locationListSamplePaste.trim()
+    setLocationListSampleValidation(null)
+    if (!pasted) {
+      setLocationListSampleValidation({ ok: false, errors: ['Paste sample data first.'] })
+      return
+    }
+    if (locationListSampleFormat === 'grpc') {
+      try {
+        const parsed = JSON.parse(pasted)
+        const locs = parsed.locations
+        if (!Array.isArray(locs)) {
+          setLocationListSampleValidation({
+            ok: false,
+            errors: ['Expected JSON object with a top-level "locations" array (SourceProviderService.GetLocations).'],
+          })
+          return
+        }
+        if (locs.length === 0) {
+          setLocationListSampleValidation({ ok: false, errors: ['"locations" array is empty.'] })
+          return
+        }
+        const lenErrors: string[] = []
+        let missing = 0
+        for (let i = 0; i < locs.length; i++) {
+          const l = locs[i]
+          const u = l && typeof (l as { unlocode?: string }).unlocode === 'string' ? (l as { unlocode: string }).unlocode.trim().toUpperCase() : ''
+          if (!u) {
+            missing++
+            continue
+          }
+          if (u.length < 4 || u.length > 5) {
+            lenErrors.push(`locations[${i}].unlocode "${u}" must be 4–5 characters (UN/LOCODE).`)
+          }
+        }
+        if (missing > 0) {
+          setLocationListSampleValidation({
+            ok: false,
+            errors: [`${missing} entr(y/ies) missing a non-empty "unlocode" string.`],
+          })
+          return
+        }
+        if (lenErrors.length > 0) {
+          setLocationListSampleValidation({ ok: false, errors: lenErrors.slice(0, 8) })
+          return
+        }
+        setLocationListSampleValidation({
+          ok: true,
+          format: 'gRPC GetLocations (JSON wire shape)',
+          count: locs.length,
+        })
+      } catch {
+        setLocationListSampleValidation({ ok: false, errors: ['Invalid JSON.'] })
+      }
+      return
+    }
+    const errors: string[] = []
+    const trimmed = pasted.trimStart()
+    if (trimmed.startsWith('<?xml') || trimmed.startsWith('<')) {
+      const detailCount = (pasted.match(/<LocationDetail\b/gi) || []).length
+      if (detailCount > 0) {
+        setLocationListSampleValidation({
+          ok: true,
+          format: 'GLORIA location list XML',
+          count: detailCount,
+        })
+        return
+      }
+      const root = (locationListRequestRoot || 'GLORIA_locationlistrq').replace(/rq$/i, 'rs')
+      if (pasted.includes(`<${root}`) || pasted.includes('<GLORIA_locationlist')) {
+        setLocationListSampleValidation({
+          ok: false,
+          errors: [`Found ${root} (or GLORIA_locationlist) but no <LocationDetail> elements.`],
+        })
+        return
+      }
+      errors.push('XML did not match expected GLORIA location list shape (look for LocationDetail inside the response).')
+    } else {
+      errors.push('For HTTP XML samples, paste raw XML. Switch to the gRPC tab for JSON from GetLocations.')
+    }
+    setLocationListSampleValidation({ ok: false, errors })
+  }
+
   const testSourceGrpc = async () => {
     if (!grpcEndpoint) {
       toast.error('Please set gRPC endpoint first')
@@ -2377,6 +2680,8 @@ export default function SourcePage() {
         onTabChange={handleTabChange} 
         user={user} 
         onLogout={handleLogout}
+        keepOpenForTour={panelTourOpen}
+        onRequestPanelTour={() => setPanelTourOpen(true)}
       />
 
       {/* Main content */}
@@ -2395,6 +2700,27 @@ export default function SourcePage() {
                   <div className="text-xs text-gray-500">{user?.email}</div>
                 </div>
               </div>
+
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="hidden xl:inline-flex"
+                onClick={() => setPanelTourOpen(true)}
+                title="Walk through each sidebar section"
+              >
+                <Sparkles className="h-4 w-4 mr-1.5 shrink-0 text-blue-600" />
+                Panel tour
+              </Button>
+              <button
+                type="button"
+                className="xl:hidden p-2 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                onClick={() => setPanelTourOpen(true)}
+                aria-label="Start panel tour"
+                title="Panel tour"
+              >
+                <Sparkles className="h-5 w-5 text-blue-600" />
+              </button>
               
               <button
                 onClick={() => setShowNotifications(true)}
@@ -2753,49 +3079,22 @@ export default function SourcePage() {
                   </div>
 
                   <div className="mt-6 space-y-6">
+                    <Card className="border border-blue-200 bg-blue-50">
+                      <CardContent className="p-4">
+                        <p className="text-sm text-blue-900">
+                          Agreements are managed externally. Share your company email, complete signing outside the platform, and use provisioned account/agreement references for operations.
+                        </p>
+                      </CardContent>
+                    </Card>
                     {/* My Agreements Section */}
                     {user?.company.status === 'ACTIVE' && (
                       <MyAgreements user={user} />
                     )}
-
-                    {/* Create New Agreement Section */}
-                    {user?.company.status === 'ACTIVE' ? (
-                      <>
-                        <CreateAgreementForm
-                          agents={agents}
-                          selectedAgentId={selectedAgentId}
-                          agreementRef={agreementRef}
-                          validFrom={validFrom}
-                          validTo={validTo}
-                          isCreatingAgreement={isCreatingAgreement}
-                          setSelectedAgentId={setSelectedAgentId}
-                          setAgreementRef={setAgreementRef}
-                          setValidFrom={setValidFrom}
-                          setValidTo={setValidTo}
-                          generateAgreementRef={generateAgreementRef}
-                          createAgreement={createAgreement}
-                          user={user}
-                          endpointConfig={endpointConfig}
-                          grpcTestResult={grpcTestResult}
-                        />
-                        {grpcTestResult?.ok ? (
-                          <AvailableAgents
-                            agents={agents}
-                            isLoadingAgents={isLoadingAgents}
-                            isOfferingAgreement={isOfferingAgreement}
-                            offerAgreement={offerAgreement}
-                            user={user}
-                            endpointConfig={endpointConfig}
-                            grpcTestResult={grpcTestResult}
-                            onViewAgreement={handleViewAgreement}
-                          />
-                        ) : (
-                          <GrpcTestRequired />
-                        )}
-                      </>
-                    ) : (
-                      <PendingVerification />
-                    )}
+                    <AvailableAgents
+                      agents={agents}
+                      isLoadingAgents={isLoadingAgents}
+                      onViewAgreement={handleViewAgreement}
+                    />
                   </div>
                 </>
               )}
@@ -3088,6 +3387,8 @@ export default function SourcePage() {
                       showLocations={showLocations}
                       loadLocations={loadLocations}
                       showRemoveButton={!selectedAgreementFilterId}
+                      agreementFilterActive={!!selectedAgreementFilterId}
+                      listMeta={locationsListMeta}
                     />
                   </div>
 
@@ -3301,9 +3602,11 @@ export default function SourcePage() {
                       </div>
                   <div>
                         <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                          Branches
+                          Manual Branch import
                         </h1>
-                        <p className="mt-2 text-gray-600 font-medium">Manage your branch locations and mappings</p>
+                        <p className="mt-2 text-gray-600 font-medium">
+                          Upload files, sync from endpoint, or edit branches — configure HTTP branch import under Location &amp; Branches
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -3342,13 +3645,18 @@ export default function SourcePage() {
                   <Card className="mb-6 border border-gray-200 shadow-sm">
                     <CardHeader className="bg-gray-50 border-b border-gray-200">
                       <CardTitle className="text-lg">Endpoint</CardTitle>
-                      <p className="text-sm text-gray-600 mt-1">Configure the endpoint URL, request root element (e.g. GLORIA_locationlistrq), and Account ID. A POST request with XML body is sent; the response should be XML containing CountryList &gt; Country &gt; VehMatchedLocs &gt; VehMatchedLoc &gt; LocationDetail.</p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Choose <strong>HTTP</strong> (POST XML to your URL; GLORIA location list response) or <strong>gRPC</strong>{' '}
+                        (<code className="bg-gray-100 px-1 rounded text-xs">SourceProviderService.GetLocations</code> on your saved{' '}
+                        <code className="bg-gray-100 px-1 rounded text-xs">host:port</code>). Use <strong>Sample &amp; Validate</strong> in the modal for both formats.
+                      </p>
                     </CardHeader>
                     <CardContent className="pt-4 flex flex-wrap items-center gap-3">
                       <Button
                         variant="secondary"
                         onClick={() => setIsLocationListConfigOpen(true)}
                         type="button"
+                        data-tour="location-branches-configure-endpoint"
                       >
                         Configure Endpoint
                       </Button>
@@ -3356,16 +3664,107 @@ export default function SourcePage() {
                         variant="primary"
                         onClick={importLocationList}
                         loading={isImportingLocationList}
-                        disabled={!locationListEndpointUrl.trim()}
+                        disabled={
+                          locationListTransport === 'grpc'
+                            ? !(grpcEndpoint || endpointConfig?.grpcEndpoint || '').toString().trim()
+                            : !locationListEndpointUrl.trim()
+                        }
                         type="button"
+                        data-tour="location-branches-import-endpoint"
                       >
                         Import from endpoint
                       </Button>
-                      {locationListEndpointUrl && (
+                      <Button
+                        variant="secondary"
+                        onClick={syncLocationListFromEndpoint}
+                        loading={isImportingLocationList}
+                        disabled={
+                          locationListTransport === 'grpc'
+                            ? !(grpcEndpoint || endpointConfig?.grpcEndpoint || '').toString().trim()
+                            : !locationListEndpointUrl.trim()
+                        }
+                        type="button"
+                        className="gap-2"
+                        title="Re-fetch from supplier. Branches and locations are upserted; nothing is deleted."
+                        data-tour="location-branches-sync-endpoint"
+                      >
+                        <RefreshCw className={`w-4 h-4 shrink-0 ${isImportingLocationList ? 'animate-spin' : ''}`} />
+                        Sync from endpoint
+                      </Button>
+                      {locationListTransport === 'http' && locationListEndpointUrl && (
                         <span className="text-sm text-gray-500 truncate max-w-md" title={locationListEndpointUrl}>
                           {locationListEndpointUrl}
                         </span>
                       )}
+                      {locationListTransport === 'grpc' && (grpcEndpoint || endpointConfig?.grpcEndpoint) && (
+                        <span className="text-sm text-gray-500 truncate max-w-md" title={grpcEndpoint || endpointConfig?.grpcEndpoint || ''}>
+                          gRPC: {grpcEndpoint || endpointConfig?.grpcEndpoint}
+                        </span>
+                      )}
+                      <p className="text-xs text-gray-600 w-full basis-full border-t border-gray-100 pt-3 mt-1 leading-relaxed">
+                        <strong>Sync from endpoint</strong> calls the same pipeline as import: your supplier response is merged into Gloria.
+                        Branches are matched by branch code — existing rows are updated, new codes are added, and branches not present in the response are{' '}
+                        <strong>not</strong> removed. With <strong>gRPC</strong>, only coverage (UN/LOCODE) is updated from{' '}
+                        <code className="bg-gray-100 px-1 rounded text-[11px]">GetLocations</code>; use HTTP/XML for full branch rows from{' '}
+                        <code className="bg-gray-100 px-1 rounded text-[11px]">LocationDetail</code>.
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="mb-6 border border-gray-200 shadow-sm">
+                    <CardHeader className="bg-gray-50 border-b border-gray-200">
+                      <CardTitle className="text-lg">Sample supplier payloads</CardTitle>
+                      <p className="text-sm text-gray-600 mt-1">
+                        What your <strong>HTTP location list</strong> or <strong>gRPC GetLocations</strong> response should look like (coverage + branch rows). For full validation and paste checks, open{' '}
+                        <strong>Configure Endpoint → Sample &amp; Validate</strong>.
+                      </p>
+                    </CardHeader>
+                    <CardContent className="pt-4 space-y-3">
+                      <details className="rounded-lg border border-gray-200 bg-white open:shadow-sm">
+                        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50">
+                          HTTP / XML — GLORIA list response (excerpt: countries + LocationDetail → branches)
+                        </summary>
+                        <div className="px-4 pb-4 border-t border-gray-100">
+                          <pre className="text-[11px] leading-relaxed bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto max-h-64 font-mono whitespace-pre">{`<GLORIA_locationlistrs ...>
+  <CountryList>
+    <Country>...</Country>
+    <CountryCode>AE</CountryCode>
+    <VehMatchedLocs>
+      <VehMatchedLoc>
+        <LocationDetail Code="DXB01" Name="Dubai Desk" Latitude="25.2532" Longitude="55.3657" ...>
+          <Address>
+            <AddressLine>...</AddressLine>
+            <CityName>Dubai</CityName>
+            <CountryName Code="AE">United Arab Emirates</CountryName>
+          </Address>
+          <Telephone PhoneNumber="+971..." />
+          <Opening>...</Opening>
+        </LocationDetail>
+      </VehMatchedLoc>
+    </VehMatchedLocs>
+  </CountryList>
+</GLORIA_locationlistrs>`}</pre>
+                          <p className="text-xs text-gray-500 mt-2">
+                            UN/LOCODE coverage is also derived from this tree where applicable; branch rows map to your Branches table by <code className="bg-gray-100 px-1 rounded">Code</code>.
+                          </p>
+                        </div>
+                      </details>
+                      <details className="rounded-lg border border-gray-200 bg-white open:shadow-sm">
+                        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50">
+                          gRPC — GetLocations JSON shape (coverage only)
+                        </summary>
+                        <div className="px-4 pb-4 border-t border-gray-100">
+                          <pre className="text-[11px] leading-relaxed bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto font-mono whitespace-pre">{`{
+  "locations": [
+    { "unlocode": "AEDXB", "name": "Dubai" },
+    { "unlocode": "GBLON", "name": "London" }
+  ]
+}`}</pre>
+                          <p className="text-xs text-gray-500 mt-2">
+                            This updates Gloria UN/LOCODE / coverage rows only. It does not carry <code className="bg-gray-100 px-1 rounded">LocationDetail</code> branch payloads — use HTTP/XML for that.
+                          </p>
+                        </div>
+                      </details>
                     </CardContent>
                   </Card>
 
@@ -3383,7 +3782,13 @@ export default function SourcePage() {
 
                   <Modal
                     isOpen={isLocationListConfigOpen}
-                    onClose={() => setIsLocationListConfigOpen(false)}
+                    onClose={() => {
+                      setIsLocationListConfigOpen(false)
+                      setLocationListConfigTab('settings')
+                      setLocationListSampleFormat('xml')
+                      setLocationListSamplePaste('')
+                      setLocationListSampleValidation(null)
+                    }}
                     title="Configure Location List Endpoint"
                     size="lg"
                   >
@@ -3406,41 +3811,130 @@ export default function SourcePage() {
                       </div>
                       {locationListConfigTab === 'settings' && (
                         <>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Endpoint URL</label>
-                            <Input
-                              value={locationListEndpointUrl}
-                              onChange={(e) => setLocationListEndpointUrl(e.target.value)}
-                              placeholder="https://example.com/locationlist.php"
-                              helperText="URL that accepts POST XML with your request root (e.g. GLORIA_locationlistrq)"
-                            />
+                          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                            <p className="text-sm font-medium text-gray-800 mb-3">How should Gloria fetch your location list?</p>
+                            <div className="flex flex-col gap-3">
+                              <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-700">
+                                <input
+                                  type="radio"
+                                  name="locationListTransport"
+                                  className="mt-1"
+                                  checked={locationListTransport === 'http'}
+                                  onChange={() => setLocationListTransport('http')}
+                                />
+                                <span>
+                                  <strong>HTTP — POST XML</strong> to your supplier URL (GLORIA_locationlistrq / …rs with LocationDetail). Whitelist applies to this URL.
+                                </span>
+                              </label>
+                              <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-700">
+                                <input
+                                  type="radio"
+                                  name="locationListTransport"
+                                  className="mt-1"
+                                  checked={locationListTransport === 'grpc'}
+                                  onChange={() => setLocationListTransport('grpc')}
+                                />
+                                <span>
+                                  <strong>gRPC — GetLocations</strong> empty request on <code className="bg-white px-1 rounded text-xs">SourceProviderService</code> using the same <strong>gRPC endpoint (host:port)</strong> as the rest of your integration (configure under Endpoints / Settings if needed).
+                                </span>
+                              </label>
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Request root element name</label>
-                            <Input
-                              value={locationListRequestRoot}
-                              onChange={(e) => setLocationListRequestRoot(e.target.value)}
-                              placeholder="GLORIA_locationlistrq"
-                              helperText="Root element of the XML request body; response is expected to use the same name with 'rs' suffix (e.g. GLORIA_locationlistrs)"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Account ID (optional)</label>
-                            <Input
-                              value={locationListAccountId}
-                              onChange={(e) => setLocationListAccountId(e.target.value)}
-                              placeholder="e.g. Gloria001"
-                              helperText='Used in request as <AccountID ID="..."/>'
-                            />
-                          </div>
+                          {locationListTransport === 'http' && (
+                            <>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Endpoint URL</label>
+                                <Input
+                                  value={locationListEndpointUrl}
+                                  onChange={(e) => setLocationListEndpointUrl(e.target.value)}
+                                  placeholder="https://example.com/locationlist.php"
+                                  helperText="URL that accepts POST XML with your request root (e.g. GLORIA_locationlistrq)"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Request root element name</label>
+                                <Input
+                                  value={locationListRequestRoot}
+                                  onChange={(e) => setLocationListRequestRoot(e.target.value)}
+                                  placeholder="GLORIA_locationlistrq"
+                                  helperText="Root element of the XML request body; response is expected to use the same name with 'rs' suffix (e.g. GLORIA_locationlistrs)"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Account ID (optional)</label>
+                                <Input
+                                  value={locationListAccountId}
+                                  onChange={(e) => setLocationListAccountId(e.target.value)}
+                                  placeholder="e.g. Gloria001"
+                                  helperText='Used in request as <AccountID ID="..."/>'
+                                />
+                              </div>
+                            </>
+                          )}
+                          {locationListTransport === 'grpc' && (
+                            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                              <p className="font-medium mb-1">gRPC endpoint</p>
+                              <p className="text-xs text-blue-800">
+                                Saved address:{' '}
+                                <code className="bg-white px-1.5 py-0.5 rounded border border-blue-100">
+                                  {(grpcEndpoint || endpointConfig?.grpcEndpoint || '(not set)').toString()}
+                                </code>
+                                . Set it in your main endpoint configuration, test with <strong>Test gRPC</strong>, then save here.
+                              </p>
+                            </div>
+                          )}
                           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                             <Button variant="secondary" onClick={() => setIsLocationListConfigOpen(false)} type="button">Cancel</Button>
-                            <Button variant="primary" onClick={handleSaveLocationListConfig} loading={isSavingLocationListConfig} disabled={!locationListEndpointUrl.trim()} type="button">Save</Button>
+                            <Button
+                              variant="primary"
+                              onClick={handleSaveLocationListConfig}
+                              loading={isSavingLocationListConfig}
+                              disabled={
+                                locationListTransport === 'http'
+                                  ? !locationListEndpointUrl.trim()
+                                  : !(grpcEndpoint || endpointConfig?.grpcEndpoint || '').toString().trim()
+                              }
+                              type="button"
+                            >
+                              Save
+                            </Button>
                           </div>
                         </>
                       )}
                       {locationListConfigTab === 'sample' && (
                         <>
+                          <div className="flex gap-2 border-b border-gray-200 pb-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLocationListSampleFormat('xml')
+                                setLocationListSampleValidation(null)
+                              }}
+                              className={`px-3 py-1.5 text-xs font-medium rounded-md ${
+                                locationListSampleFormat === 'xml'
+                                  ? 'bg-slate-800 text-white'
+                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              }`}
+                            >
+                              HTTP / XML
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLocationListSampleFormat('grpc')
+                                setLocationListSampleValidation(null)
+                              }}
+                              className={`px-3 py-1.5 text-xs font-medium rounded-md ${
+                                locationListSampleFormat === 'grpc'
+                                  ? 'bg-slate-800 text-white'
+                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              }`}
+                            >
+                              gRPC (GetLocations)
+                            </button>
+                          </div>
+
+                          {locationListSampleFormat === 'xml' && (
                           <div>
                             <p className="text-sm font-medium text-gray-700 mb-2">Sample request (POST body)</p>
                             <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto max-h-40 font-mono whitespace-pre">{`<?xml version="1.0" encoding="UTF-8"?>
@@ -3452,6 +3946,8 @@ export default function SourcePage() {
   </ACC>
 </${locationListRequestRoot || 'GLORIA_locationlistrq'}>`}</pre>
                           </div>
+                          )}
+                          {locationListSampleFormat === 'xml' && (
                           <div>
                             <p className="text-sm font-medium text-gray-700 mb-2">Expected response structure</p>
                             <p className="text-xs text-gray-500 mb-1">The endpoint returns XML. Below is the JSON schema showing the expected structure and field types. Country code is taken from the <code className="bg-gray-200 px-1 rounded">CountryCode</code> element inside each <code className="bg-gray-200 px-1 rounded">Country</code>.</p>
@@ -3532,6 +4028,147 @@ export default function SourcePage() {
   }
 }`}</pre>
                             <p className="text-xs text-gray-400 mt-2 italic">The actual response is XML; this JSON schema shows the structure and field types.</p>
+                          </div>
+                          )}
+
+                          {locationListSampleFormat === 'grpc' && (
+                            <div className="space-y-4">
+                              <p className="text-sm text-gray-700">
+                                Over <strong>gRPC</strong> (HTTP/2 to your configured <code className="bg-gray-100 px-1 rounded text-xs">host:port</code>), Gloria calls{' '}
+                                <code className="bg-gray-100 px-1 rounded text-xs">SourceProviderService.GetLocations</code> as defined in{' '}
+                                <code className="bg-gray-100 px-1 rounded text-xs">source_provider.proto</code>. There is <strong>no XML POST body</strong> like the HTTP path — the request is an empty protobuf message.
+                              </p>
+
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-2">Proto service (reference)</p>
+                                <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto font-mono whitespace-pre">{`service SourceProviderService {
+  rpc GetHealth       (Empty) returns (HealthResponse);
+  rpc GetLocations    (Empty) returns (LocationsResponse);
+  // … GetAvailability, CreateBooking, …
+}
+
+// Request — no fields (Gloria sends this empty)
+message Empty {}
+
+// One coverage row
+message Location {
+  string unlocode = 1;  // required, 4–5 chars UN/LOCODE
+  string name     = 2;  // optional; used as place label on import
+}
+
+message LocationsResponse {
+  repeated Location locations = 1;
+}`}</pre>
+                              </div>
+
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-2">Sample request (conceptual)</p>
+                                <p className="text-xs text-gray-600 mb-2">
+                                  On the wire this is <code className="bg-gray-200 px-1 rounded">Empty</code> with no payload. Unlike HTTP/XML, you do not return a GLORIA XML envelope — only the protobuf <code className="bg-gray-200 px-1 rounded">LocationsResponse</code>.
+                                </p>
+                                <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto font-mono whitespace-pre">{`{}`}</pre>
+                              </div>
+
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-2">Expected response — JSON shape (for this validator)</p>
+                                <p className="text-xs text-gray-500 mb-2">
+                                  Live gRPC responses are binary protobuf. Paste <strong>JSON with the same logical shape</strong> here (e.g. from a test harness or JSON transcoding). Each entry is imported as coverage (UN/LOCODE + place). The proto <code className="bg-gray-200 px-1 rounded">Location</code> message has only <code className="bg-gray-200 px-1 rounded">unlocode</code> and <code className="bg-gray-200 px-1 rounded">name</code> — there is no Opening, Cars, or Address on this RPC. For the rich XML tree (branches per <code className="bg-gray-200 px-1 rounded">LocationDetail</code>, hours, cars, etc.), use the <strong>HTTP / XML</strong> tab and a GLORIA location list XML response.
+                                </p>
+                                <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto max-h-[28rem] font-mono whitespace-pre">{`{
+  "locations": [
+    {
+      "unlocode": "AEDXB",
+      "name": "Dubai"
+    },
+    {
+      "unlocode": "GBLON",
+      "name": "London"
+    }
+  ]
+}
+
+// Logical schema (matches LocationsResponse → Location)
+{
+  "locations": [
+    {
+      "unlocode": "string (required, 4–5 characters, UN/LOCODE)",
+      "name": "string (optional; used as place / label when upserting UNLocode)"
+    }
+  ]
+}`}</pre>
+                                <p className="text-xs text-gray-400 mt-2 italic">
+                                  Only <code className="bg-gray-200 px-1 rounded">unlocode</code> and <code className="bg-gray-200 px-1 rounded">name</code> exist on <code className="bg-gray-200 px-1 rounded">Location</code> in proto3 — no Opening/Cars/Address here; use HTTP/XML location list if you need that richness in one import.
+                                </p>
+                              </div>
+
+                              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                <strong>Tip:</strong> If <strong>Validate sample</strong> passes but live import fails, confirm TLS/ALPN, that the same <code className="bg-white px-1 rounded">host:port</code> is saved under Endpoints, and that your server implements <code className="bg-white px-1 rounded">GetLocations</code> on <code className="bg-white px-1 rounded">SourceProviderService</code> exactly as in the proto.
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="border-t border-gray-200 pt-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Paste sample {locationListSampleFormat === 'grpc' ? 'GetLocations JSON' : 'HTTP XML response'}
+                            </label>
+                            <p className="text-xs text-gray-500 mb-1">
+                              {locationListSampleFormat === 'grpc'
+                                ? 'Paste JSON (same shape as LocationsResponse). Validate checks each locations[].unlocode (non-empty, 4–5 chars).'
+                                : 'Paste a fragment or full XML; we look for LocationDetail nodes or GLORIA list response roots.'}
+                            </p>
+                            <textarea
+                              value={locationListSamplePaste}
+                              onChange={(e) => {
+                                setLocationListSamplePaste(e.target.value)
+                                setLocationListSampleValidation(null)
+                              }}
+                              placeholder={
+                                locationListSampleFormat === 'grpc'
+                                  ? '{ "locations": [ { "unlocode": "AEDXB", "name": "Dubai" } ] }'
+                                  : 'Paste XML from GLORIA_locationlistrs...'
+                              }
+                              className="w-full h-36 px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              spellCheck={false}
+                            />
+                            <div className="flex items-center gap-3 mt-2">
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={validateLocationListSample}
+                                disabled={!locationListSamplePaste.trim()}
+                              >
+                                Validate sample
+                              </Button>
+                              {locationListSampleValidation && (
+                                <div
+                                  className={`flex-1 text-sm ${
+                                    locationListSampleValidation.ok ? 'text-green-700' : 'text-red-700'
+                                  }`}
+                                >
+                                  {locationListSampleValidation.ok ? (
+                                    <span>
+                                      <CheckCircle2 className="w-4 h-4 inline mr-1 align-middle" />
+                                      Detected <strong>{locationListSampleValidation.format}</strong>
+                                      {locationListSampleValidation.count != null &&
+                                        ` — ${locationListSampleValidation.count} location(s)`}
+                                      .
+                                    </span>
+                                  ) : (
+                                    <span>
+                                      <XCircle className="w-4 h-4 inline mr-1 align-middle" />
+                                      {locationListSampleValidation.errors?.join(' ') || 'Validation failed.'}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            {locationListSampleValidation?.errors && locationListSampleValidation.errors.length > 0 && (
+                              <ul className="mt-2 text-xs text-red-700 list-disc list-inside">
+                                {locationListSampleValidation.errors.map((err, i) => (
+                                  <li key={i}>{err}</li>
+                                ))}
+                              </ul>
+                            )}
                           </div>
                           <div className="flex justify-end pt-2 border-t border-gray-200">
                             <Button variant="secondary" onClick={() => setIsLocationListConfigOpen(false)} type="button">Close</Button>
@@ -3627,6 +4264,7 @@ export default function SourcePage() {
                               <button
                                 key={fmt}
                                 onClick={() => setAvailabilityAdapterType(fmt)}
+                                data-tour={`pricing-format-${fmt}`}
                                 className={`flex-1 py-2 px-3 transition-colors ${
                                   active
                                     ? 'bg-blue-600 text-white'
@@ -3661,6 +4299,7 @@ export default function SourcePage() {
                                 onClick={handleSaveAvailabilityEndpointUrl}
                                 loading={isSavingAvailabilityEndpoint}
                                 disabled={!availabilityEndpointUrl.trim()}
+                                data-tour="pricing-save-endpoint"
                               >
                                 Save
                               </Button>
@@ -3856,6 +4495,7 @@ message AvailabilityRequest {
                             variant="primary"
                             onClick={handleFetchAvailability}
                             loading={isFetchingAvailability}
+                            data-tour="pricing-fetch-store"
                             disabled={
                               availabilityAdapterType === 'grpc'
                                 ? !grpcEndpointAddress.trim() && !(endpointConfig as any)?.grpcEndpoint
@@ -3887,12 +4527,12 @@ message AvailabilityRequest {
                     </Card>
 
                     {/* ── Stored Availability Samples ── */}
-                    <Card className="border border-gray-200 shadow-sm">
+                    <Card className="shadow-sm">
                       <CardHeader>
-                        <div className="flex items-center justify-between">
-                          <div>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
                             <CardTitle className="text-lg">Stored availability samples</CardTitle>
-                            <p className="text-sm text-gray-500 mt-1">
+                            <p className="text-sm text-gray-600 mt-1 max-w-3xl">
                               All previously fetched results for this source — each unique search criteria is stored separately.
                             </p>
                           </div>
@@ -3900,13 +4540,13 @@ message AvailabilityRequest {
                             variant="ghost"
                             onClick={loadStoredSamples}
                             loading={isLoadingStoredSamples}
-                            className="text-xs"
+                            className="text-xs shrink-0 self-start"
                           >
                             Refresh
                           </Button>
                         </div>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="max-w-full overflow-x-hidden">
                         {isLoadingStoredSamples && storedSamples.length === 0 ? (
                           <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
                             <svg className="animate-spin w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24">
@@ -3944,7 +4584,7 @@ message AvailabilityRequest {
                         {/* ── OTA XML reference ── */}
                         {availabilityAdapterType === 'xml' && (<>
                           <p className="text-sm text-gray-700">
-                            Your endpoint must accept an <strong>OTA_VehAvailRateRQ XML POST</strong> (<code className="bg-gray-100 px-1 rounded">Content-Type: text/xml</code>) and return <strong>OTA_VehAvailRateRS XML</strong>. Gloria automatically parses the XML response and extracts vehicle data, pricing, and terms.
+                            Your endpoint must accept an <strong>OTA_VehAvailRateRQ XML POST</strong> (<code className="bg-gray-100 px-1 rounded">Content-Type: text/xml</code>). The response can be either <strong>OTA_VehAvailRateRS XML</strong> or your <strong>GLORIA_availabilityrs</strong> structure (<code className="bg-gray-100 px-1 rounded">VehAvairsdetails → availcars[]</code>). Gloria stores both formats into the same Availability samples store.
                           </p>
                           <div>
                             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Request sent to your endpoint (OTA_VehAvailRateRQ)</p>
@@ -4031,6 +4671,42 @@ message AvailabilityRequest {
                               <li><code>PricedEquips</code> — optional add-on equipment with pricing</li>
                             </ul>
                           </div>
+                          <div>
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Alternative response also accepted (GLORIA_availabilityrs)</p>
+                            <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-64">{`<GLORIA_availabilityrs TimeStamp="2025-04-28T10:30:45" Target="Production" Version="1.00">
+  <Success />
+  <VehAvairsdetails>
+    <vehavailmaindet PickUpDateTime="2026-05-23T09:00:00" ReturnDateTime="2026-05-27T11:00:00" Duration="5">
+      <PickUpLocation LocationCode="TIAA02" />
+      <ReturnLocation LocationCode="TIAA02" />
+    </vehavailmaindet>
+    <availcars ACRISS="CCAR">
+      <vehdetails Make="SKODA" Model="FABIA" Transmission="Automatic" Doors="4" Seats="5" ImageURL="http://..." />
+      <pricing CarOrderID="CCAR12345629-04-26" Currency="EUR" DailyGross="30.00" TotalGross="150.00" />
+      <includedinprice>
+        <Item Code="CDW" ItemDescription="Collision damage waiver" Excess="1200.00" Deposit="1200.00" Currency="EUR" />
+      </includedinprice>
+      <notincludedinprice>
+        <Item Code="FP" ItemDescription="Fuel policy upgrade" Price="35.00" Currency="EUR" />
+      </notincludedinprice>
+      <OptionalExtras>
+        <Item Code="GPS" ItemDescription="GPS" Price="25.00" Currency="EUR" />
+      </OptionalExtras>
+    </availcars>
+  </VehAvairsdetails>
+</GLORIA_availabilityrs>`}</pre>
+                          </div>
+                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 space-y-1">
+                            <p className="font-semibold">GLORIA_availabilityrs mapping rules used by Gloria:</p>
+                            <ul className="list-disc list-inside space-y-0.5 mt-1">
+                              <li><code>VehAvairsdetails.availcars[]</code> is normalized from object/array automatically.</li>
+                              <li>Vehicle identity/pricing from <code>pricing.CarOrderID</code>, <code>pricing.TotalGross</code>, <code>pricing.Currency</code>.</li>
+                              <li>Vehicle basics from <code>vehdetails</code> (Make/Model/Transmission/Doors/Seats/ImageURL).</li>
+                              <li><code>includedinprice.Item[]</code> and <code>notincludedinprice.Item[]</code> support object-or-array and are deduplicated by <code>Code</code>.</li>
+                              <li><code>OptionalExtras.Item[]</code> is mapped to priced extras (<code>priced_equips</code>) in stored samples.</li>
+                              <li>Unknown/new codes are kept as raw code+description so suppliers/brokers can extend without breaking ingestion.</li>
+                            </ul>
+                          </div>
                         </>)}
 
                         {/* ── Gloria JSON reference ── */}
@@ -4099,6 +4775,14 @@ message AvailabilityRequest {
                               <li><code>availability_status</code> — AVAILABLE / ON_REQUEST / SOLD_OUT</li>
                               <li><code>picture_url</code>, <code>door_count</code>, <code>baggage</code>, <code>vehicle_category</code>, <code>veh_id</code></li>
                               <li><code>ota_vehicle_json</code> — optional JSON string for terms, charges, extras (same rich data as OTA XML)</li>
+                            </ul>
+                          </div>
+                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 space-y-1">
+                            <p className="font-semibold">Terms/codes guidance (JSON mode):</p>
+                            <ul className="list-disc list-inside space-y-0.5 mt-1">
+                              <li>Include as many code rows as available in your source for included, not-included, extras, and policies.</li>
+                              <li>Some suppliers return partial sets; Gloria stores whatever is present without requiring every possible code.</li>
+                              <li>If new codes appear later, they should still be passed through (code + description + amounts) so brokers can display them.</li>
                             </ul>
                           </div>
                         </>)}
@@ -4195,6 +4879,9 @@ service SourceProviderService {
                             <p className="font-mono">host:port &nbsp;(e.g. <strong>localhost:50051</strong> or <strong>source.example.com:443</strong>)</p>
                             <p className="mt-1">No <code>grpc://</code> prefix needed — Gloria adds the insecure channel automatically.</p>
                           </div>
+                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900">
+                            Keep rich policy/terms data in <code>ota_vehicle_json</code> (included, not-included, extras, charges). Missing sections are allowed; available sections are stored and shown.
+                          </div>
                         </>)}
 
                       </CardContent>
@@ -4203,8 +4890,32 @@ service SourceProviderService {
                 </>
               )}
 
+              {activeTab === 'daily-pricing' && (
+                <DailyPricingCalendar />
+              )}
+
               {activeTab === 'transactions' && (
                 <SourceTransactionsTab />
+              )}
+
+              {activeTab === 'reservations' && (
+                <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
+                  <SourceBookingsPanel
+                    view="reservations"
+                    title="Reservations"
+                    description="Bookings from agents that are not cancelled (requested, confirmed, or other active states). Same data as Gloria stores when agents book your source."
+                  />
+                </div>
+              )}
+
+              {activeTab === 'cancellations' && (
+                <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
+                  <SourceBookingsPanel
+                    view="cancellations"
+                    title="Cancellations"
+                    description="Bookings that have been cancelled (agent or flow updated status to CANCELLED in Gloria)."
+                  />
+                </div>
               )}
 
               {activeTab === 'health' && (
@@ -5110,6 +5821,18 @@ service SourceProviderService {
         onClose={() => setShowNotifications(false)}
         endpoint="/endpoints/notifications"
         markReadEndpoint={(id) => `/endpoints/notifications/${id}/read`}
+      />
+
+      <SourcePanelTour
+        open={panelTourOpen}
+        onClose={() => setPanelTourOpen(false)}
+        onStepChangeTab={(tab) => {
+          if (tab !== activeTab) handleTabChange(tab)
+        }}
+        onComplete={() => {
+          const id = user?.company?.id
+          if (id) localStorage.setItem(SOURCE_PANEL_TOUR_STORAGE_KEY(id), '1')
+        }}
       />
     </div>
   )

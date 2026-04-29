@@ -50,11 +50,17 @@ export const subscriptionApi = {
     }
   },
 
-  createCheckoutSession: async (planId: string, successUrl?: string, cancelUrl?: string): Promise<{ url: string | null }> => {
+  createCheckoutSession: async (
+    planId: string,
+    successUrl?: string,
+    cancelUrl?: string,
+    branchQuantity?: number,
+  ): Promise<{ url: string | null }> => {
     const { data } = await api.post('/sources/checkout-session', {
       planId,
       successUrl,
       cancelUrl,
+      branchQuantity: branchQuantity ?? 1,
     })
     return data
   },

@@ -2,23 +2,24 @@ import React, { useState, useEffect } from 'react';
 import './docs.css';
 import toast from 'react-hot-toast';
 import { API_BASE_URL } from '../../lib/apiConfig';
-import TypeScriptGuide from './guides/TypeScriptGuide';
-import JavaScriptGuide from './guides/JavaScriptGuide';
-import GoGuide from './guides/GoGuide';
 import PhpGuide from './guides/PhpGuide';
-import PythonGuide from './guides/PythonGuide';
-import JavaGuide from './guides/JavaGuide';
-import PerlGuide from './guides/PerlGuide';
 import { SdkDownloadButton } from './SdkDownloadButton';
 
-type SdkType = 'javascript' | 'typescript' | 'go' | 'php' | 'python' | 'java' | 'perl';
+type SdkType = 'php';
 
-type SectionType = 'quick-start' | 'installation' | 'error-handling' | 'best-practices' | 'api-reference' | 'grpc-implementation';
+type SectionType =
+  | 'quick-start'
+  | 'architecture-flow'
+  | 'installation'
+  | 'integration-standard'
+  | 'error-handling'
+  | 'best-practices'
+  | 'api-reference'
+  | 'grpc-implementation';
 
 const SdkGuide: React.FC<{ role?: 'agent' | 'source' | 'admin' }> = ({ role = 'source' }) => {
   const [companyId, setCompanyId] = useState<string>('YOUR_COMPANY_ID');
   const [companyType, setCompanyType] = useState<string>('SOURCE');
-  const [activeSdk, setActiveSdk] = useState<SdkType>('typescript');
   const [activeSection, setActiveSection] = useState<SectionType>('quick-start');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [downloadingProto, setDownloadingProto] = useState(false);
@@ -76,23 +77,26 @@ const SdkGuide: React.FC<{ role?: 'agent' | 'source' | 'admin' }> = ({ role = 's
     admin: 'Start here: login → manage companies → agreements → health monitoring',
   };
 
+  const pageSubtitle =
+    role === 'source'
+      ? 'Source PHP: Gloria REST (cURL) in the sections below, plus architecture for the supplier OTA + Laravel + optional gRPC bridge (Source PHP bundle ZIP — not CarHireClient).'
+      : role === 'agent'
+        ? 'Agent PHP: CarHireClient (broker) SDK; ZIP is php-agent. Suppliers use the Source portal bundle instead.'
+        : 'Production-ready SDK documentation for Gloria Connect.';
+
   const sections: { id: SectionType; label: string }[] = [
     { id: 'quick-start', label: 'Quick Start' },
+    { id: 'architecture-flow', label: 'Architecture & flow' },
     { id: 'installation', label: 'Installation' },
+    { id: 'integration-standard', label: 'Integration Standard' },
     { id: 'error-handling', label: 'Error Handling' },
     { id: 'best-practices', label: 'Best Practices' },
     { id: 'api-reference', label: 'API Reference' },
     { id: 'grpc-implementation', label: 'gRPC Implementation' },
   ];
 
-  const sdks: { id: SdkType; name: string; icon: string; downloadType: 'nodejs' | 'python' | 'php' | 'java' | 'go' | 'perl' }[] = [
-    { id: 'typescript', name: 'TypeScript', icon: '📘', downloadType: 'nodejs' },
-    { id: 'javascript', name: 'JavaScript', icon: '📦', downloadType: 'nodejs' },
-    { id: 'go', name: 'Go', icon: '🐹', downloadType: 'go' },
+  const sdks: { id: SdkType; name: string; icon: string; downloadType: 'php' }[] = [
     { id: 'php', name: 'PHP', icon: '🐘', downloadType: 'php' },
-    { id: 'python', name: 'Python', icon: '🐍', downloadType: 'python' },
-    { id: 'java', name: 'Java', icon: '☕', downloadType: 'java' },
-    { id: 'perl', name: 'Perl', icon: '🐪', downloadType: 'perl' },
   ];
 
   return (
@@ -145,62 +149,35 @@ const SdkGuide: React.FC<{ role?: 'agent' | 'source' | 'admin' }> = ({ role = 's
           
           {sidebarOpen && (
             <>
-              {/* SDK Selector */}
               <div style={{ marginBottom: '2rem' }}>
                 <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '0.75rem' }}>
-                  Select SDK
+                  PHP SDK (source)
                 </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {sdks.map((sdk) => (
-                    <div
-                      key={sdk.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem'
-                      }}
-                    >
-                      <button
-                        onClick={() => {
-                          setActiveSdk(sdk.id);
-                          setActiveSection('quick-start');
-                        }}
-                        style={{
-                          flex: 1,
-                          padding: '0.75rem',
-                          textAlign: 'left',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '0.375rem',
-                          backgroundColor: activeSdk === sdk.id ? '#f1f5f9' : 'white',
-                          color: activeSdk === sdk.id ? '#1f2937' : '#64748b',
-                          fontWeight: activeSdk === sdk.id ? 600 : 400,
-                          cursor: 'pointer',
-                          transition: 'all 0.15s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (activeSdk !== sdk.id) {
-                            e.currentTarget.style.backgroundColor = '#f9fafb';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (activeSdk !== sdk.id) {
-                            e.currentTarget.style.backgroundColor = 'white';
-                          }
-                        }}
-                      >
-                        <span>{sdk.icon}</span>
-                        <span>{sdk.name}</span>
-                      </button>
-                      <SdkDownloadButton
-                        sdkType={sdk.downloadType}
-                        variant="icon-only"
-                        className="sdk-download-btn"
-                      />
-                    </div>
-                  ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '0.375rem',
+                      backgroundColor: '#f1f5f9',
+                      color: '#1f2937',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    <span>🐘</span>
+                    <span>PHP</span>
+                  </div>
+                  <SdkDownloadButton
+                    sdkType="php"
+                    downloadSlug="php-source"
+                    zipFilename="gloria-php-source-supplier.zip"
+                    variant="icon-only"
+                    className="sdk-download-btn"
+                  />
                 </div>
               </div>
 
@@ -258,16 +235,18 @@ const SdkGuide: React.FC<{ role?: 'agent' | 'source' | 'admin' }> = ({ role = 's
         <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
           <div style={{ flex: 1 }}>
             <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: '0.5rem', color: '#1f2937' }}>
-              {sdks.find(s => s.id === activeSdk)?.name} SDK
+              {sdks[0].name} SDK
             </h1>
-            <p style={{ color: '#64748b', fontSize: '1rem' }}>
-              Production-ready SDK for integrating with Gloria Connect API
+            <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: 1.55 }}>
+              {pageSubtitle}
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             <SdkDownloadButton
-              sdkType={sdks.find(s => s.id === activeSdk)?.downloadType || 'nodejs'}
-              label={`Download ${sdks.find(s => s.id === activeSdk)?.name} SDK`}
+              sdkType="php"
+              downloadSlug="php-source"
+              zipFilename="gloria-php-source-supplier.zip"
+              label="Download Source PHP bundle"
               variant="default"
             />
             <button
@@ -311,6 +290,75 @@ const SdkGuide: React.FC<{ role?: 'agent' | 'source' | 'admin' }> = ({ role = 's
           </div>
         )}
 
+        {role === 'source' && (
+          <div
+            style={{
+              marginBottom: '2rem',
+              padding: '1.25rem',
+              backgroundColor: '#fffbeb',
+              border: '1px solid #fcd34d',
+              borderRadius: '0.5rem',
+            }}
+          >
+            <h2 style={{ margin: '0 0 0.75rem 0', fontSize: '1.05rem', fontWeight: 700, color: '#92400e' }}>
+              Supplier integration — what to configure first
+            </h2>
+            <ol style={{ margin: 0, paddingLeft: '1.25rem', color: '#78350f', fontSize: '0.875rem', lineHeight: 1.65 }}>
+              <li>
+                <strong>API base URL</strong> — In PHP/cURL samples, replace <code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>$API_BASE</code> /{' '}
+                <code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>localhost:8080</code> with the same Gloria API origin this portal uses (your deployed backend / <code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>VITE_*</code> env in your own app).
+              </li>
+              <li>
+                <strong>JWT</strong> — Call <code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>/auth/login</code>, then send <code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>Authorization: Bearer …</code> on every other request.
+              </li>
+              <li>
+                <strong>Company id</strong> — Use your source company id for <code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>source_id</code>, coverage paths, and agreement payloads (shown in the box below when you are logged in here).
+              </li>
+              <li>
+                <strong>Endpoints in Gloria</strong> — <code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>PUT /endpoints/config</code> sets your supplier <strong>HTTP</strong> and <strong>gRPC</strong> addresses (<code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>host:port</code>), <code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>adapterType</code>, and optional import URLs. Under <strong>Location &amp; Branches</strong> you can choose <strong>HTTP POST XML</strong> (GLORIA location list) or <strong>gRPC GetLocations</strong> for the same import button.
+              </li>
+              <li>
+                <strong>Whitelist</strong> — Register supplier hostnames/IPs Gloria may call; otherwise requests fail with a whitelist error.
+              </li>
+              <li>
+                <strong>gRPC contract</strong> — Use <strong>Download Proto</strong> for <code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>source_provider.proto</code> when implementing <code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>SourceProviderService</code>.
+              </li>
+              <li>
+                <strong>Source PHP bundle ZIP</strong> — Supplier OTA + Laravel + optional gRPC bridge; same Gloria contracts as the REST flows in this guide.
+              </li>
+              <li>
+                <strong>PHP (two different products)</strong> — Tabs below show <strong>direct REST/cURL</strong> to Gloria. The <strong>supplier OTA + Laravel + optional gRPC bridge</strong> is the separate <strong>Source PHP bundle</strong> download (<code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>php-source</code>), not <code style={{ backgroundColor: '#fef3c7', padding: '0.1rem 0.3rem', borderRadius: '0.2rem' }}>CarHireClient</code>.
+              </li>
+            </ol>
+          </div>
+        )}
+
+        {role === 'source' && (
+          <div
+            style={{
+              marginBottom: '2rem',
+              padding: '1.25rem',
+              backgroundColor: '#ecfdf5',
+              border: '1px solid #6ee7b7',
+              borderRadius: '0.5rem',
+            }}
+          >
+            <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', color: '#065f46' }}>Source (supplier) PHP integration</h2>
+            <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#047857', lineHeight: 1.5 }}>
+              Download the supplier-side bundle: OTA XML adapter, Laravel HTTP layer, optional Node gRPC bridge, and{' '}
+              <code style={{ backgroundColor: '#d1fae5', padding: '0.125rem 0.35rem', borderRadius: '0.25rem' }}>gloria_client_supplier.proto</code>.
+              Booking agents use the <strong>Agent portal</strong> PHP SDK (<code>CarHireClient</code>), not this ZIP.
+            </p>
+            <SdkDownloadButton
+              sdkType="php"
+              downloadSlug="php-source"
+              zipFilename="gloria-php-source-supplier.zip"
+              label="Download Source PHP bundle"
+              variant="default"
+            />
+          </div>
+        )}
+
         {companyId !== 'YOUR_COMPANY_ID' && (
           <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '0.5rem' }}>
             <p style={{ margin: 0, fontSize: '0.875rem', color: '#1f2937' }}>
@@ -326,55 +374,38 @@ const SdkGuide: React.FC<{ role?: 'agent' | 'source' | 'admin' }> = ({ role = 's
 
         {/* Content Container */}
         <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '2rem', marginTop: '2rem' }}>
-          {activeSdk === 'typescript' && (
-            <TypeScriptGuide
+          {activeSection === 'integration-standard' && (
+            <div>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem', color: '#1f2937' }}>Car Rental Integration Standard</h2>
+              <p style={{ color: '#64748b', marginBottom: '1rem' }}>
+                Source integrations must keep Gloria output normalized across ListBranches, PriceRequest, BookingRequest, and Cancel/ReservationStatus.
+              </p>
+              <pre className="code-block">{`<?php
+// Source REST — same normalized keys as OTA / gRPC adapters in the PHP bundle
+
+// Branches (after PUT /endpoints/config + import)
+apiRequest('POST', '/sources/import-branches');
+$branches = apiRequest('GET', '/sources/branches?limit=25');
+
+// Agreements → offer to agent
+$agreement = apiRequest('POST', '/agreements', [
+  'agent_id' => 'agent_company_id',
+  'source_id' => $companyId,
+  'agreement_ref' => 'AG-2026-490',
+]);
+apiRequest('POST', '/agreements/' . $agreement['id'] . '/offer');
+
+// Keys you will also see in OTA / proto payloads:
+// agreement_ref, supplier_offer_ref, supplier_booking_ref, pickup_iso, dropoff_iso`}</pre>
+            </div>
+          )}
+          {activeSection !== 'integration-standard' && (
+            <PhpGuide
               activeSection={activeSection}
               role={role}
               companyId={companyId}
               downloadingProto={downloadingProto}
               onDownloadProto={handleDownloadProto}
-            />
-          )}
-          {activeSdk === 'javascript' && (
-            <JavaScriptGuide
-              activeSection={activeSection}
-              role={role}
-              companyId={companyId}
-            />
-          )}
-          {activeSdk === 'go' && (
-            <GoGuide
-              activeSection={activeSection}
-              role={role}
-              companyId={companyId}
-            />
-          )}
-          {activeSdk === 'php' && (
-            <PhpGuide
-              activeSection={activeSection}
-              role={role}
-              companyId={companyId}
-            />
-          )}
-          {activeSdk === 'python' && (
-            <PythonGuide
-              activeSection={activeSection}
-              role={role}
-              companyId={companyId}
-            />
-          )}
-          {activeSdk === 'java' && (
-            <JavaGuide
-              activeSection={activeSection}
-              role={role}
-              companyId={companyId}
-            />
-          )}
-          {activeSdk === 'perl' && (
-            <PerlGuide
-              activeSection={activeSection}
-              role={role}
-              companyId={companyId}
             />
           )}
         </div>

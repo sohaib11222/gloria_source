@@ -51,6 +51,10 @@ export interface CreateBranchRequest {
   countryCode?: string | null
   natoLocode?: string | null
   agreementId?: string | null
+  /** GLORIA-style payload (Opening hours, PickupInstructions, AtAirport, Brand, …) */
+  rawJson?: Record<string, unknown> | null
+  pickupTimes?: Record<string, unknown> | null
+  dropoffTimes?: Record<string, unknown> | null
 }
 
 export interface UpdateBranchRequest {

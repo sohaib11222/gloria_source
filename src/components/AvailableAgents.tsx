@@ -1,76 +1,21 @@
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
-import { Button } from './ui/Button'
 import { Loader } from './ui/Loader'
 import { Badge } from './ui/Badge'
-import { Tooltip } from './ui/Tooltip'
-import { Users, Building2, Mail, CheckCircle, Send, FileText, Calendar } from 'lucide-react'
+import { Users, Building2, Mail, FileText, Calendar } from 'lucide-react'
 import { Agent } from '../api/agreements'
 import { getStatusColor } from '../lib/utils'
 
 interface AvailableAgentsProps {
   agents: Agent[]
   isLoadingAgents: boolean
-  isOfferingAgreement: string | null
-  offerAgreement: (agreementId: string) => void
-  user?: {
-    company: {
-      status: string
-    }
-  } | null
-  endpointConfig?: {
-    grpcEndpoint?: string | null
-  } | null
-  grpcTestResult?: {
-    ok?: boolean
-  } | null
   onViewAgreement?: (agreementId: string) => void
 }
 
 export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
   agents,
   isLoadingAgents,
-  isOfferingAgreement,
-  offerAgreement,
-  user,
-  endpointConfig,
-  grpcTestResult,
   onViewAgreement,
 }) => {
-  // Determine if offer button should be disabled and why
-  const getOfferButtonState = (agreementStatus: string) => {
-    if (agreementStatus !== 'DRAFT') {
-      return {
-        disabled: true,
-        reason: `Agreement status is ${agreementStatus}. Only DRAFT agreements can be offered.`,
-      }
-    }
-
-    if (user?.company.status !== 'ACTIVE') {
-      return {
-        disabled: true,
-        reason: `Company status is ${user?.company.status}. Company must be ACTIVE to offer agreements.`,
-      }
-    }
-
-    if (!endpointConfig?.grpcEndpoint) {
-      return {
-        disabled: true,
-        reason: 'gRPC endpoint is not configured. Please configure your gRPC endpoint in the Dashboard.',
-      }
-    }
-
-    if (!grpcTestResult?.ok) {
-      return {
-        disabled: true,
-        reason: 'gRPC connection test has not passed. Please test your gRPC connection in the Dashboard.',
-      }
-    }
-
-    return {
-      disabled: false,
-      reason: '',
-    }
-  }
   return (
     <Card>
       <CardHeader>
@@ -173,36 +118,9 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
                                         </div>
                                       </div>
                                     </div>
-                                    {(() => {
-                                      const buttonState = getOfferButtonState(agreement.status)
-                                      
-                                      const button = (
-                                        <Button
-                                          onClick={() => offerAgreement(agreement.id)}
-                                          loading={isOfferingAgreement === agreement.id}
-                                          variant="primary"
-                                          size="sm"
-                                          disabled={buttonState.disabled}
-                                          title={buttonState.disabled ? buttonState.reason : undefined}
-                                          className="flex items-center gap-2 shadow-md hover:shadow-lg"
-                                        >
-                                          <Send className="w-4 h-4" />
-                                          Offer
-                                        </Button>
-                                      )
-
-                                      return buttonState.disabled ? (
-                                        <div className="relative inline-block" title={buttonState.reason}>
-                                          <Tooltip content={buttonState.reason} position="top">
-                                            <div className="inline-block">
-                                              {button}
-                                            </div>
-                                          </Tooltip>
-                                        </div>
-                                      ) : (
-                                        button
-                                      )
-                                    })()}
+                                    <span className="text-xs text-gray-500">
+                                      Externally managed
+                                    </span>
                                   </div>
                                 </CardContent>
                               </Card>

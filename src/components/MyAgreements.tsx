@@ -119,6 +119,11 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
           </div>
         </CardHeader>
         <CardContent className="pt-6">
+          <div className="mb-6 rounded-md border border-blue-200 bg-blue-50 px-4 py-3">
+            <p className="text-sm text-blue-900">
+              Agreements are externally signed. Use listed agent contact emails to complete signing and account setup, then continue with imported agreement references.
+            </p>
+          </div>
           {/* Status Filter Tabs */}
           <div className="border-b-2 border-gray-200 mb-6">
             <nav className="-mb-px flex space-x-2 overflow-x-auto pb-1">

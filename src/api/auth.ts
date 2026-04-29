@@ -1,5 +1,5 @@
 import api from '../lib/api'
-import { LoginForm } from '../lib/validators'
+import { LoginForm, type RegisterForm } from '../lib/validators'
 
 export interface Company {
   id: string
@@ -23,13 +23,6 @@ export interface LoginResponse {
   access: string
   refresh: string
   user: User
-}
-
-export interface RegisterForm {
-  companyName: string
-  type: 'SOURCE'
-  email: string
-  password: string
 }
 
 export interface VerifyEmailRequest {
@@ -118,7 +111,7 @@ export const authApi = {
     }
   },
 
-  register: async (data: RegisterForm): Promise<LoginResponse> => {
+  register: async (data: RegisterForm & { referralSlug?: string }): Promise<LoginResponse> => {
     try {
       console.log('🔵 Making register request to:', '/auth/register', 'with data:', { email: data.email, companyName: data.companyName })
       const response = await api.post('/auth/register', data)

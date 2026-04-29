@@ -1,0 +1,403 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { format, parseISO } from 'date-fns'
+import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
+import { Input } from './ui/Input'
+import { Button } from './ui/Button'
+import { Select } from './ui/Select'
+import { Loader } from './ui/Loader'
+import toast from 'react-hot-toast'
+import { endpointsApi, StoredAvailabilitySample } from '../api/endpoints'
+
+function formatDateInput(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+function isoDateOnly(iso: string | undefined | null): string {
+  if (!iso || typeof iso !== 'string') return ''
+  const s = iso.trim()
+  if (s.length >= 10) return s.slice(0, 10)
+  return ''
+}
+
+function buildSampleLabel(s: StoredAvailabilitySample, index: number): string {
+  const offer = s.offersSummary?.[0]
+  const ac = offer?.vehicle_class || '—'
+  const price =
+    offer != null && offer.total_price != null
+      ? `${offer.total_price} ${offer.currency || ''}`.trim()
+      : ''
+  const when = s.fetchedAt ? format(parseISO(s.fetchedAt), 'dd/MM/yyyy HH:mm') : ''
+  const short = `${s.pickupLoc}→${s.returnLoc} · ${ac}${price ? ` · ${price}` : ''}`
+  return `${index + 1}. ${short}${when ? ` · ${when}` : ''}`
+}
+
+export function DailyPricingCalendar() {
+  const today = new Date()
+  const [startDate, setStartDate] = useState(formatDateInput(today))
+  const endDefault = new Date(today)
+  endDefault.setDate(endDefault.getDate() + 6)
+  const [endDate, setEndDate] = useState(formatDateInput(endDefault))
+  const [pickupLoc, setPickupLoc] = useState('TIAA01')
+  const [returnLoc, setReturnLoc] = useState('TIAA01')
+  const [acrissCode, setAcrissCode] = useState('CDAR')
+  const [maxDays, setMaxDays] = useState(17)
+  const [currency, setCurrency] = useState('EUR')
+  const [defaultPrice, setDefaultPrice] = useState(25)
+  const [dayStart, setDayStart] = useState(1)
+  const [dayEnd, setDayEnd] = useState(17)
+
+  /** `custom` = manual filters only; otherwise stored availability sample id from Pricing tab API */
+  const [pricingBaseId, setPricingBaseId] = useState<string>('custom')
+  const autoLinkedRef = useRef(false)
+
+  const samplesQuery = useQuery({
+    queryKey: ['availability-samples', 'daily-pricing'],
+    queryFn: async () => {
+      const { samples } = await endpointsApi.getAvailabilitySamples()
+      return samples
+    },
+    staleTime: 60_000,
+  })
+
+  const samples = samplesQuery.data ?? []
+
+  const applySampleToFilters = useCallback((s: StoredAvailabilitySample) => {
+    const crit = s.criteria ?? {}
+    const pLoc = (s.pickupLoc || crit.pickupLoc || '').toString().toUpperCase().trim()
+    const rLoc = (s.returnLoc || crit.returnLoc || '').toString().toUpperCase().trim()
+    const pIso = s.pickupIso || crit.pickupIso || ''
+    const rIso = s.returnIso || crit.returnIso || ''
+    const offer = s.offersSummary?.[0]
+
+    if (pLoc) setPickupLoc(pLoc)
+    if (rLoc) setReturnLoc(rLoc)
+    if (offer?.vehicle_class) setAcrissCode(String(offer.vehicle_class).toUpperCase().slice(0, 5))
+    if (offer?.currency) setCurrency(String(offer.currency).toUpperCase().slice(0, 3))
+    if (offer?.total_price != null && typeof offer.total_price === 'number') {
+      setDefaultPrice(Math.max(0, offer.total_price))
+    }
+
+    const sd = isoDateOnly(pIso)
+    if (sd) {
+      setStartDate(sd)
+      let ed = ''
+      try {
+        const dPickup = parseISO(pIso.includes('T') ? pIso : `${sd}T12:00:00`)
+        const dReturn = rIso ? parseISO(rIso.includes('T') ? rIso : `${isoDateOnly(rIso)}T12:00:00`) : null
+        if (dReturn && !isNaN(dReturn.getTime())) {
+          const diffDays = Math.max(
+            1,
+            Math.ceil((dReturn.getTime() - dPickup.getTime()) / 86400000)
+          )
+          const span = Math.min(21, Math.max(6, diffDays + 2))
+          const end = new Date(dPickup)
+          end.setDate(end.getDate() + span)
+          ed = formatDateInput(end)
+        }
+      } catch {
+        /* ignore */
+      }
+      if (!ed) {
+        const end = new Date(sd)
+        end.setDate(end.getDate() + 6)
+        ed = formatDateInput(end)
+      }
+      setEndDate(ed)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!samples.length || autoLinkedRef.current) return
+    autoLinkedRef.current = true
+    setPricingBaseId(samples[0].id)
+    applySampleToFilters(samples[0])
+  }, [samples, applySampleToFilters])
+
+  useEffect(() => {
+    if (pricingBaseId === 'custom' || !samples.length) return
+    if (!samples.some((s) => s.id === pricingBaseId)) {
+      setPricingBaseId(samples[0].id)
+      applySampleToFilters(samples[0])
+    }
+  }, [samples, pricingBaseId, applySampleToFilters])
+
+  const selectedSample = useMemo(
+    () => (pricingBaseId === 'custom' ? null : samples.find((s) => s.id === pricingBaseId) ?? null),
+    [pricingBaseId, samples]
+  )
+
+  const baseSelectOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [
+      {
+        value: 'custom',
+        label: 'Manual only (pickup / return / ACRISS below — not tied to a stored Pricing fetch)',
+      },
+    ]
+    samples.forEach((s, i) => {
+      opts.push({ value: s.id, label: buildSampleLabel(s, i) })
+    })
+    return opts
+  }, [samples])
+
+  const onPricingBaseChange = (id: string) => {
+    setPricingBaseId(id)
+    if (id === 'custom') return
+    const s = samples.find((x) => x.id === id)
+    if (s) applySampleToFilters(s)
+  }
+
+  const query = useQuery({
+    queryKey: ['source', 'daily-pricing', startDate, endDate, pickupLoc, returnLoc, acrissCode, maxDays],
+    queryFn: () => endpointsApi.getDailyPricing({ startDate, endDate, pickupLoc, returnLoc, acrissCode, maxDays }),
+  })
+
+  const applyDefaultMutation = useMutation({
+    mutationFn: () =>
+      endpointsApi.applyDailyPricingDefault({
+        startDate,
+        endDate,
+        pickupLoc,
+        returnLoc,
+        acrissCode,
+        defaultPrice,
+        dayStart,
+        dayEnd,
+        currency,
+      }),
+    onSuccess: () => {
+      toast.success('Default prices applied')
+      query.refetch()
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message || 'Failed to apply default pricing'),
+  })
+
+  const [pendingEdits, setPendingEdits] = useState<Record<string, number>>({})
+  const saveCellMutation = useMutation({
+    mutationFn: async ({ pickupDate, dayOffset, price }: { pickupDate: string; dayOffset: number; price: number }) =>
+      endpointsApi.updateDailyPricingCell({
+        pickupDate,
+        pickupLoc,
+        returnLoc,
+        acrissCode,
+        dayOffset,
+        price,
+        currency,
+      }),
+    onSuccess: () => {
+      toast.success('Cell updated')
+      query.refetch()
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message || 'Failed to update cell'),
+  })
+
+  const rows = query.data?.items ?? []
+  const dayColumns = useMemo(() => Array.from({ length: maxDays }, (_, i) => i + 1), [maxDays])
+
+  return (
+    <div className="space-y-6">
+      <div className="mb-2">
+        <h1 className="text-3xl font-bold text-gray-900">Daily Prices</h1>
+        <p className="mt-1 text-gray-600">
+          Calendar overrides per pickup date and rental length (Day1…DayN). Choose a{' '}
+          <strong className="text-gray-800">stored availability sample</strong> from the same API as the{' '}
+          <strong className="text-gray-800">Pricing</strong> tab so locations, ACRISS, and currency match that
+          fetch — then adjust the matrix below. Or use <strong>Manual only</strong> to type codes yourself.
+        </p>
+      </div>
+
+      <Card className="border border-blue-100 bg-blue-50/40 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg text-gray-900">Base context (from Pricing tab API)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {samplesQuery.isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Loader size="sm" className="inline-flex w-auto min-h-0 py-0 justify-start" />
+              Loading stored availability samples…
+            </div>
+          ) : samples.length === 0 ? (
+            <p className="text-sm text-gray-700">
+              No stored samples yet. Open the <strong>Pricing</strong> tab, run <strong>Fetch &amp; Store</strong> on
+              your availability endpoint, then return here — samples will appear in the dropdown automatically.
+            </p>
+          ) : (
+            <>
+              <Select
+                label="Stored availability sample"
+                value={pricingBaseId}
+                onChange={(e) => onPricingBaseChange(e.target.value)}
+                options={baseSelectOptions}
+                helperText="Samples are the same records listed under Pricing → stored results. Selecting one fills pickup/return, ACRISS, currency, and date range."
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => samplesQuery.refetch()}
+                  disabled={samplesQuery.isFetching}
+                >
+                  Reload samples
+                </Button>
+              </div>
+            </>
+          )}
+
+          {selectedSample && (
+            <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
+              <p className="font-semibold text-gray-800 mb-2">Selected API snapshot</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-gray-700">
+                <div>
+                  <span className="text-gray-500">Pickup / return</span>{' '}
+                  <span className="font-mono">
+                    {selectedSample.pickupLoc} → {selectedSample.returnLoc}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Fetched</span>{' '}
+                  {selectedSample.fetchedAt
+                    ? format(parseISO(selectedSample.fetchedAt), 'dd/MM/yyyy HH:mm')
+                    : '—'}
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="text-gray-500">Criteria window</span>{' '}
+                  <span className="font-mono text-xs">
+                    {selectedSample.pickupIso} → {selectedSample.returnIso}
+                  </span>
+                </div>
+              </div>
+              {selectedSample.offersSummary && selectedSample.offersSummary.length > 0 && (
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                    First offer from that response (reference pricing)
+                  </p>
+                  <ul className="space-y-1">
+                    {selectedSample.offersSummary.slice(0, 4).map((o, idx) => (
+                      <li key={idx} className="text-xs text-gray-800 flex flex-wrap gap-x-3">
+                        <span className="font-mono font-semibold">{o.vehicle_class}</span>
+                        <span>{o.vehicle_make_model}</span>
+                        <span>
+                          {o.total_price} {o.currency}
+                        </span>
+                        <span className="text-gray-500">{o.availability_status}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border border-gray-200">
+        <CardHeader>
+          <CardTitle>Matrix filters</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-gray-500 mb-3">
+            These fields drive the daily-pricing API. They are filled from the dropdown above when you pick a
+            sample; you can still edit them before refresh.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Input label="Start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <Input label="End date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            <Input label="Pickup location" value={pickupLoc} onChange={(e) => setPickupLoc(e.target.value.toUpperCase())} />
+            <Input label="Return location" value={returnLoc} onChange={(e) => setReturnLoc(e.target.value.toUpperCase())} />
+            <Input label="ACRISS code" value={acrissCode} onChange={(e) => setAcrissCode(e.target.value.toUpperCase())} />
+            <Input label="Currency" value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))} />
+            <Input label="Day columns" type="number" min={1} max={31} value={maxDays} onChange={(e) => setMaxDays(Math.max(1, Math.min(31, Number(e.target.value) || 1)))} />
+            <div className="flex items-end">
+              <Button variant="secondary" onClick={() => query.refetch()} disabled={query.isFetching}>
+                Refresh matrix
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border border-gray-200">
+        <CardHeader>
+          <CardTitle>Default fill (overrides empty cells in range)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <Input label="Default price" type="number" min={0} step="0.01" value={defaultPrice} onChange={(e) => setDefaultPrice(Number(e.target.value) || 0)} />
+            <Input label="From day" type="number" min={1} max={31} value={dayStart} onChange={(e) => setDayStart(Number(e.target.value) || 1)} />
+            <Input label="To day" type="number" min={1} max={31} value={dayEnd} onChange={(e) => setDayEnd(Number(e.target.value) || 1)} />
+            <div className="md:col-span-2 flex items-end">
+              <Button onClick={() => applyDefaultMutation.mutate()} loading={applyDefaultMutation.isPending}>
+                Apply to date range
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border border-gray-200">
+        <CardHeader>
+          <CardTitle>Daily price matrix (custom overrides)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {query.isLoading ? (
+            <Loader />
+          ) : (
+            <div className="overflow-auto">
+              <table className="min-w-[1200px] w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50">
+                    <th className="text-left px-2 py-2">Pickup Date</th>
+                    <th className="text-left px-2 py-2">ACRISS</th>
+                    {dayColumns.map((d) => (
+                      <th key={d} className="text-left px-2 py-2">{`Day ${d}`}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r: any) => (
+                    <tr key={r.pickupDate} className="border-b border-gray-100">
+                      <td className="px-2 py-2 whitespace-nowrap">{r.pickupDate}</td>
+                      <td className="px-2 py-2">{r.acrissCode || acrissCode}</td>
+                      {dayColumns.map((d) => {
+                        const key = `${r.pickupDate}:${d}`
+                        const current = pendingEdits[key] ?? (r[`day${d}`] as number | null) ?? 0
+                        return (
+                          <td key={d} className="px-2 py-2">
+                            <div className="flex gap-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                className="w-20 rounded border border-gray-300 px-1.5 py-1 text-xs"
+                                value={current}
+                                onChange={(e) => {
+                                  const value = Number(e.target.value) || 0
+                                  setPendingEdits((prev) => ({ ...prev, [key]: value }))
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                                onClick={() => {
+                                  const price = pendingEdits[key] ?? current
+                                  saveCellMutation.mutate({ pickupDate: r.pickupDate, dayOffset: d, price })
+                                }}
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {rows.length === 0 && <p className="text-gray-500 py-4">No rows for these filters. Adjust dates or refresh.</p>}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

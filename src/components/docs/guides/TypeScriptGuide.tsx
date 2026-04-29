@@ -326,8 +326,10 @@ server.bindAsync(port, grpc.ServerCredentials.createInsecure(), (error, port) =>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1rem', color: '#1f2937' }}>TypeScript Quick Start</h2>
             {role === 'source' && (
               <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '0.25rem' }}>
-                <p style={{ margin: 0, fontSize: '0.875rem', color: '#1f2937' }}>
-                  <strong>For Sources:</strong> After login, configure your endpoints, sync locations, and offer agreements to agents. Use your Company ID ({companyId !== 'YOUR_COMPANY_ID' ? <code style={{ backgroundColor: '#fff', padding: '0.125rem 0.25rem', borderRadius: '0.125rem', border: '1px solid #d1d5db' }}>{companyId}</code> : 'YOUR_COMPANY_ID'}) in API calls.
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#1f2937', lineHeight: 1.55 }}>
+                  <strong>For Sources:</strong> Follow the numbered <strong>Supplier integration</strong> checklist at the top of this SDK page (API base, JWT, company id, endpoints, whitelist, proto, PHP bundle). Here, replace{' '}
+                  <code style={{ backgroundColor: '#fff', padding: '0.125rem 0.25rem', borderRadius: '0.125rem', border: '1px solid #d1d5db' }}>API_BASE</code> in the snippet with that same Gloria API origin. Company id when logged in:{' '}
+                  {companyId !== 'YOUR_COMPANY_ID' ? <code style={{ backgroundColor: '#fff', padding: '0.125rem 0.25rem', borderRadius: '0.125rem', border: '1px solid #d1d5db' }}>{companyId}</code> : <code style={{ backgroundColor: '#fff', padding: '0.125rem 0.25rem', borderRadius: '0.125rem', border: '1px solid #d1d5db' }}>YOUR_COMPANY_ID</code>}.
                 </p>
               </div>
             )}

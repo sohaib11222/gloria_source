@@ -10,6 +10,14 @@ export const RegisterSchema = z.object({
   type: z.literal('SOURCE'),
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
+  registrationBranchName: z.string().min(1, 'Branch name is required').max(300),
+  companyAddress: z.string().min(3, 'Company address is required').max(2000),
+  companyWebsiteUrl: z
+    .string()
+    .min(1, 'Company website URL is required')
+    .url('Enter a valid URL (include https://)'),
+  /** Set from URL ?ref= when present; not shown as a form field */
+  referralSlug: z.string().max(64).optional(),
 })
 
 export const EndpointSchema = z.object({
