@@ -1,7 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { agreementsApi, Agent, CreateAgreementRequest } from '../api/agreements'
-import { endpointsApi, EndpointConfig, Location, SourceGrpcTestResponse } from '../api/endpoints'
+import {
+  endpointsApi,
+  EndpointConfig,
+  Location,
+  SourceGrpcTestResponse,
+  type ManualGloriaPricingPayload,
+} from '../api/endpoints'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { SourceInformation } from '../components/SourceInformation'
@@ -33,16 +39,18 @@ import api from '../lib/api'
 import { Branch } from '../api/branches'
 import { subscriptionApi, transactionsApi, SourceTransaction, BranchQuotaExceededPayload } from '../api/subscription'
 import { verificationApi, VerificationResult } from '../api/verification'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell } from 'lucide-react'
 import { NotificationsDrawer } from '../components/NotificationsDrawer'
 import { SourceHealth } from '../types/api'
 import { Modal } from '../components/ui/Modal'
 import { Input } from '../components/ui/Input'
-import { useQueryClient } from '@tanstack/react-query'
+import { AcrissCodePicker } from '../components/AcrissCodePicker'
+import { SearchableStringPicker } from '../components/SearchableStringPicker'
+import { fetchNhtsaMakes, fetchNhtsaModelsForMake } from '../lib/nhtsaVehicles'
 import { Loader } from '../components/ui/Loader'
 import { formatDate } from '../lib/utils'
-import { AlertCircle, XCircle, CheckCircle2, ChevronDown, ChevronUp, FileText, Info, Receipt, RefreshCw, ExternalLink, Sparkles } from 'lucide-react'
+import { AlertCircle, XCircle, CheckCircle2, ChevronDown, ChevronUp, FileText, Info, Receipt, RefreshCw, ExternalLink, Sparkles, Plus, Settings } from 'lucide-react'
 
 // Location Import Result Display Component
 const LocationImportResultDisplay: React.FC<{ result: any }> = ({ result }) => {
@@ -433,8 +441,92 @@ const LocationImportResultDisplay: React.FC<{ result: any }> = ({ result }) => {
 // Availability Fetch Result Display (Pricing tab) — shows car cards with full OTA data
 const PAGE_SIZE = 6
 
+/**
+ * Resolves picture_url for <img src>.
+ * Uploads are served at the API host under /uploads (not under /api). Prefixing /uploads with
+ * the axios baseURL (.../api) breaks production (Cannot GET /api/uploads/...).
+ */
+function displayVehicleImageUrl(raw?: string | null): string {
+  const u = String(raw ?? '').trim()
+  if (!u) return ''
+  if (/^data:/i.test(u)) return u
+  if (/^https?:/i.test(u)) {
+    return u.replace(/(\/\/[^/]+)\/api(\/uploads\/)/i, '$1$2')
+  }
+  const path = u.startsWith('/') ? u : `/${u}`
+  if (path.startsWith('/uploads')) {
+    const base = String(api.defaults.baseURL || '/api').replace(/\/$/, '')
+    if (base.startsWith('http')) {
+      const origin = base.replace(/\/api$/i, '') || base
+      return `${origin}${path}`
+    }
+    return path
+  }
+  const base = String(api.defaults.baseURL || '/api').replace(/\/$/, '')
+  return `${base}${path}`
+}
+
+/** Example GLORIA/TL International availability URL (Postman-style). */
+const PRICING_SAMPLE_AV_ENDPOINT = 'https://ota.tlinternationalgroup.com/gloria/av.php'
+
+const MANUAL_MAKE_TO_MODELS: Record<string, string[]> = {
+  SKODA: ['FABIA', 'OCTAVIA', 'SCALA', 'KAMIQ', 'KAROQ', 'SUPERB'],
+  TOYOTA: ['YARIS', 'COROLLA', 'RAV4', 'AYGO', 'CH-R'],
+  VOLKSWAGEN: ['GOLF', 'POLO', 'PASSAT', 'TIGUAN', 'T-ROC'],
+  FORD: ['FIESTA', 'FOCUS', 'KUGA', 'PUMA'],
+  BMW: ['1 SERIES', '3 SERIES', 'X1', 'X3'],
+  MERCEDES: ['A CLASS', 'C CLASS', 'VITO', 'SPRINTER'],
+  NISSAN: ['MICRA', 'JUKE', 'QASHQAI'],
+}
+
+const MANUAL_MAKES = Object.keys(MANUAL_MAKE_TO_MODELS).sort()
+
+function getFallbackModelsForMake(make: string): string[] {
+  const t = make.trim()
+  if (!t) return []
+  const u = t.toUpperCase()
+  if (MANUAL_MAKE_TO_MODELS[u]) return [...MANUAL_MAKE_TO_MODELS[u]]
+  const k = Object.keys(MANUAL_MAKE_TO_MODELS).find((key) => key.toUpperCase() === u)
+  return k ? [...MANUAL_MAKE_TO_MODELS[k]] : []
+}
+
+function newManualImportRowId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+}
+
+const GLORIA_VEHDETAIL_ATTR_ORDER = [
+  'ACRISS',
+  'Make',
+  'Model',
+  'Transmission',
+  'Doors',
+  'Seats',
+  'BagsSmall',
+  'BagsMedium',
+  'ImageURL',
+] as const
+
+function sortedGloriaVehdetailEntries(rec: Record<string, string>): [string, string][] {
+  const keys = Object.keys(rec)
+  const preferred = GLORIA_VEHDETAIL_ATTR_ORDER.filter((k) => keys.includes(k))
+  const rest = keys.filter((k) => !(GLORIA_VEHDETAIL_ATTR_ORDER as readonly string[]).includes(k)).sort()
+  const ordered = [...preferred, ...rest]
+  return ordered.map((k) => [k, rec[k] ?? ''])
+}
+
+function isAvailStatusSuccess(status?: string | null): boolean {
+  return String(status ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '') === 'available'
+}
+
 // Card for a single stored availability sample (in the "Stored samples" list)
-const StoredSampleCard: React.FC<{ sample: import('../api/endpoints').StoredAvailabilitySample }> = ({ sample }) => {
+const StoredSampleCard: React.FC<{
+  sample: import('../api/endpoints').StoredAvailabilitySample
+  /** When set, each vehicle row links to Daily Prices pre-filled for that sample + offer index */
+  buildDailyPricingHref?: (offerIndex: number) => string
+}> = ({ sample, buildDailyPricingHref }) => {
   const [expanded, setExpanded] = useState(false)
   const [page, setPage] = useState(0)
   const [expandedCard, setExpandedCard] = useState<number | null>(null)
@@ -452,8 +544,14 @@ const StoredSampleCard: React.FC<{ sample: import('../api/endpoints').StoredAvai
     xml: 'bg-orange-50 text-orange-800 border-orange-200',
     json: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     grpc: 'bg-violet-50 text-violet-800 border-violet-200',
+    manual: 'bg-slate-100 text-slate-800 border-slate-200',
   }
-  const adapterLabel: Record<string, string> = { xml: 'OTA XML', json: 'Gloria JSON', grpc: 'Gloria gRPC' }
+  const adapterLabel: Record<string, string> = {
+    xml: 'OTA XML',
+    json: 'Gloria JSON',
+    grpc: 'Gloria gRPC',
+    manual: 'Manual import',
+  }
 
   const goPage = (next: number) => {
     setPage(Math.max(0, Math.min(totalPages - 1, next)))
@@ -490,7 +588,7 @@ const StoredSampleCard: React.FC<{ sample: import('../api/endpoints').StoredAvai
             </span>
             {sample.criteria?.requestorId && (
               <span className="text-xs text-gray-700 bg-gray-100 border border-gray-200 rounded-md px-2 py-0.5 font-mono shrink-0">
-                ID: {sample.criteria.requestorId}
+                Account: {sample.criteria.requestorId}
               </span>
             )}
           </div>
@@ -576,7 +674,7 @@ const StoredSampleCard: React.FC<{ sample: import('../api/endpoints').StoredAvai
                       <div className="flex flex-col sm:flex-row sm:items-stretch gap-4 p-4 sm:p-5">
                         {offer.picture_url ? (
                           <img
-                            src={offer.picture_url}
+                            src={displayVehicleImageUrl(offer.picture_url)}
                             alt=""
                             className="w-full max-w-[200px] sm:w-36 sm:h-24 h-32 sm:h-auto mx-auto sm:mx-0 object-contain rounded-lg bg-gray-50 border border-gray-100 self-center sm:self-start"
                             onError={(e) => {
@@ -615,10 +713,32 @@ const StoredSampleCard: React.FC<{ sample: import('../api/endpoints').StoredAvai
                                 )}
                                 {offer.baggage && (
                                   <span className="inline-flex items-center text-xs text-gray-700 bg-white px-2 py-0.5 rounded-md border border-gray-200">
-                                    {offer.baggage} bags
+                                    Bags small/medium: {offer.baggage}
+                                  </span>
+                                )}
+                                {offer.gloria_vehdetails_attributes?.Seats && (
+                                  <span className="inline-flex items-center text-xs text-gray-700 bg-white px-2 py-0.5 rounded-md border border-gray-200">
+                                    {offer.gloria_vehdetails_attributes.Seats} seats
                                   </span>
                                 )}
                               </div>
+                              {offer.manual_business_rules && typeof offer.manual_business_rules === 'object' && (
+                                <p className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                                  {(offer.manual_business_rules as any).seats != null &&
+                                    String((offer.manual_business_rules as any).seats).trim() !== '' && (
+                                    <span>Seats: {(offer.manual_business_rules as any).seats}</span>
+                                  )}
+                                  {(offer.manual_business_rules as any).min_lead_hours != null && (
+                                    <span>Min lead: {(offer.manual_business_rules as any).min_lead_hours} h</span>
+                                  )}
+                                  {(offer.manual_business_rules as any).max_lead_days != null && (
+                                    <span>Max lead: {(offer.manual_business_rules as any).max_lead_days} d</span>
+                                  )}
+                                  {(offer.manual_business_rules as any).mileage != null && (
+                                    <span>Mileage: {(offer.manual_business_rules as any).mileage}</span>
+                                  )}
+                                </p>
+                              )}
                             </div>
                             <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 sm:text-right shrink-0 border-t border-gray-100 pt-3 sm:border-0 sm:pt-0 sm:pl-4">
                               <p className="text-lg sm:text-xl font-bold text-emerald-700 tabular-nums">
@@ -626,24 +746,33 @@ const StoredSampleCard: React.FC<{ sample: import('../api/endpoints').StoredAvai
                                   ? `${offer.currency ? `${offer.currency} ` : ''}${Number(offer.total_price).toFixed(2)}`
                                   : '—'}
                               </p>
-                              <Badge variant={offer.availability_status === 'Available' ? 'success' : 'default'} className="text-xs">
+                              <Badge variant={isAvailStatusSuccess(offer.availability_status) ? 'success' : 'default'} className="text-xs">
                                 {offer.availability_status || 'Available'}
                               </Badge>
+                              {buildDailyPricingHref ? (
+                                <Link
+                                  to={buildDailyPricingHref(globalIdx)}
+                                  className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2 shrink-0"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Daily prices
+                                </Link>
+                              ) : null}
                             </div>
                           </div>
                           {includedList.length > 0 && (
                             <div className="flex flex-wrap gap-1.5">
-                              {includedList.slice(0, 5).map((t: any, i: number) => (
+                              {includedList.map((t: any, i: number) => (
                                 <span
                                   key={i}
                                   className="text-xs bg-emerald-50 text-emerald-900 border border-emerald-200/80 rounded-md px-2 py-1 max-w-full break-words"
+                                  title={t.details ? String(t.details) : undefined}
                                 >
-                                  ✓ {t.header || t.code}
+                                  ✓ {t.code ? <span className="font-mono">{t.code}</span> : null}
+                                  {t.code ? ' · ' : null}
+                                  {t.details || t.header || '—'}
                                 </span>
                               ))}
-                              {includedList.length > 5 && (
-                                <span className="text-xs text-gray-500 self-center px-1">+{includedList.length - 5} more</span>
-                              )}
                             </div>
                           )}
                         </div>
@@ -664,25 +793,97 @@ const StoredSampleCard: React.FC<{ sample: import('../api/endpoints').StoredAvai
                         <div className="px-4 pb-4 pt-3 sm:px-5 border-t border-gray-200 bg-gray-50/90 space-y-4 text-sm text-gray-800">
                           {offer.veh_id && (
                             <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">VehID</p>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">VehID / CarOrderID</p>
                               <code className="text-xs sm:text-sm font-mono text-gray-900 break-all block bg-gray-50 border border-gray-100 rounded-md px-2 py-1.5">
                                 {offer.veh_id}
                               </code>
                             </div>
                           )}
+                          {offer.gloria_vehdetails_attributes &&
+                            Object.keys(offer.gloria_vehdetails_attributes).length > 0 && (
+                              <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">
+                                  GLORIA vehdetails (@attributes)
+                                </p>
+                                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                                  {sortedGloriaVehdetailEntries(
+                                    offer.gloria_vehdetails_attributes as Record<string, string>,
+                                  ).map(([k, v]) => (
+                                    <div key={k} className="flex gap-2 min-w-0 sm:col-span-2">
+                                      <dt className="text-gray-500 shrink-0 w-36">{k}</dt>
+                                      <dd className="text-gray-900 min-w-0 break-words font-mono">
+                                        {k === 'ImageURL' && v.startsWith('http') ? (
+                                          <a href={v} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                                            {v}
+                                          </a>
+                                        ) : (
+                                          v || '—'
+                                        )}
+                                      </dd>
+                                    </div>
+                                  ))}
+                                </dl>
+                              </div>
+                            )}
+                          {offer.gloria_response_meta && typeof offer.gloria_response_meta === 'object' && (
+                            <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm text-xs text-gray-700">
+                              <p className="font-semibold uppercase tracking-wide text-gray-500 mb-1">GLORIA response meta</p>
+                              <p className="font-mono break-all">
+                                {Object.entries(offer.gloria_response_meta as Record<string, string>)
+                                  .filter(([, v]) => v)
+                                  .map(([k, v]) => `${k}: ${v}`)
+                                  .join(' · ') || '—'}
+                              </p>
+                            </div>
+                          )}
+                          {offer.gloria_pricing_attributes && Object.keys(offer.gloria_pricing_attributes).length > 0 && (
+                            <div className="rounded-lg border border-amber-200/80 bg-white p-3 shadow-sm">
+                              <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide mb-2">pricing @attributes</p>
+                              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                                {Object.entries(offer.gloria_pricing_attributes).map(([k, v]) => (
+                                  <div key={k} className="flex gap-2 min-w-0">
+                                    <dt className="text-gray-500 shrink-0">{k}</dt>
+                                    <dd className="font-mono text-gray-900 truncate" title={String(v)}>{String(v)}</dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            </div>
+                          )}
+                          {offer.gloria_terms && Array.isArray(offer.gloria_terms) && offer.gloria_terms.length > 0 && (
+                            <details className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                              <summary className="text-xs font-semibold text-gray-700 cursor-pointer">Terms ({offer.gloria_terms.length} item(s))</summary>
+                              <pre className="mt-2 text-[10px] font-mono text-gray-800 bg-gray-50 border border-gray-100 rounded p-2 max-h-48 overflow-auto">
+                                {JSON.stringify(offer.gloria_terms, null, 2)}
+                              </pre>
+                            </details>
+                          )}
                           {includedList.length > 0 && (
                             <div className="rounded-lg border border-emerald-200/80 bg-white p-3 shadow-sm">
                               <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide mb-2">Included</p>
-                              <ul className="space-y-1.5 text-sm text-gray-800">
+                              <ul className="space-y-3 text-sm text-gray-800">
                                 {includedList.map((t: any, i: number) => (
-                                  <li key={i} className="flex gap-2">
+                                  <li key={i} className="flex gap-2 border-b border-emerald-100/80 pb-2 last:border-0 last:pb-0">
                                     <span className="text-emerald-600 shrink-0">✓</span>
-                                    <span className="min-w-0 break-words">
-                                      <span className="font-medium">{t.header || t.code}</span>
-                                      {t.excess && t.excess !== '0.00' ? (
-                                        <span className="text-gray-600"> (excess {t.excess})</span>
+                                    <div className="min-w-0 break-words flex-1">
+                                      {t.code ? (
+                                        <p className="text-xs font-mono text-emerald-900/90 mb-0.5">{t.code}</p>
                                       ) : null}
-                                    </span>
+                                      <p className="font-medium text-gray-900 whitespace-pre-wrap">
+                                        {t.details || t.header || '—'}
+                                      </p>
+                                      <p className="text-xs text-gray-600 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                                        {t.currency ? <span>Currency: {t.currency}</span> : null}
+                                        {t.excess != null && String(t.excess).trim() !== '' ? (
+                                          <span>Excess: {t.excess}</span>
+                                        ) : null}
+                                        {t.deposit != null && String(t.deposit).trim() !== '' ? (
+                                          <span>Deposit: {t.deposit}</span>
+                                        ) : null}
+                                        {t.price != null && String(t.price).trim() !== '' && String(t.price) !== '0.00' ? (
+                                          <span>Price: {t.price}</span>
+                                        ) : null}
+                                      </p>
+                                    </div>
                                   </li>
                                 ))}
                               </ul>
@@ -690,17 +891,37 @@ const StoredSampleCard: React.FC<{ sample: import('../api/endpoints').StoredAvai
                           )}
                           {notIncludedList.length > 0 && (
                             <div className="rounded-lg border border-blue-200/80 bg-white p-3 shadow-sm">
-                              <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-2">Optional extras</p>
-                              <ul className="space-y-1.5 text-sm text-gray-800">
+                              <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-2">Not included in price</p>
+                              <ul className="space-y-3 text-sm text-gray-800">
                                 {notIncludedList.map((t: any, i: number) => (
-                                  <li key={i} className="flex gap-2">
+                                  <li key={i} className="flex gap-2 border-b border-blue-100/80 pb-2 last:border-0 last:pb-0">
                                     <span className="text-blue-600 shrink-0">+</span>
-                                    <span className="min-w-0 break-words">
-                                      <span className="font-medium">{t.header || t.code}</span>
-                                      {t.price && t.price !== '0.00' ? (
-                                        <span className="text-gray-600"> — {t.price} {offer.currency || ''}</span>
+                                    <div className="min-w-0 break-words flex-1">
+                                      {t.code ? (
+                                        <p className="text-xs font-mono text-blue-900/90 mb-0.5">{t.code}</p>
                                       ) : null}
-                                    </span>
+                                      <p className="font-medium text-gray-900 whitespace-pre-wrap">
+                                        {t.details || t.header || '—'}
+                                      </p>
+                                      <p className="text-xs text-gray-600 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                                        {t.price != null && String(t.price).trim() !== '' ? (
+                                          <span>
+                                            Price: {t.price}{' '}
+                                            {t.currency || offer.currency || ''}
+                                          </span>
+                                        ) : null}
+                                        {t.cover_amount != null && String(t.cover_amount).trim() !== '' ? (
+                                          <span>Cover: {t.cover_amount}</span>
+                                        ) : null}
+                                        {t.excess != null && String(t.excess).trim() !== '' ? (
+                                          <span>Excess: {t.excess}</span>
+                                        ) : null}
+                                        {t.deposit != null && String(t.deposit).trim() !== '' ? (
+                                          <span>Deposit: {t.deposit}</span>
+                                        ) : null}
+                                        {!t.price && t.currency ? <span>Currency: {t.currency}</span> : null}
+                                      </p>
+                                    </div>
                                   </li>
                                 ))}
                               </ul>
@@ -715,10 +936,15 @@ const StoredSampleCard: React.FC<{ sample: import('../api/endpoints').StoredAvai
                                     <span className="text-violet-600 shrink-0">•</span>
                                     <span className="min-w-0 break-words">
                                       {eq.description || eq.equip_type || '—'}
+                                      {eq.long_description ? (
+                                        <span className="text-gray-500 block text-xs mt-0.5 whitespace-pre-wrap">
+                                          {eq.long_description}
+                                        </span>
+                                      ) : null}
                                       {eq.charge?.Amount ? (
                                         <span className="text-gray-600">
                                           {' '}
-                                          — {offer.currency || ''} {Number(eq.charge.Amount).toFixed(2)}
+                                          — {eq.currency || offer.currency || ''} {Number(eq.charge.Amount).toFixed(2)}
                                         </span>
                                       ) : null}
                                     </span>
@@ -799,7 +1025,13 @@ const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) =
               <CardTitle className={`text-lg font-bold ${
                 isError ? 'text-red-900' : isDuplicate ? 'text-amber-900' : 'text-green-900'
               }`}>
-                {isError ? 'Fetch Failed' : isDuplicate ? 'Duplicate — Not Stored' : 'Fetch & Store Summary'}
+                {isError
+                  ? 'Fetch Failed'
+                  : isDuplicate
+                    ? 'Duplicate — Not Stored'
+                    : result.criteria?.adapterType === 'manual'
+                      ? 'Manual import summary'
+                      : 'Fetch & Store Summary'}
               </CardTitle>
             </div>
             {!isError && (result.offersCount ?? 0) >= 0 && (
@@ -877,7 +1109,7 @@ const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) =
                   {/* Car image */}
                   {offer.picture_url ? (
                     <img
-                      src={offer.picture_url}
+                      src={displayVehicleImageUrl(offer.picture_url)}
                       alt={offer.vehicle_make_model || 'Vehicle'}
                       className="w-32 h-20 object-contain flex-shrink-0 rounded-lg bg-gray-50 border border-gray-100"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
@@ -912,16 +1144,36 @@ const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) =
                             <span className="text-xs text-gray-600">{offer.door_count} doors</span>
                           )}
                           {offer.baggage && (
-                            <span className="text-xs text-gray-600">{offer.baggage} bags</span>
+                            <span className="text-xs text-gray-600">Bags small/medium: {offer.baggage}</span>
+                          )}
+                          {offer.gloria_vehdetails_attributes?.Seats && (
+                            <span className="text-xs text-gray-600">{offer.gloria_vehdetails_attributes.Seats} seats</span>
                           )}
                         </div>
+                        {offer.manual_business_rules && typeof offer.manual_business_rules === 'object' && (
+                          <p className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                            {(offer.manual_business_rules as any).seats != null &&
+                              String((offer.manual_business_rules as any).seats).trim() !== '' && (
+                              <span>Seats: {(offer.manual_business_rules as any).seats}</span>
+                            )}
+                            {(offer.manual_business_rules as any).min_lead_hours != null && (
+                              <span>Min lead: {(offer.manual_business_rules as any).min_lead_hours} h</span>
+                            )}
+                            {(offer.manual_business_rules as any).max_lead_days != null && (
+                              <span>Max lead: {(offer.manual_business_rules as any).max_lead_days} d</span>
+                            )}
+                            {(offer.manual_business_rules as any).mileage != null && (
+                              <span>Mileage: {(offer.manual_business_rules as any).mileage}</span>
+                            )}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right flex-shrink-0">
                         <div className="text-xl font-bold text-emerald-700">
                           {offer.total_price ? `${offer.currency || ''} ${Number(offer.total_price).toFixed(2)}` : '—'}
                         </div>
                         <div className="text-xs text-gray-500">total incl. tax</div>
-                        <Badge variant={offer.availability_status === 'Available' ? 'success' : 'default'} className="mt-1 text-xs">
+                        <Badge variant={isAvailStatusSuccess(offer.availability_status) ? 'success' : 'default'} className="mt-1 text-xs">
                           {offer.availability_status || 'Available'}
                         </Badge>
                       </div>
@@ -930,15 +1182,20 @@ const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) =
                     {/* Included terms (brief chips) */}
                     {(offer.included?.filter((t: any) => t.header || t.code).length ?? 0) > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {(offer.included ?? []).filter((t: any) => t.header || t.code).slice(0, 5).map((t: any, i: number) => (
-                          <span key={i} className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded px-2 py-0.5">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                            {t.header || t.code}
+                        {(offer.included ?? []).filter((t: any) => t.header || t.code).map((t: any, i: number) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded px-2 py-0.5 max-w-[16rem]"
+                            title={t.details ? String(t.details) : undefined}
+                          >
+                            <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                            <span className="truncate">
+                              {t.code ? <span className="font-mono">{t.code}</span> : null}
+                              {t.code ? ' · ' : null}
+                              {t.details || t.header}
+                            </span>
                           </span>
                         ))}
-                        {(offer.included?.filter((t: any) => t.header || t.code).length ?? 0) > 5 && (
-                          <span className="text-xs text-gray-500">+{offer.included.filter((t: any) => t.header || t.code).length - 5} more</span>
-                        )}
                       </div>
                     )}
                   </div>
@@ -965,18 +1222,64 @@ const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) =
                       </div>
                     )}
 
+                    {offer.gloria_vehdetails_attributes &&
+                      Object.keys(offer.gloria_vehdetails_attributes).length > 0 && (
+                        <div className="text-xs bg-white border border-gray-200 rounded p-2">
+                          <p className="font-semibold text-gray-700 mb-1">GLORIA vehdetails (@attributes)</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 font-mono">
+                            {sortedGloriaVehdetailEntries(
+                              offer.gloria_vehdetails_attributes as Record<string, string>,
+                            ).map(([k, v]) => (
+                              <div key={k} className="flex justify-between gap-2 sm:col-span-2">
+                                <span className="text-gray-500 shrink-0">{k}</span>
+                                <span className="truncate text-right" title={v}>
+                                  {k === 'ImageURL' && v.startsWith('http') ? (
+                                    <a href={v} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                                      link
+                                    </a>
+                                  ) : (
+                                    v
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    {offer.gloria_pricing_attributes && Object.keys(offer.gloria_pricing_attributes).length > 0 && (
+                      <div className="text-xs">
+                        <p className="font-semibold text-amber-800 mb-1">pricing @attributes</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 font-mono bg-white border border-gray-200 rounded p-2">
+                          {Object.entries(offer.gloria_pricing_attributes).map(([k, v]) => (
+                            <div key={k} className="flex justify-between gap-2"><span className="text-gray-500">{k}</span><span className="truncate">{String(v)}</span></div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {offer.gloria_terms && Array.isArray(offer.gloria_terms) && offer.gloria_terms.length > 0 && (
+                      <details className="text-xs">
+                        <summary className="font-semibold text-gray-700 cursor-pointer">Terms JSON ({offer.gloria_terms.length})</summary>
+                        <pre className="mt-1 p-2 bg-white border rounded max-h-40 overflow-auto text-[10px]">{JSON.stringify(offer.gloria_terms, null, 2)}</pre>
+                      </details>
+                    )}
+
                     {/* Included terms */}
                     {(offer.included?.filter((t: any) => t.header || t.code).length ?? 0) > 0 && (
                       <div>
                         <p className="text-xs font-semibold text-green-700 mb-1.5">Included in price</p>
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                           {(offer.included ?? []).map((t: any, i: number) => (
-                            <div key={i} className="flex items-start gap-2 text-xs">
+                            <div key={i} className="flex items-start gap-2 text-xs border-b border-green-100 pb-2 last:border-0">
                               <svg className="w-3.5 h-3.5 text-green-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                              <div>
-                                <span className="font-medium text-gray-800">{t.header || t.code}</span>
-                                {t.excess && t.excess !== '0.00' && <span className="text-gray-500 ml-1">(excess: {t.excess})</span>}
-                                {t.details && t.details !== t.header && <p className="text-gray-500 mt-0.5">{t.details}</p>}
+                              <div className="flex-1 min-w-0">
+                                {t.code ? <p className="font-mono text-green-900/90 mb-0.5">{t.code}</p> : null}
+                                <p className="font-medium text-gray-800 whitespace-pre-wrap">{t.details || t.header}</p>
+                                <p className="text-[11px] text-gray-500 mt-1 flex flex-wrap gap-x-2">
+                                  {t.currency ? <span>{t.currency}</span> : null}
+                                  {t.excess ? <span>Excess: {t.excess}</span> : null}
+                                  {t.deposit ? <span>Deposit: {t.deposit}</span> : null}
+                                  {t.price ? <span>Price: {t.price}</span> : null}
+                                </p>
                               </div>
                             </div>
                           ))}
@@ -984,23 +1287,27 @@ const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) =
                       </div>
                     )}
 
-                    {/* Optional extras */}
+                    {/* Not included in price */}
                     {(offer.not_included?.filter((t: any) => t.header || t.code).length ?? 0) > 0 && (
                       <div>
-                        <p className="text-xs font-semibold text-blue-700 mb-1.5">Optional extras (available at desk)</p>
+                        <p className="text-xs font-semibold text-blue-700 mb-1.5">Not included in price</p>
                         <div className="space-y-1.5">
                           {(offer.not_included ?? []).map((t: any, i: number) => (
                             <div key={i} className="flex items-start gap-2 text-xs bg-blue-50 border border-blue-100 rounded p-2">
                               <svg className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                              <div className="flex-1">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="font-medium text-gray-800">{t.header || t.code}</span>
-                                  {t.price && t.price !== '0.00' && (
-                                    <span className="text-blue-700 font-semibold">{t.price} {offer.currency}/rental</span>
-                                  )}
+                              <div className="flex-1 min-w-0">
+                                {t.code ? <p className="font-mono text-blue-900/90 mb-0.5">{t.code}</p> : null}
+                                <p className="font-medium text-gray-800 whitespace-pre-wrap">{t.details || t.header}</p>
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-600 mt-1">
+                                  {t.price != null && String(t.price).trim() !== '' ? (
+                                    <span className="text-blue-800 font-semibold">
+                                      {t.price} {t.currency || offer.currency || ''}
+                                    </span>
+                                  ) : null}
+                                  {t.cover_amount ? <span>Cover: {t.cover_amount}</span> : null}
+                                  {t.excess ? <span>Excess: {t.excess}</span> : null}
+                                  {t.deposit ? <span>Deposit: {t.deposit}</span> : null}
                                 </div>
-                                {t.excess && t.excess !== '0.00' && <span className="text-gray-500">Excess: {t.excess}</span>}
-                                {t.details && t.details !== t.header && <p className="text-gray-500 mt-0.5 leading-relaxed">{t.details}</p>}
                               </div>
                             </div>
                           ))}
@@ -1016,8 +1323,13 @@ const AvailabilityFetchResultDisplay: React.FC<{ result: any }> = ({ result }) =
                           {(offer.priced_equips ?? []).map((eq: any, i: number) => (
                             <div key={i} className="text-xs bg-purple-50 border border-purple-100 rounded p-2">
                               <div className="font-medium text-gray-800">{eq.description || eq.equip_type || eq.vendor_equip_id || '—'}</div>
+                              {eq.long_description ? (
+                                <p className="text-gray-600 mt-0.5 whitespace-pre-wrap">{eq.long_description}</p>
+                              ) : null}
                               <div className="text-purple-700 font-semibold">
-                                {eq.charge?.Amount ? `${offer.currency || ''} ${Number(eq.charge.Amount).toFixed(2)}/rental` : ''}
+                                {eq.charge?.Amount
+                                  ? `${eq.currency || offer.currency || ''} ${Number(eq.charge.Amount).toFixed(2)}/rental`
+                                  : ''}
                                 {eq.charge?.UnitCharge && eq.charge?.UnitName ? ` (${eq.charge.UnitCharge}/${eq.charge.UnitName})` : ''}
                               </div>
                             </div>
@@ -1319,6 +1631,20 @@ function SourceTransactionsTab() {
 export default function SourcePage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const dailyPricingDeeplinkSampleId = searchParams.get('sample')
+  const dailyPricingDeeplinkOfferRaw = searchParams.get('offer')
+  const dailyPricingDeeplinkOfferIndex =
+    dailyPricingDeeplinkOfferRaw != null && dailyPricingDeeplinkOfferRaw !== ''
+      ? Math.max(0, parseInt(dailyPricingDeeplinkOfferRaw, 10) || 0)
+      : undefined
+
+  const buildDailyPricingLink = useCallback((sampleId: string, offerIndex: number) => {
+    const p = new URLSearchParams()
+    p.set('tab', 'daily-pricing')
+    p.set('sample', sampleId)
+    p.set('offer', String(Math.max(0, offerIndex)))
+    return `/source?${p.toString()}`
+  }, [])
   const [user, setUser] = useState<any>(null)
   
   // Get active tab from URL or default to dashboard
@@ -1436,7 +1762,11 @@ export default function SourcePage() {
   // Sync URL when tab changes
   const handleTabChange = (tab: 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-branches' | 'pricing' | 'daily-pricing' | 'transactions' | 'reservations' | 'cancellations' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings') => {
     setActiveTab(tab)
-    setSearchParams({ tab })
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('tab', tab)
+      return next
+    })
     // When switching to locations tab, refresh the locations data
     if (tab === 'locations' && user?.company?.id) {
       // Small delay to ensure state is updated
@@ -1487,9 +1817,9 @@ export default function SourcePage() {
     }
   }, [activeTab, user?.company?.id])
 
-  // Auto-load stored availability samples whenever the pricing tab becomes active
+  // Keep Pricing list + TanStack cache in sync with GET /sources/availability-samples
   useEffect(() => {
-    if (activeTab === 'pricing') {
+    if (activeTab === 'pricing' || activeTab === 'daily-pricing') {
       loadStoredSamples()
     }
   }, [activeTab])
@@ -1571,7 +1901,55 @@ export default function SourcePage() {
   const [otaCitizenCountry, setOtaCitizenCountry] = useState('US')
   const [forceRefreshAvailability, setForceRefreshAvailability] = useState(false)
   const [availabilityAdapterType, setAvailabilityAdapterType] = useState<'xml' | 'json' | 'grpc'>('xml')
+  /** Top-level: live endpoint (OTA/JSON/gRPC) vs manual GLORIA-shaped entry */
+  const [pricingEntryMode, setPricingEntryMode] = useState<'endpoint' | 'manual'>('endpoint')
   const [grpcEndpointAddress, setGrpcEndpointAddress] = useState('')
+  const [showManualImportModal, setShowManualImportModal] = useState(false)
+  const [isSubmittingManualImport, setIsSubmittingManualImport] = useState(false)
+  const [customAcrissCodes, setCustomAcrissCodes] = useState<string[]>([])
+  const [newAcrissDraft, setNewAcrissDraft] = useState('')
+  const [manualAcriss, setManualAcriss] = useState('')
+  const [manualMake, setManualMake] = useState('')
+  const [manualModel, setManualModel] = useState('')
+  const [manualModalPickupLoc, setManualModalPickupLoc] = useState('TIAA01')
+  const [manualModalReturnLoc, setManualModalReturnLoc] = useState('TIAA01')
+  const [manualModalPickupDt, setManualModalPickupDt] = useState('')
+  const [manualModalReturnDt, setManualModalReturnDt] = useState('')
+  const [manualCurrency, setManualCurrency] = useState('EUR')
+  const [manualTotalPrice, setManualTotalPrice] = useState('150')
+  const [manualTransmission, setManualTransmission] = useState('Automatic')
+  const [manualDoors, setManualDoors] = useState('4')
+  const [manualSeats, setManualSeats] = useState('5')
+  const [manualBagsS, setManualBagsS] = useState('1')
+  const [manualBagsM, setManualBagsM] = useState('2')
+  const [manualMinLead, setManualMinLead] = useState('2')
+  const [manualMaxLead, setManualMaxLead] = useState('365')
+  const [manualMileage, setManualMileage] = useState('0')
+  const [manualImageUrl, setManualImageUrl] = useState('')
+  const [isUploadingManualVehicleImage, setIsUploadingManualVehicleImage] = useState(false)
+  const manualVehicleImageInputRef = useRef<HTMLInputElement>(null)
+  const [manualCarOrderId, setManualCarOrderId] = useState('')
+  const [manualRentalDuration, setManualRentalDuration] = useState('')
+  const [gloriaMetaTimestamp, setGloriaMetaTimestamp] = useState('')
+  const [gloriaMetaTarget, setGloriaMetaTarget] = useState('Production')
+  const [gloriaMetaVersion, setGloriaMetaVersion] = useState('1.00')
+  const [manualPricingCarOrderId, setManualPricingCarOrderId] = useState('')
+  const [manualPricingCurrency, setManualPricingCurrency] = useState('')
+  const [manualPricingDuration, setManualPricingDuration] = useState('')
+  const [manualPricingDailyNet, setManualPricingDailyNet] = useState('')
+  const [manualPricingDailyTax, setManualPricingDailyTax] = useState('')
+  const [manualPricingDailyGross, setManualPricingDailyGross] = useState('')
+  const [manualPricingTotalNet, setManualPricingTotalNet] = useState('')
+  const [manualPricingTotalTax, setManualPricingTotalTax] = useState('')
+  const [manualPricingTotalGross, setManualPricingTotalGross] = useState('')
+  const [manualPricingTaxRate, setManualPricingTaxRate] = useState('')
+  const [manualTermsJson, setManualTermsJson] = useState('[]')
+  type ManualLineRow = { id: string; code: string; description: string; excess: string; deposit: string; currency: string }
+  type ManualNotRow = ManualLineRow & { cover_amount: string; price: string }
+  type ManualExtraRow = { id: string; code: string; description: string; price: string; currency: string; long_description: string }
+  const [includedRows, setIncludedRows] = useState<ManualLineRow[]>([])
+  const [notIncludedRows, setNotIncludedRows] = useState<ManualNotRow[]>([])
+  const [extraRows, setExtraRows] = useState<ManualExtraRow[]>([])
   // Stored availability samples (loaded on pricing tab mount)
   const [storedSamples, setStoredSamples] = useState<import('../api/endpoints').StoredAvailabilitySample[]>([])
   const [isLoadingStoredSamples, setIsLoadingStoredSamples] = useState(false)
@@ -2267,10 +2645,262 @@ export default function SourcePage() {
     try {
       const { samples } = await endpointsApi.getAvailabilitySamples()
       setStoredSamples(samples)
+      queryClient.invalidateQueries({ queryKey: ['availability-samples'] })
     } catch {
       // silently ignore — tab still works without historical data
     } finally {
       setIsLoadingStoredSamples(false)
+    }
+  }
+
+  const nhtsaMakesQuery = useQuery({
+    queryKey: ['nhtsa-vpic', 'makes'],
+    queryFn: fetchNhtsaMakes,
+    enabled: showManualImportModal,
+    staleTime: 1000 * 60 * 60 * 24,
+    retry: 1,
+  })
+
+  const makeTrimmed = manualMake.trim()
+  const [vpicMakeDebounced, setVpicMakeDebounced] = useState('')
+  useEffect(() => {
+    if (!showManualImportModal) {
+      setVpicMakeDebounced('')
+      return
+    }
+    const t = window.setTimeout(() => setVpicMakeDebounced(manualMake.trim()), 450)
+    return () => window.clearTimeout(t)
+  }, [manualMake, showManualImportModal])
+
+  const nhtsaModelsQuery = useQuery({
+    queryKey: ['nhtsa-vpic', 'models', vpicMakeDebounced.toLowerCase()],
+    queryFn: () => fetchNhtsaModelsForMake(vpicMakeDebounced),
+    enabled: showManualImportModal && vpicMakeDebounced.length > 0,
+    staleTime: 1000 * 60 * 60 * 6,
+    retry: 1,
+  })
+
+  const manualMakeOptions = useMemo(() => {
+    const s = new Set<string>(MANUAL_MAKES)
+    const api = nhtsaMakesQuery.data
+    if (api?.length) for (const m of api) s.add(m)
+    return [...s].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+  }, [nhtsaMakesQuery.data])
+
+  const manualModelOptions = useMemo(() => {
+    if (!makeTrimmed) return []
+    const s = new Set<string>()
+    for (const m of getFallbackModelsForMake(manualMake)) s.add(m)
+    const api = nhtsaModelsQuery.data
+    const apiMatches =
+      api?.length &&
+      vpicMakeDebounced.length > 0 &&
+      vpicMakeDebounced.trim().toLowerCase() === makeTrimmed.toLowerCase()
+    if (apiMatches) for (const m of api) s.add(m)
+    return [...s].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+  }, [manualMake, makeTrimmed, vpicMakeDebounced, nhtsaModelsQuery.data])
+
+  const openManualImportModal = () => {
+    setManualModalPickupLoc(otaPickupLoc)
+    setManualModalReturnLoc(otaReturnLoc)
+    setManualModalPickupDt(otaPickupDateTime)
+    setManualModalReturnDt(otaReturnDateTime)
+    setManualPricingCurrency((c) => c || manualCurrency)
+    setManualPricingTotalGross((g) => g || manualTotalPrice)
+    setIncludedRows([{ id: newManualImportRowId(), code: '', description: '', excess: '', deposit: '', currency: '' }])
+    setNotIncludedRows([
+      { id: newManualImportRowId(), code: '', description: '', excess: '', deposit: '', currency: '', cover_amount: '', price: '' },
+    ])
+    setExtraRows([{ id: newManualImportRowId(), code: '', description: '', price: '', currency: '', long_description: '' }])
+    setManualTermsJson('[]')
+    setShowManualImportModal(true)
+  }
+
+  const handleAddCustomAcriss = () => {
+    const c = newAcrissDraft.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (c.length < 2 || c.length > 8) {
+      toast.error('ACRISS code must be 2–8 letters or digits')
+      return
+    }
+    setCustomAcrissCodes((prev) => (prev.includes(c) ? prev : [...prev, c]))
+    setManualAcriss(c)
+    setNewAcrissDraft('')
+    toast.success(`ACRISS ${c} added`)
+  }
+
+  const handleManualVehicleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setIsUploadingManualVehicleImage(true)
+    try {
+      const { url } = await endpointsApi.uploadManualAvailabilityVehicleImage(file)
+      setManualImageUrl(url)
+      toast.success('Image uploaded — URL filled; click Store sample to save.')
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Image upload failed'
+      toast.error(msg)
+    } finally {
+      setIsUploadingManualVehicleImage(false)
+    }
+  }
+
+  const handleManualImportSubmit = async () => {
+    const pickupIso = manualModalPickupDt ? `${manualModalPickupDt}:00` : ''
+    const returnIso = manualModalReturnDt ? `${manualModalReturnDt}:00` : ''
+    if (!manualModalPickupLoc.trim() || !manualModalReturnLoc.trim()) {
+      toast.error('Pick-up and return location codes are required')
+      return
+    }
+    if (!pickupIso || !returnIso) {
+      toast.error('Pick-up and return date/time are required')
+      return
+    }
+    if (!manualAcriss.trim()) {
+      toast.error('Select or add an ACRISS code')
+      return
+    }
+    if (!manualMake.trim() || !manualModel.trim()) {
+      toast.error('Select make and model')
+      return
+    }
+    const totalGrossStr = (manualPricingTotalGross || manualTotalPrice).trim()
+    const total = Number(totalGrossStr)
+    if (!Number.isFinite(total) || total < 0) {
+      toast.error('Enter a valid total gross (pricing) or total price')
+      return
+    }
+    let termsParsed: unknown[] | undefined
+    try {
+      const t = JSON.parse(manualTermsJson.trim() || '[]')
+      if (!Array.isArray(t)) {
+        toast.error('Terms must be a JSON array (Terms.Item[])')
+        return
+      }
+      termsParsed = t.length ? t : undefined
+    } catch {
+      toast.error('Terms must be valid JSON')
+      return
+    }
+    for (const ex of extraRows) {
+      if (!ex.description.trim()) continue
+      const p = Number(ex.price)
+      if (!Number.isFinite(p) || p < 0) {
+        toast.error(`Optional extra "${ex.description.slice(0, 40)}…" needs a valid price`)
+        return
+      }
+    }
+    setIsSubmittingManualImport(true)
+    setFetchAvailabilityResult(null)
+    try {
+      const optInt = (s: string) => {
+        if (!s.trim()) return undefined
+        const v = Number(s)
+        return Number.isFinite(v) ? v : undefined
+      }
+      const s = (v: string) => (v.trim() ? v.trim() : undefined)
+      const pricing: ManualGloriaPricingPayload = {
+        total_gross: totalGrossStr,
+        currency: (manualPricingCurrency || manualCurrency).trim().toUpperCase(),
+      }
+      const co = s(manualPricingCarOrderId) || s(manualCarOrderId)
+      if (co) pricing.car_order_id = co
+      if (s(manualPricingDuration)) pricing.duration = s(manualPricingDuration)
+      if (s(manualPricingDailyNet)) pricing.daily_net = s(manualPricingDailyNet)
+      if (s(manualPricingDailyTax)) pricing.daily_tax = s(manualPricingDailyTax)
+      if (s(manualPricingDailyGross)) pricing.daily_gross = s(manualPricingDailyGross)
+      if (s(manualPricingTotalNet)) pricing.total_net = s(manualPricingTotalNet)
+      if (s(manualPricingTotalTax)) pricing.total_tax = s(manualPricingTotalTax)
+      if (s(manualPricingTaxRate)) pricing.tax_rate = s(manualPricingTaxRate)
+
+      const response_meta =
+        s(gloriaMetaTimestamp) || s(gloriaMetaTarget) || s(gloriaMetaVersion)
+          ? {
+              ...(s(gloriaMetaTimestamp) ? { timestamp: s(gloriaMetaTimestamp)! } : {}),
+              ...(s(gloriaMetaTarget) ? { target: s(gloriaMetaTarget)! } : {}),
+              ...(s(gloriaMetaVersion) ? { version: s(gloriaMetaVersion)! } : {}),
+            }
+          : undefined
+
+      const result = await endpointsApi.postManualAvailabilitySample({
+        pickupLoc: manualModalPickupLoc.trim().toUpperCase(),
+        returnLoc: manualModalReturnLoc.trim().toUpperCase(),
+        pickupIso,
+        returnIso,
+        rental_duration: optInt(manualRentalDuration),
+        requestorId: otaRequestorId.trim() || undefined,
+        driverAge: otaDriverAge || undefined,
+        citizenCountry: otaCitizenCountry.trim() || undefined,
+        force: forceRefreshAvailability || undefined,
+        response_meta,
+        pricing,
+        included: includedRows
+          .filter((r) => r.description.trim() || r.code.trim())
+          .map(({ id: _id, ...r }) => ({
+            code: s(r.code),
+            description: r.description.trim(),
+            excess: s(r.excess),
+            deposit: s(r.deposit),
+            currency: s(r.currency),
+          })),
+        not_included: notIncludedRows
+          .filter((r) => r.description.trim() || r.code.trim())
+          .map(({ id: _id, ...r }) => ({
+            code: s(r.code),
+            description: r.description.trim(),
+            excess: s(r.excess),
+            deposit: s(r.deposit),
+            price: s(r.price),
+            cover_amount: s(r.cover_amount),
+            currency: s(r.currency),
+          })),
+        extras: extraRows
+          .filter((e) => e.description.trim())
+          .map(({ id: _id, ...e }) => ({
+            code: s(e.code),
+            description: e.description.trim(),
+            price: Number(e.price),
+            currency: s(e.currency),
+            long_description: s(e.long_description),
+          })),
+        terms: termsParsed,
+        vehicle: {
+          acriss: manualAcriss.trim(),
+          make: manualMake.trim(),
+          model: manualModel.trim(),
+          currency: manualCurrency.trim() || 'EUR',
+          total_price: total,
+          transmission: manualTransmission.trim() || undefined,
+          doors: manualDoors.trim() === '' ? undefined : manualDoors.trim(),
+          seats: manualSeats.trim() === '' ? undefined : manualSeats.trim(),
+          bags_small: manualBagsS.trim() === '' ? undefined : manualBagsS.trim(),
+          bags_medium: manualBagsM.trim() === '' ? undefined : manualBagsM.trim(),
+          min_lead_hours: optInt(manualMinLead),
+          max_lead_days: optInt(manualMaxLead),
+          mileage: optInt(manualMileage),
+          image_url: manualImageUrl.trim() || undefined,
+          car_order_id: s(manualCarOrderId),
+        },
+      })
+      setFetchAvailabilityResult(result)
+      if (result.duplicate) {
+        toast('Data unchanged — not stored (same data already exists)', { icon: 'ℹ️' })
+      } else {
+        toast.success(result.message)
+        loadStoredSamples()
+        setShowManualImportModal(false)
+      }
+    } catch (error: any) {
+      const errorData = error.response?.data || {}
+      const errorMessage = errorData.message || 'Failed to store manual sample'
+      setFetchAvailabilityResult({
+        message: errorMessage,
+        error: errorData.error || 'REQUEST_FAILED',
+        details: errorData.details,
+      })
+      toast.error(errorMessage)
+    } finally {
+      setIsSubmittingManualImport(false)
     }
   }
 
@@ -4253,16 +4883,70 @@ message LocationsResponse {
                     <Card className="border border-gray-200 shadow-sm">
                       <CardHeader>
                         <CardTitle className="text-lg">Format &amp; Endpoint</CardTitle>
+                        <p className="text-sm text-gray-500 mt-1 max-w-3xl">
+                          Choose <strong>Endpoint</strong> to test OTA XML, Gloria JSON, or gRPC, or <strong>Manual</strong> to enter a GLORIA-shaped sample without a live pricing API.
+                        </p>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                        {/* Endpoint vs Manual (top-level) */}
+                        <div>
+                          <p className="text-xs font-medium text-gray-600 mb-2">Data source</p>
+                          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
+                            <button
+                              type="button"
+                              data-tour="pricing-entry-endpoint"
+                              onClick={() => setPricingEntryMode('endpoint')}
+                              className={`flex-1 py-2 px-3 transition-colors ${
+                                pricingEntryMode === 'endpoint'
+                                  ? 'bg-slate-800 text-white'
+                                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                              }`}
+                            >
+                              Endpoint
+                            </button>
+                            <button
+                              type="button"
+                              data-tour="pricing-entry-manual"
+                              onClick={() => setPricingEntryMode('manual')}
+                              className={`flex-1 py-2 px-3 transition-colors ${
+                                pricingEntryMode === 'manual'
+                                  ? 'bg-slate-800 text-white'
+                                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                              }`}
+                            >
+                              Manual
+                            </button>
+                          </div>
+                        </div>
+
+                        {pricingEntryMode === 'manual' ? (
+                          <div className="rounded-lg border border-emerald-200 bg-emerald-50/90 p-4 space-y-3">
+                            <p className="text-sm text-emerald-950 leading-relaxed">
+                              Enter vehicle, pricing, included / not-included lines, optional extras, and optional <code className="bg-white/80 px-1 rounded text-xs">Terms</code> JSON — same store as <strong>Fetch &amp; Store</strong>, without calling your URL.
+                            </p>
+                            <Button
+                              type="button"
+                              variant="primary"
+                              onClick={openManualImportModal}
+                              data-tour="pricing-manual-import"
+                            >
+                              Open manual import form
+                            </Button>
+                            <p className="text-xs text-emerald-900">
+                              Use the <strong>next card</strong> for requestor ID, locations, and dates — they prefill the form and are sent with the manual sample.
+                            </p>
+                          </div>
+                        ) : (
+                          <>
                         {/* Format tabs */}
                         <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
                           {(['xml', 'json', 'grpc'] as const).map((fmt) => {
-                            const labels = { xml: 'OTA XML', json: 'Gloria JSON', grpc: 'Gloria gRPC' }
+                            const labels = { xml: 'Gloria XML', json: 'Gloria JSON', grpc: 'Gloria gRPC' }
                             const active = availabilityAdapterType === fmt
                             return (
                               <button
                                 key={fmt}
+                                type="button"
                                 onClick={() => setAvailabilityAdapterType(fmt)}
                                 data-tour={`pricing-format-${fmt}`}
                                 className={`flex-1 py-2 px-3 transition-colors ${
@@ -4282,7 +4966,7 @@ message LocationsResponse {
                           <div>
                             <p className="text-xs text-gray-500 mb-2">
                               {availabilityAdapterType === 'xml'
-                                ? 'Gloria POSTs an OTA_VehAvailRateRQ XML body (Content-Type: text/xml) and expects OTA_VehAvailRateRS XML back.'
+                                ? 'Gloria POSTs a GLORIA_availabilityrq XML body (Content-Type: text/xml) to match Postman / av.php. The response can be OTA_VehAvailRateRS XML or GLORIA_availabilityrs with VehAvairsdetails + availcars[].'
                                 : 'Gloria POSTs a JSON body with Gloria field names (Content-Type: application/json) and expects { vehicles: [...] } back.'}
                             </p>
                             <div className="flex gap-2 items-end">
@@ -4291,7 +4975,7 @@ message LocationsResponse {
                                 <Input
                                   value={availabilityEndpointUrl}
                                   onChange={(e) => setAvailabilityEndpointUrl(e.target.value)}
-                                  placeholder="https://ota.tlinternationalgroup.com/pricetest.php"
+                                  placeholder={PRICING_SAMPLE_AV_ENDPOINT}
                                 />
                               </div>
                               <Button
@@ -4324,6 +5008,8 @@ message LocationsResponse {
                             )}
                           </div>
                         )}
+                          </>
+                        )}
                       </CardContent>
                     </Card>
 
@@ -4331,34 +5017,55 @@ message LocationsResponse {
                     <Card className="border border-gray-200 shadow-sm">
                       <CardHeader>
                         <CardTitle className="text-lg">
-                          {availabilityAdapterType === 'xml' ? 'OTA_VehAvailRateRQ' : availabilityAdapterType === 'json' ? 'Gloria JSON' : 'Gloria gRPC'} request parameters
+                          {pricingEntryMode === 'manual'
+                            ? 'Manual availability entry'
+                            : `${availabilityAdapterType === 'xml' ? 'GLORIA_availabilityrq' : availabilityAdapterType === 'json' ? 'Gloria JSON' : 'Gloria gRPC'} request parameters`}
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                        {pricingEntryMode === 'manual' ? (
+                          <>
+                            <p className="text-sm text-gray-600 leading-relaxed">
+                              Use <strong className="text-gray-800">Format &amp; Endpoint → Open manual import form</strong> for locations, dates, ACRISS, vehicle, pricing, and extras. Results from <strong>Store sample</strong> show below, same list as endpoint fetches.
+                            </p>
+                            <div className="flex flex-wrap items-center gap-3 pt-1">
+                              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={forceRefreshAvailability}
+                                  onChange={(e) => setForceRefreshAvailability(e.target.checked)}
+                                  className="rounded border-gray-300 text-emerald-700 focus:ring-emerald-500"
+                                />
+                                <span className="text-xs text-gray-600">Force re-store (manual)</span>
+                              </label>
+                            </div>
+                          </>
+                        ) : (
+                          <>
                         <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 leading-relaxed">
-                          {availabilityAdapterType === 'xml' && <>Gloria sends an <strong>OTA_VehAvailRateRQ XML POST</strong> to your endpoint. Fill in the fields below and click <strong>Fetch &amp; Store</strong>.</>}
-                          {availabilityAdapterType === 'json' && <>Gloria sends a <strong>JSON POST</strong> with Gloria field names (<code>pickup_unlocode</code>, <code>agreement_ref</code>, etc.) and expects <code className="bg-blue-100 px-1 rounded">{`{ "vehicles": [ ... ] }`}</code> back.</>}
-                          {availabilityAdapterType === 'grpc' && <>Gloria calls <strong>GetAvailability</strong> on your source backend using <code>source_provider.proto</code> (AvailabilityRequest → AvailabilityResponse).</>}
+                            {availabilityAdapterType === 'xml' && <>Gloria sends a <strong>GLORIA_availabilityrq XML POST</strong> (<code className="bg-blue-100 px-1 rounded text-[11px]">ACC / AccountID</code>, <code className="bg-blue-100 px-1 rounded text-[11px]">VehAvailbody</code>) to your endpoint. Fill in the fields below and click <strong>Fetch &amp; Store</strong>.</>}
+                            {availabilityAdapterType === 'json' && <>Gloria sends a <strong>JSON POST</strong> with Gloria field names (<code>pickup_unlocode</code>, <code>agreement_ref</code>, etc.) and expects <code className="bg-blue-100 px-1 rounded">{`{ "vehicles": [ ... ] }`}</code> back.</>}
+                            {availabilityAdapterType === 'grpc' && <>Gloria calls <strong>GetAvailability</strong> on your source backend using <code>source_provider.proto</code> (AvailabilityRequest → AvailabilityResponse).</>}
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {/* RequestorID */}
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                              RequestorID <span className="text-gray-400 font-normal">(broker account number)</span>
+                              Account ID <span className="text-gray-400 font-normal">(GLORIA ACC / AccountID)</span>
                             </label>
                             <Input
                               value={otaRequestorId}
                               onChange={(e) => setOtaRequestorId(e.target.value)}
-                              placeholder="1000097"
-                              helperText="The ID passed in <RequestorID Type='5' ID='...'>"
+                              placeholder="Gloria002"
+                              helperText="Mapped to &lt;ACC&gt;&lt;Source&gt;&lt;AccountID ID=&quot;…&quot;/&gt;. JSON/gRPC still use agreement_ref / requestor semantics."
                             />
                           </div>
 
                           {/* Citizen country */}
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                              CitizenCountryName Code <span className="text-gray-400 font-normal">(ISO 2-letter)</span>
+                              Driver residency <span className="text-gray-400 font-normal">(ISO 2-letter → DriverCitizenCountry in GLORIA XML)</span>
                             </label>
                             <Input
                               value={otaCitizenCountry}
@@ -4431,38 +5138,31 @@ message LocationsResponse {
                           </div>
                         </div>
 
-                        {/* Request preview — format specific */}
+                        {/* Request preview — only when using a live endpoint */}
                         <details className="border border-gray-200 rounded-lg">
                           <summary className="px-4 py-2 text-xs font-semibold text-gray-600 cursor-pointer select-none hover:bg-gray-50">
-                            {availabilityAdapterType === 'xml' && 'Preview OTA_VehAvailRateRQ XML that will be sent'}
+                            {availabilityAdapterType === 'xml' && 'Preview GLORIA_availabilityrq XML that will be sent'}
                             {availabilityAdapterType === 'json' && 'Preview Gloria JSON request body that will be sent'}
                             {availabilityAdapterType === 'grpc' && 'Preview Gloria gRPC AvailabilityRequest that will be sent'}
                           </summary>
                           {availabilityAdapterType === 'xml' && (
-                            <pre className="text-xs font-mono text-gray-700 bg-gray-50 p-4 overflow-x-auto max-h-56 border-t border-gray-200">{`<?xml version="1.0" encoding="UTF-8"?>
-<OTA_VehAvailRateRQ xmlns="http://www.opentravel.org/OTA/2003/05"
-    TimeStamp="${new Date().toISOString().slice(0,19)}" Target="Production" Version="1.007">
-  <POS>
+                            <pre className="text-xs font-mono text-gray-700 bg-gray-50 p-4 overflow-x-auto max-h-96 border-t border-gray-200 whitespace-pre">{`<?xml version="1.0" encoding="UTF-8"?>
+<GLORIA_availabilityrq TimeStamp="${new Date().toISOString().slice(0, 19)}" Target="Production" Version="1.00">
+  <ACC>
     <Source>
-      <RequestorID Type="5" ID="${otaRequestorId || '1000097'}"/>
+      <AccountID ID="${(otaRequestorId || '').trim() || 'Gloria002'}"/>
     </Source>
-  </POS>
-  <VehAvailRQCore Status="Available">
-    <VehRentalCore PickUpDateTime="${otaPickupDateTime ? otaPickupDateTime + ':00' : '2026-03-18T14:00:00'}"
-                   ReturnDateTime="${otaReturnDateTime ? otaReturnDateTime + ':00' : '2026-03-22T14:00:00'}">
-      <PickUpLocation LocationCode="${otaPickupLoc || 'TIAA01'}"/>
-      <ReturnLocation LocationCode="${otaReturnLoc || 'TIAA01'}"/>
-    </VehRentalCore>
-    <DriverType Age="${otaDriverAge || 30}"/>
-  </VehAvailRQCore>
-  <VehAvailRQInfo>
-    <Customer>
-      <Primary>
-        <CitizenCountryName Code="${otaCitizenCountry || 'US'}"/>
-      </Primary>
-    </Customer>
-  </VehAvailRQInfo>
-</OTA_VehAvailRateRQ>`}</pre>
+  </ACC>
+  <VehAvailbody>
+    <Vehmain PickUpDateTime="${otaPickupDateTime ? `${otaPickupDateTime}:00` : '2026-05-23T09:00:00'}"
+             ReturnDateTime="${otaReturnDateTime ? `${otaReturnDateTime}:00` : '2026-05-27T11:00:00'}">
+      <collectionbranch LocationCode="${otaPickupLoc || 'TIAA02'}"/>
+      <returnbranch LocationCode="${otaReturnLoc || 'TIAA02'}"/>
+    </Vehmain>
+    <DriverAge Age="${otaDriverAge || 30}"/>
+    <DriverCitizenCountry Code="${otaCitizenCountry || 'FR'}"/>
+  </VehAvailbody>
+</GLORIA_availabilityrq>`}</pre>
                           )}
                           {availabilityAdapterType === 'json' && (
                             <pre className="text-xs font-mono text-gray-700 bg-gray-50 p-4 overflow-x-auto max-h-56 border-t border-gray-200">{JSON.stringify({
@@ -4491,40 +5191,386 @@ message AvailabilityRequest {
                         </details>
 
                         <div className="flex flex-wrap items-center gap-3 pt-2">
-                          <Button
-                            variant="primary"
-                            onClick={handleFetchAvailability}
-                            loading={isFetchingAvailability}
-                            data-tour="pricing-fetch-store"
-                            disabled={
-                              availabilityAdapterType === 'grpc'
-                                ? !grpcEndpointAddress.trim() && !(endpointConfig as any)?.grpcEndpoint
-                                : !availabilityEndpointUrl.trim() && !endpointConfig?.availabilityEndpointUrl && !endpointConfig?.httpEndpoint
-                            }
-                          >
-                            Fetch &amp; Store
-                          </Button>
-                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={forceRefreshAvailability}
-                              onChange={(e) => setForceRefreshAvailability(e.target.checked)}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="text-xs text-gray-600">Force re-store</span>
-                          </label>
-                          <p className="text-xs text-gray-500 self-center">
-                            {availabilityAdapterType === 'xml' && 'OTA XML POST → OTA_VehAvailRateRS → stored in Gloria'}
-                            {availabilityAdapterType === 'json' && 'JSON POST → Gloria vehicles[] → stored in Gloria'}
-                            {availabilityAdapterType === 'grpc' && 'gRPC GetAvailability → VehicleOffer[] → stored in Gloria'}
-                          </p>
+                              <Button
+                                variant="primary"
+                                onClick={handleFetchAvailability}
+                                loading={isFetchingAvailability}
+                                data-tour="pricing-fetch-store"
+                                disabled={
+                                  availabilityAdapterType === 'grpc'
+                                    ? !grpcEndpointAddress.trim() && !(endpointConfig as any)?.grpcEndpoint
+                                    : !availabilityEndpointUrl.trim() && !endpointConfig?.availabilityEndpointUrl && !endpointConfig?.httpEndpoint
+                                }
+                              >
+                                Fetch &amp; Store
+                              </Button>
+                              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={forceRefreshAvailability}
+                                  onChange={(e) => setForceRefreshAvailability(e.target.checked)}
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-xs text-gray-600">Force re-store</span>
+                              </label>
+                              <p className="text-xs text-gray-500 self-center max-w-xl">
+                                {availabilityAdapterType === 'xml' &&
+                                  'GLORIA_availabilityrq POST → OTA_RS or GLORIA_availabilityrs → normalized & stored. Large supplier responses can take 1–2 minutes; wait for the request to finish.'}
+                                {availabilityAdapterType === 'json' && 'JSON POST → Gloria vehicles[] → stored in Gloria'}
+                                {availabilityAdapterType === 'grpc' && 'gRPC GetAvailability → VehicleOffer[] → stored in Gloria'}
+                              </p>
                         </div>
+                          </>
+                        )}
 
                         {fetchAvailabilityResult && (
                           <AvailabilityFetchResultDisplay result={fetchAvailabilityResult} />
                         )}
                       </CardContent>
                     </Card>
+
+                    <Modal
+                      isOpen={showManualImportModal}
+                      onClose={() => setShowManualImportModal(false)}
+                      title="Manual availability import"
+                      size="xl"
+                    >
+                      <div className="space-y-5 text-sm text-gray-800 -mx-2 sm:mx-0 max-h-[85vh] overflow-y-auto pr-1">
+                        <p className="text-xs text-gray-600 leading-relaxed">
+                          Mirrors <strong>GLORIA_availabilityrs</strong> shape: <code className="bg-gray-100 px-1 rounded text-xs">VehAvairsdetails</code> (locations + dates), <code className="bg-gray-100 px-1 rounded text-xs">availcars[]</code> (one car), <code className="bg-gray-100 px-1 rounded text-xs">pricing</code>, included / not-included / optional extras, and optional <code className="bg-gray-100 px-1 rounded text-xs">Terms</code> as JSON. Stored in the same samples list as fetched results.
+                        </p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Pick-up location code</label>
+                            <Input value={manualModalPickupLoc} onChange={(e) => setManualModalPickupLoc(e.target.value.toUpperCase())} placeholder="TIAA02" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Return location code</label>
+                            <Input value={manualModalReturnLoc} onChange={(e) => setManualModalReturnLoc(e.target.value.toUpperCase())} placeholder="TIAA02" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Availability from</label>
+                            <input
+                              type="datetime-local"
+                              value={manualModalPickupDt}
+                              onChange={(e) => setManualModalPickupDt(e.target.value)}
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Availability to</label>
+                            <input
+                              type="datetime-local"
+                              value={manualModalReturnDt}
+                              onChange={(e) => setManualModalReturnDt(e.target.value)}
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="border-t border-gray-200 pt-4 space-y-4">
+                          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                            <div className="flex-1 min-w-0">
+                              <label htmlFor="manual-acriss-picker" className="block text-sm font-medium text-gray-700 mb-1">
+                                ACRISS code <span className="text-red-500">*</span>
+                              </label>
+                              <AcrissCodePicker
+                                id="manual-acriss-picker"
+                                value={manualAcriss}
+                                onChange={setManualAcriss}
+                                customCodes={customAcrissCodes}
+                              />
+                            </div>
+                            <div className="flex flex-1 gap-2 items-end min-w-0">
+                              <Input
+                                className="flex-1"
+                                value={newAcrissDraft}
+                                onChange={(e) => setNewAcrissDraft(e.target.value.toUpperCase())}
+                                placeholder="New code…"
+                                maxLength={8}
+                              />
+                              <Button type="button" variant="secondary" className="shrink-0" onClick={handleAddCustomAcriss}>
+                                <Plus className="w-4 h-4 mr-1 inline" aria-hidden />
+                                New ACRISS
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label htmlFor="manual-import-make" className="block text-sm font-medium text-gray-700 mb-1">
+                                Make <span className="text-red-500">*</span>
+                              </label>
+                              <SearchableStringPicker
+                                id="manual-import-make"
+                                value={manualMake}
+                                onChange={setManualMake}
+                                onCommit={() => setManualModel('')}
+                                options={manualMakeOptions}
+                                loading={nhtsaMakesQuery.isLoading}
+                                placeholder="Search or type make (e.g. Toyota)…"
+                                helperText="Suggestions from NHTSA vPIC (US DOT, no API key) plus local presets — any typed make is allowed."
+                                initialVisible={50}
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="manual-import-model" className="block text-sm font-medium text-gray-700 mb-1">
+                                Model <span className="text-red-500">*</span>
+                              </label>
+                              <SearchableStringPicker
+                                id="manual-import-model"
+                                value={manualModel}
+                                onChange={setManualModel}
+                                options={manualModelOptions}
+                                loading={!!makeTrimmed && nhtsaModelsQuery.isLoading}
+                                disabled={!makeTrimmed}
+                                placeholder={makeTrimmed ? 'Search or type model…' : 'Choose a make first…'}
+                                helperText={
+                                  makeTrimmed
+                                    ? 'Models load from vPIC for that make; you can always type a model name not in the list.'
+                                    : undefined
+                                }
+                                emptyListHint="No catalog match for this make yet — enter the model name manually."
+                                initialVisible={50}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Rental duration (days)</label>
+                              <Input
+                                value={manualRentalDuration}
+                                onChange={(e) => setManualRentalDuration(e.target.value)}
+                                placeholder="vehavailmaindet Duration"
+                                inputMode="numeric"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Vehicle currency</label>
+                              <Input value={manualCurrency} onChange={(e) => setManualCurrency(e.target.value.toUpperCase())} maxLength={3} placeholder="EUR" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Fallback total (if pricing blank)</label>
+                              <Input value={manualTotalPrice} onChange={(e) => setManualTotalPrice(e.target.value)} inputMode="decimal" />
+                            </div>
+                          </div>
+
+                          <div className="rounded-lg border border-dashed border-gray-300 bg-white p-3 space-y-2">
+                            <p className="text-xs font-semibold text-gray-700">Response <code className="bg-gray-100 px-1 rounded">@attributes</code> (optional)</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <Input value={gloriaMetaTimestamp} onChange={(e) => setGloriaMetaTimestamp(e.target.value)} placeholder="TimeStamp" />
+                              <Input value={gloriaMetaTarget} onChange={(e) => setGloriaMetaTarget(e.target.value)} placeholder="Target" />
+                              <Input value={gloriaMetaVersion} onChange={(e) => setGloriaMetaVersion(e.target.value)} placeholder="Version" />
+                            </div>
+                          </div>
+
+                          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                            <p className="text-xs font-semibold text-gray-800">pricing <code className="bg-white px-1 rounded border">@attributes</code></p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                              <Input value={manualPricingCarOrderId} onChange={(e) => setManualPricingCarOrderId(e.target.value)} placeholder="CarOrderID" />
+                              <Input value={manualPricingCurrency} onChange={(e) => setManualPricingCurrency(e.target.value.toUpperCase())} placeholder="Currency" maxLength={3} />
+                              <Input value={manualPricingDuration} onChange={(e) => setManualPricingDuration(e.target.value)} placeholder="Duration" />
+                              <Input value={manualPricingDailyNet} onChange={(e) => setManualPricingDailyNet(e.target.value)} placeholder="DailyNet" />
+                              <Input value={manualPricingDailyTax} onChange={(e) => setManualPricingDailyTax(e.target.value)} placeholder="DailyTax" />
+                              <Input value={manualPricingDailyGross} onChange={(e) => setManualPricingDailyGross(e.target.value)} placeholder="DailyGross" />
+                              <Input value={manualPricingTotalNet} onChange={(e) => setManualPricingTotalNet(e.target.value)} placeholder="TotalNet" />
+                              <Input value={manualPricingTotalTax} onChange={(e) => setManualPricingTotalTax(e.target.value)} placeholder="TotalTax" />
+                              <Input value={manualPricingTotalGross} onChange={(e) => setManualPricingTotalGross(e.target.value)} placeholder="TotalGross *" />
+                              <Input value={manualPricingTaxRate} onChange={(e) => setManualPricingTaxRate(e.target.value)} placeholder="TaxRate" />
+                            </div>
+                            <p className="text-xs text-gray-500">Total gross (or fallback total) is required. Other fields map 1:1 to GLORIA XML/JSON.</p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-semibold text-gray-800">includedinprice.Item</p>
+                              <Button type="button" variant="ghost" className="text-xs h-8" onClick={() => setIncludedRows((r) => [...r, { id: newManualImportRowId(), code: '', description: '', excess: '', deposit: '', currency: '' }])}>
+                                + Add line
+                              </Button>
+                            </div>
+                            {includedRows.map((row) => (
+                              <div key={row.id} className="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end border border-gray-100 rounded-lg p-2 bg-white">
+                                <Input value={row.code} onChange={(e) => setIncludedRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, code: e.target.value } : x)))} placeholder="Code" />
+                                <div className="sm:col-span-2">
+                                  <Input value={row.description} onChange={(e) => setIncludedRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, description: e.target.value } : x)))} placeholder="ItemDescription" />
+                                </div>
+                                <Input value={row.excess} onChange={(e) => setIncludedRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, excess: e.target.value } : x)))} placeholder="Excess" />
+                                <Input value={row.deposit} onChange={(e) => setIncludedRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, deposit: e.target.value } : x)))} placeholder="Deposit" />
+                                <div className="flex gap-1">
+                                  <Input value={row.currency} onChange={(e) => setIncludedRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, currency: e.target.value } : x)))} placeholder="Cur" maxLength={3} />
+                                  <Button type="button" variant="ghost" className="text-xs shrink-0" onClick={() => setIncludedRows((rows) => rows.filter((x) => x.id !== row.id))} disabled={includedRows.length <= 1}>
+                                    Remove
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-semibold text-gray-800">notincludedinprice.Item</p>
+                              <Button type="button" variant="ghost" className="text-xs h-8" onClick={() => setNotIncludedRows((r) => [...r, { id: newManualImportRowId(), code: '', description: '', excess: '', deposit: '', currency: '', cover_amount: '', price: '' }])}>
+                                + Add line
+                              </Button>
+                            </div>
+                            {notIncludedRows.map((row) => (
+                              <div key={row.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end border border-gray-100 rounded-lg p-2 bg-white">
+                                <Input className="sm:col-span-1" value={row.code} onChange={(e) => setNotIncludedRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, code: e.target.value } : x)))} placeholder="Code" />
+                                <div className="sm:col-span-3">
+                                  <Input value={row.description} onChange={(e) => setNotIncludedRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, description: e.target.value } : x)))} placeholder="ItemDescription" />
+                                </div>
+                                <Input className="sm:col-span-1" value={row.excess} onChange={(e) => setNotIncludedRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, excess: e.target.value } : x)))} placeholder="Excess" />
+                                <Input className="sm:col-span-1" value={row.deposit} onChange={(e) => setNotIncludedRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, deposit: e.target.value } : x)))} placeholder="Deposit" />
+                                <Input className="sm:col-span-1" value={row.cover_amount} onChange={(e) => setNotIncludedRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, cover_amount: e.target.value } : x)))} placeholder="Cover" />
+                                <Input className="sm:col-span-1" value={row.price} onChange={(e) => setNotIncludedRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, price: e.target.value } : x)))} placeholder="Price" />
+                                <Input className="sm:col-span-1" value={row.currency} onChange={(e) => setNotIncludedRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, currency: e.target.value } : x)))} placeholder="Cur" maxLength={3} />
+                                <Button type="button" variant="ghost" className="text-xs sm:col-span-2" onClick={() => setNotIncludedRows((rows) => rows.filter((x) => x.id !== row.id))} disabled={notIncludedRows.length <= 1}>
+                                  Remove
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-semibold text-gray-800">OptionalExtras.Item</p>
+                              <Button type="button" variant="ghost" className="text-xs h-8" onClick={() => setExtraRows((r) => [...r, { id: newManualImportRowId(), code: '', description: '', price: '', currency: '', long_description: '' }])}>
+                                + Add line
+                              </Button>
+                            </div>
+                            {extraRows.map((row) => (
+                              <div key={row.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end border border-gray-100 rounded-lg p-2 bg-white">
+                                <Input className="sm:col-span-1" value={row.code} onChange={(e) => setExtraRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, code: e.target.value } : x)))} placeholder="Code" />
+                                <div className="sm:col-span-3">
+                                  <Input value={row.description} onChange={(e) => setExtraRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, description: e.target.value } : x)))} placeholder="ItemDescription" />
+                                </div>
+                                <Input className="sm:col-span-2" value={row.price} onChange={(e) => setExtraRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, price: e.target.value } : x)))} placeholder="Price" inputMode="decimal" />
+                                <Input className="sm:col-span-1" value={row.currency} onChange={(e) => setExtraRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, currency: e.target.value } : x)))} placeholder="Cur" maxLength={3} />
+                                <div className="sm:col-span-3">
+                                  <Input value={row.long_description} onChange={(e) => setExtraRows((rows) => rows.map((x) => (x.id === row.id ? { ...x, long_description: e.target.value } : x)))} placeholder="Description (attr)" />
+                                </div>
+                                <Button type="button" variant="ghost" className="text-xs sm:col-span-2" onClick={() => setExtraRows((rows) => rows.filter((x) => x.id !== row.id))} disabled={extraRows.length <= 1}>
+                                  Remove
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-800 mb-1">Terms.Item[] (JSON array — optional)</label>
+                            <textarea
+                              value={manualTermsJson}
+                              onChange={(e) => setManualTermsJson(e.target.value)}
+                              rows={5}
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder='[ { "@attributes": { "Code": "...", "Name": "..." } } ]'
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Car order ID (vehicle / booking ref)</label>
+                            <Input value={manualCarOrderId} onChange={(e) => setManualCarOrderId(e.target.value)} placeholder="Optional if set in pricing" />
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                            <Settings className="w-4 h-4 text-gray-500" aria-hidden />
+                            Vehicle details
+                            <span className="text-xs font-normal text-gray-500">(optional)</span>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Transmission</label>
+                              <Input value={manualTransmission} onChange={(e) => setManualTransmission(e.target.value)} />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Doors</label>
+                              <Input value={manualDoors} onChange={(e) => setManualDoors(e.target.value)} inputMode="numeric" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Seats</label>
+                              <Input value={manualSeats} onChange={(e) => setManualSeats(e.target.value)} inputMode="numeric" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Bags (S)</label>
+                              <Input value={manualBagsS} onChange={(e) => setManualBagsS(e.target.value)} inputMode="numeric" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Bags (M)</label>
+                              <Input value={manualBagsM} onChange={(e) => setManualBagsM(e.target.value)} inputMode="numeric" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Min lead (hrs)</label>
+                              <Input value={manualMinLead} onChange={(e) => setManualMinLead(e.target.value)} inputMode="numeric" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Max lead (days)</label>
+                              <Input value={manualMaxLead} onChange={(e) => setManualMaxLead(e.target.value)} inputMode="numeric" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Mileage</label>
+                              <Input value={manualMileage} onChange={(e) => setManualMileage(e.target.value)} inputMode="numeric" />
+                            </div>
+                          </div>
+                          <div className="rounded-md border border-dashed border-gray-300 bg-white p-3 space-y-2">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Vehicle image</label>
+                            <Input
+                              value={manualImageUrl}
+                              onChange={(e) => setManualImageUrl(e.target.value)}
+                              placeholder="https://… Or choose a file to upload — stored on Gloria"
+                              className="text-sm"
+                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                              <input
+                                ref={manualVehicleImageInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/gif,image/webp"
+                                onChange={handleManualVehicleImageSelected}
+                                disabled={isUploadingManualVehicleImage}
+                                className="block w-full max-w-xs text-xs text-gray-600 file:mr-2 file:rounded file:border file:border-gray-300 file:bg-gray-50 file:px-2 file:py-1"
+                              />
+                              {isUploadingManualVehicleImage && (
+                                <span className="text-xs text-gray-500">Uploading…</span>
+                              )}
+                              {manualImageUrl.trim() && (
+                                <Button type="button" variant="ghost" className="text-xs h-8 shrink-0" onClick={() => setManualImageUrl('')}>
+                                  Clear image URL
+                                </Button>
+                              )}
+                            </div>
+                            {manualImageUrl.trim() !== '' && (
+                              <img
+                                src={displayVehicleImageUrl(manualImageUrl)}
+                                alt="Vehicle preview"
+                                className="max-h-28 max-w-full object-contain rounded border border-gray-200 bg-gray-50 p-2"
+                              />
+                            )}
+                          </div>
+                        </div>
+
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={forceRefreshAvailability}
+                            onChange={(e) => setForceRefreshAvailability(e.target.checked)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          Force re-store (overwrite duplicate guard)
+                        </label>
+
+                        <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-gray-100">
+                          <Button type="button" variant="ghost" onClick={() => setShowManualImportModal(false)}>
+                            Cancel
+                          </Button>
+                          <Button type="button" variant="primary" onClick={handleManualImportSubmit} loading={isSubmittingManualImport}>
+                            Store sample
+                          </Button>
+                        </div>
+                      </div>
+                    </Modal>
 
                     {/* ── Stored Availability Samples ── */}
                     <Card className="shadow-sm">
@@ -4557,12 +5603,16 @@ message AvailabilityRequest {
                           </div>
                         ) : storedSamples.length === 0 ? (
                           <p className="text-sm text-gray-400 italic py-4">
-                            No stored samples yet. Click "Fetch &amp; Store" above to test your endpoint and save the result.
+                            No stored samples yet. Use <strong>Fetch &amp; Store</strong> to pull from your endpoint, or <strong>Manual import</strong> to enter one vehicle without an API.
                           </p>
                         ) : (
                           <div className="space-y-4">
                             {storedSamples.map((sample) => (
-                              <StoredSampleCard key={sample.id} sample={sample} />
+                              <StoredSampleCard
+                                key={sample.id}
+                                sample={sample}
+                                buildDailyPricingHref={(offerIdx) => buildDailyPricingLink(sample.id, offerIdx)}
+                              />
                             ))}
                           </div>
                         )}
@@ -4574,7 +5624,7 @@ message AvailabilityRequest {
                     <Card className="border border-gray-200 shadow-sm">
                       <CardHeader>
                         <CardTitle className="text-lg">
-                          {availabilityAdapterType === 'xml' && 'OTA XML format reference'}
+                          {availabilityAdapterType === 'xml' && 'Gloria XML — request & responses'}
                           {availabilityAdapterType === 'json' && 'Gloria JSON format reference'}
                           {availabilityAdapterType === 'grpc' && 'Gloria gRPC format reference'}
                         </CardTitle>
@@ -4584,35 +5634,39 @@ message AvailabilityRequest {
                         {/* ── OTA XML reference ── */}
                         {availabilityAdapterType === 'xml' && (<>
                           <p className="text-sm text-gray-700">
-                            Your endpoint must accept an <strong>OTA_VehAvailRateRQ XML POST</strong> (<code className="bg-gray-100 px-1 rounded">Content-Type: text/xml</code>). The response can be either <strong>OTA_VehAvailRateRS XML</strong> or your <strong>GLORIA_availabilityrs</strong> structure (<code className="bg-gray-100 px-1 rounded">VehAvairsdetails → availcars[]</code>). Gloria stores both formats into the same Availability samples store.
+                            Configure your availability URL (e.g.{' '}
+                            <code className="bg-gray-100 px-1 rounded">{PRICING_SAMPLE_AV_ENDPOINT}</code>
+                            ). Gloria sends the <strong>GLORIA_availabilityrq</strong> XML below (<code className="bg-gray-100 px-1 rounded">Content-Type: text/xml</code>
+                            ): <code className="bg-gray-100 px-1 rounded">AccountID</code> from the Account ID field,{' '}
+                            <code className="bg-gray-100 px-1 rounded">collectionbranch</code>/<code className="bg-gray-100 px-1 rounded">returnbranch</code> from branch codes,{' '}
+                            dates on <code className="bg-gray-100 px-1 rounded">Vehmain</code>, residency on <code className="bg-gray-100 px-1 rounded">DriverCitizenCountry</code>.
+                            Responses may be legacy <strong>OTA_VehAvailRateRS</strong> or supplier <strong>GLORIA_availabilityrs</strong> with{' '}
+                            <code className="bg-gray-100 px-1 rounded">VehAvairsdetails → availcars[]</code> (<code className="bg-gray-100 px-1 rounded">vehdetails</code>,{' '}
+                            <code className="bg-gray-100 px-1 rounded">pricing</code>, included / not-included <code className="bg-gray-100 px-1 rounded">Item</code> lines, optional extras). Gloria normalizes everything into stored samples — the UI surfaces every attribute we parse.
                           </p>
                           <div>
-                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Request sent to your endpoint (OTA_VehAvailRateRQ)</p>
-                            <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-48">{`<?xml version="1.0" encoding="UTF-8"?>
-<OTA_VehAvailRateRQ xmlns="http://www.opentravel.org/OTA/2003/05"
-    TimeStamp="2026-03-18T14:31:15" Target="Production" Version="1.007">
-  <POS>
-    <Source>
-      <RequestorID Type="5" ID="1000097"/>   <!-- broker account number -->
-    </Source>
-  </POS>
-  <VehAvailRQCore Status="Available">
-    <VehRentalCore PickUpDateTime="2026-03-18T14:00:00"
-                   ReturnDateTime="2026-03-22T14:00:00">
-      <PickUpLocation LocationCode="TIAA01"/>
-      <ReturnLocation LocationCode="TIAA01"/>
-    </VehRentalCore>
-    <DriverType Age="35"/>
-  </VehAvailRQCore>
-  <VehAvailRQInfo>
-    <Customer><Primary>
-      <CitizenCountryName Code="US"/>
-    </Primary></Customer>
-  </VehAvailRQInfo>
-</OTA_VehAvailRateRQ>`}</pre>
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                              Request Gloria sends (<span className="font-mono normal-case">GLORIA_availabilityrq</span>)
+                            </p>
+                            <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-64 whitespace-pre">{`<GLORIA_availabilityrq TimeStamp="2025-04-28T10:30:45" Target="Production" Version="1.00">
+<ACC>
+<Source>
+<AccountID ID="Gloria002"/>
+</Source>
+</ACC>
+<VehAvailbody>
+<Vehmain PickUpDateTime="2026-05-23T09:00:00"
+         ReturnDateTime="2026-05-27T11:00:00">
+  <collectionbranch LocationCode="TIAA02"/>
+  <returnbranch LocationCode="TIAA02"/>
+</Vehmain>
+<DriverAge Age="30"/>
+<DriverCitizenCountry Code="FR"/>
+</VehAvailbody>
+</GLORIA_availabilityrq>`}</pre>
                           </div>
                           <div>
-                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Expected response (OTA_VehAvailRateRS)</p>
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Also accepted: OTA XML response (<span className="font-mono normal-case">OTA_VehAvailRateRS</span>)</p>
                             <pre className="text-xs font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto max-h-64">{`<?xml version="1.0" encoding="UTF-8"?>
 <OTA_VehAvailRateRS xmlns="http://www.opentravel.org/OTA/2003/05"
     TimeStamp="2026-03-18T14:31:15" Target="Production" Version="1.007">
@@ -4702,9 +5756,12 @@ message AvailabilityRequest {
                               <li><code>VehAvairsdetails.availcars[]</code> is normalized from object/array automatically.</li>
                               <li>Vehicle identity/pricing from <code>pricing.CarOrderID</code>, <code>pricing.TotalGross</code>, <code>pricing.Currency</code>.</li>
                               <li>Vehicle basics from <code>vehdetails</code> (Make/Model/Transmission/Doors/Seats/ImageURL).</li>
-                              <li><code>includedinprice.Item[]</code> and <code>notincludedinprice.Item[]</code> support object-or-array and are deduplicated by <code>Code</code>.</li>
+                              <li><code>includedinprice.Item[]</code> and <code>notincludedinprice.Item[]</code> support object-or-array; <strong>every line is kept</strong> (code, description, excess, deposit, currency, price, cover).</li>
                               <li><code>OptionalExtras.Item[]</code> is mapped to priced extras (<code>priced_equips</code>) in stored samples.</li>
                               <li>Unknown/new codes are kept as raw code+description so suppliers/brokers can extend without breaking ingestion.</li>
+                              <li>
+                                Document every code your API may return for included, not-included, optional extras, and policies: some companies return only a subset, others add new codes over time — Gloria preserves whatever is present.
+                              </li>
                             </ul>
                           </div>
                         </>)}
@@ -4880,7 +5937,7 @@ service SourceProviderService {
                             <p className="mt-1">No <code>grpc://</code> prefix needed — Gloria adds the insecure channel automatically.</p>
                           </div>
                           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900">
-                            Keep rich policy/terms data in <code>ota_vehicle_json</code> (included, not-included, extras, charges). Missing sections are allowed; available sections are stored and shown.
+                            Keep rich policy/terms data in <code>ota_vehicle_json</code> (included, not-included, extras, charges). Missing sections are allowed; available sections are stored and shown. Suppliers may return partial code lists or add new codes later — document the full catalogue for brokers even if not every field appears in every response.
                           </div>
                         </>)}
 
@@ -4891,7 +5948,10 @@ service SourceProviderService {
               )}
 
               {activeTab === 'daily-pricing' && (
-                <DailyPricingCalendar />
+                <DailyPricingCalendar
+                  deeplinkSampleId={dailyPricingDeeplinkSampleId}
+                  deeplinkOfferIndex={dailyPricingDeeplinkOfferIndex}
+                />
               )}
 
               {activeTab === 'transactions' && (

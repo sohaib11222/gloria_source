@@ -111,7 +111,9 @@ export const authApi = {
     }
   },
 
-  register: async (data: RegisterForm & { referralSlug?: string }): Promise<LoginResponse> => {
+  register: async (
+    data: RegisterForm & { referralSlug?: string; registrationPhotoDataUrl?: string }
+  ): Promise<LoginResponse> => {
     try {
       console.log('🔵 Making register request to:', '/auth/register', 'with data:', { email: data.email, companyName: data.companyName })
       const response = await api.post('/auth/register', data)

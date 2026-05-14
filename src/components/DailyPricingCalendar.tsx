@@ -21,6 +21,7 @@ function isoDateOnly(iso: string | undefined | null): string {
 }
 
 function buildSampleLabel(s: StoredAvailabilitySample, index: number): string {
+  const n = s.offersSummary?.length ?? 0
   const offer = s.offersSummary?.[0]
   const ac = offer?.vehicle_class || '—'
   const price =
@@ -28,11 +29,38 @@ function buildSampleLabel(s: StoredAvailabilitySample, index: number): string {
       ? `${offer.total_price} ${offer.currency || ''}`.trim()
       : ''
   const when = s.fetchedAt ? format(parseISO(s.fetchedAt), 'dd/MM/yyyy HH:mm') : ''
-  const short = `${s.pickupLoc}→${s.returnLoc} · ${ac}${price ? ` · ${price}` : ''}`
+  const multi = n > 1 ? ` · ${n} vehicles` : ''
+  const short = `${s.pickupLoc}→${s.returnLoc} · ${ac}${price ? ` · ${price}` : ''}${multi}`
   return `${index + 1}. ${short}${when ? ` · ${when}` : ''}`
 }
 
-export function DailyPricingCalendar() {
+function rentalLengthDays(pPickup: string, pReturn: string): number | undefined {
+  if (!pPickup?.trim() || !pReturn?.trim()) return undefined
+  try {
+    const sd = isoDateOnly(pPickup)
+    const rd = isoDateOnly(pReturn)
+    const dPickup = parseISO(pPickup.includes('T') ? pPickup : `${sd}T12:00:00`)
+    const dReturn = parseISO(pReturn.includes('T') ? pReturn : `${rd}T12:00:00`)
+    if (isNaN(dPickup.getTime()) || isNaN(dReturn.getTime())) return undefined
+    const diff = Math.ceil((dReturn.getTime() - dPickup.getTime()) / 86400000)
+    if (!Number.isFinite(diff)) return undefined
+    return Math.max(1, diff)
+  } catch {
+    return undefined
+  }
+}
+
+export type DailyPricingCalendarProps = {
+  /** `sample` query param — select this stored fetch and optional offer row */
+  deeplinkSampleId?: string | null
+  /** `offer` query param — index into offersSummary (same order as Pricing tab) */
+  deeplinkOfferIndex?: number
+}
+
+export function DailyPricingCalendar({
+  deeplinkSampleId = null,
+  deeplinkOfferIndex = 0,
+}: DailyPricingCalendarProps) {
   const today = new Date()
   const [startDate, setStartDate] = useState(formatDateInput(today))
   const endDefault = new Date(today)
@@ -49,10 +77,12 @@ export function DailyPricingCalendar() {
 
   /** `custom` = manual filters only; otherwise stored availability sample id from Pricing tab API */
   const [pricingBaseId, setPricingBaseId] = useState<string>('custom')
-  const autoLinkedRef = useRef(false)
+  /** Index into offersSummary — same ordering as Pricing → stored sample vehicle rows */
+  const [pricingOfferIdx, setPricingOfferIdx] = useState(0)
+  const didAutoPickSampleRef = useRef(false)
 
   const samplesQuery = useQuery({
-    queryKey: ['availability-samples', 'daily-pricing'],
+    queryKey: ['availability-samples'],
     queryFn: async () => {
       const { samples } = await endpointsApi.getAvailabilitySamples()
       return samples
@@ -62,13 +92,16 @@ export function DailyPricingCalendar() {
 
   const samples = samplesQuery.data ?? []
 
-  const applySampleToFilters = useCallback((s: StoredAvailabilitySample) => {
+  const applySampleToFilters = useCallback((s: StoredAvailabilitySample, offerIdx: number) => {
     const crit = s.criteria ?? {}
+    const critAny = crit as { rental_duration?: number }
     const pLoc = (s.pickupLoc || crit.pickupLoc || '').toString().toUpperCase().trim()
     const rLoc = (s.returnLoc || crit.returnLoc || '').toString().toUpperCase().trim()
     const pIso = s.pickupIso || crit.pickupIso || ''
     const rIso = s.returnIso || crit.returnIso || ''
-    const offer = s.offersSummary?.[0]
+    const offers = s.offersSummary ?? []
+    const idx = offers.length ? Math.max(0, Math.min(offers.length - 1, offerIdx)) : 0
+    const offer = offers[idx]
 
     if (pLoc) setPickupLoc(pLoc)
     if (rLoc) setReturnLoc(rLoc)
@@ -76,6 +109,17 @@ export function DailyPricingCalendar() {
     if (offer?.currency) setCurrency(String(offer.currency).toUpperCase().slice(0, 3))
     if (offer?.total_price != null && typeof offer.total_price === 'number') {
       setDefaultPrice(Math.max(0, offer.total_price))
+    }
+
+    let rentalDays = rentalLengthDays(pIso, rIso)
+    if (rentalDays == null && typeof critAny.rental_duration === 'number' && critAny.rental_duration > 0) {
+      rentalDays = Math.min(31, Math.max(1, Math.floor(critAny.rental_duration)))
+    }
+    if (rentalDays != null) {
+      const md = Math.min(31, Math.max(1, rentalDays))
+      setMaxDays(md)
+      setDayStart(1)
+      setDayEnd(md)
     }
 
     const sd = isoDateOnly(pIso)
@@ -108,19 +152,46 @@ export function DailyPricingCalendar() {
   }, [])
 
   useEffect(() => {
-    if (!samples.length || autoLinkedRef.current) return
-    autoLinkedRef.current = true
-    setPricingBaseId(samples[0].id)
-    applySampleToFilters(samples[0])
-  }, [samples, applySampleToFilters])
+    if (!samples.length) return
+
+    if (deeplinkSampleId && samples.some((s) => s.id === deeplinkSampleId)) {
+      const s = samples.find((x) => x.id === deeplinkSampleId)!
+      const n = s.offersSummary?.length ?? 0
+      const idx = n > 0 ? Math.max(0, Math.min(n - 1, deeplinkOfferIndex)) : 0
+      setPricingBaseId(deeplinkSampleId)
+      setPricingOfferIdx(idx)
+      applySampleToFilters(s, idx)
+      return
+    }
+
+    if (!didAutoPickSampleRef.current) {
+      didAutoPickSampleRef.current = true
+      setPricingBaseId(samples[0].id)
+      setPricingOfferIdx(0)
+      applySampleToFilters(samples[0], 0)
+    }
+  }, [samples, deeplinkSampleId, deeplinkOfferIndex, applySampleToFilters])
 
   useEffect(() => {
     if (pricingBaseId === 'custom' || !samples.length) return
     if (!samples.some((s) => s.id === pricingBaseId)) {
       setPricingBaseId(samples[0].id)
-      applySampleToFilters(samples[0])
+      setPricingOfferIdx(0)
+      applySampleToFilters(samples[0], 0)
     }
   }, [samples, pricingBaseId, applySampleToFilters])
+
+  useEffect(() => {
+    if (pricingBaseId === 'custom') return
+    const s = samples.find((x) => x.id === pricingBaseId)
+    const n = s?.offersSummary?.length ?? 0
+    if (n === 0) return
+    if (pricingOfferIdx >= n) {
+      const ni = n - 1
+      setPricingOfferIdx(ni)
+      applySampleToFilters(s!, ni)
+    }
+  }, [samples, pricingBaseId, pricingOfferIdx, applySampleToFilters])
 
   const selectedSample = useMemo(
     () => (pricingBaseId === 'custom' ? null : samples.find((s) => s.id === pricingBaseId) ?? null),
@@ -144,8 +215,23 @@ export function DailyPricingCalendar() {
     setPricingBaseId(id)
     if (id === 'custom') return
     const s = samples.find((x) => x.id === id)
-    if (s) applySampleToFilters(s)
+    if (s) {
+      setPricingOfferIdx(0)
+      applySampleToFilters(s, 0)
+    }
   }
+
+  const offerSelectOptions = useMemo(() => {
+    if (!selectedSample?.offersSummary?.length) return []
+    return selectedSample.offersSummary.map((o: any, i: number) => {
+      const mm = String(o.vehicle_make_model || '—')
+      const mmShort = mm.length > 40 ? `${mm.slice(0, 40)}…` : mm
+      return {
+        value: String(i),
+        label: `${i + 1}. ${o.vehicle_class || '—'} · ${mmShort} · ${o.total_price ?? '—'} ${o.currency || ''}`.trim(),
+      }
+    })
+  }, [selectedSample])
 
   const query = useQuery({
     queryKey: ['source', 'daily-pricing', startDate, endDate, pickupLoc, returnLoc, acrissCode, maxDays],
@@ -228,8 +314,21 @@ export function DailyPricingCalendar() {
                 value={pricingBaseId}
                 onChange={(e) => onPricingBaseChange(e.target.value)}
                 options={baseSelectOptions}
-                helperText="Samples are the same records listed under Pricing → stored results. Selecting one fills pickup/return, ACRISS, currency, and date range."
+                helperText="Samples are the same records listed under Pricing → stored results. Selecting one fills pickup/return, ACRISS, currency, rental-length columns (Day1…DayN), and date range."
               />
+              {selectedSample && offerSelectOptions.length > 1 ? (
+                <Select
+                  label="Vehicle row (same order as Pricing tab)"
+                  value={String(pricingOfferIdx)}
+                  onChange={(e) => {
+                    const i = Number(e.target.value) || 0
+                    setPricingOfferIdx(i)
+                    applySampleToFilters(selectedSample, i)
+                  }}
+                  options={offerSelectOptions}
+                  helperText="Mirrors each vehicle card under Stored availability samples — pick which ACRISS drives the matrix, or open Daily Prices from a vehicle’s link on the Pricing tab."
+                />
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -270,20 +369,30 @@ export function DailyPricingCalendar() {
               {selectedSample.offersSummary && selectedSample.offersSummary.length > 0 && (
                 <div className="mt-3 border-t border-gray-100 pt-3">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                    First offer from that response (reference pricing)
+                    Selected vehicle row (reference pricing)
                   </p>
                   <ul className="space-y-1">
-                    {selectedSample.offersSummary.slice(0, 4).map((o, idx) => (
-                      <li key={idx} className="text-xs text-gray-800 flex flex-wrap gap-x-3">
-                        <span className="font-mono font-semibold">{o.vehicle_class}</span>
-                        <span>{o.vehicle_make_model}</span>
-                        <span>
-                          {o.total_price} {o.currency}
-                        </span>
-                        <span className="text-gray-500">{o.availability_status}</span>
-                      </li>
-                    ))}
+                    {(() => {
+                      const os = selectedSample.offersSummary!
+                      const o = os[pricingOfferIdx] ?? os[0]
+                      return (
+                        <li key={pricingOfferIdx} className="text-xs text-gray-800 flex flex-wrap gap-x-3">
+                          <span className="font-mono font-semibold">{o.vehicle_class}</span>
+                          <span>{o.vehicle_make_model}</span>
+                          <span>
+                            {o.total_price} {o.currency}
+                          </span>
+                          <span className="text-gray-500">{o.availability_status}</span>
+                        </li>
+                      )
+                    })()}
                   </ul>
+                  {selectedSample.offersSummary.length > 1 && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      {selectedSample.offersSummary.length} vehicles in this sample — switch rows with the dropdown
+                      above to match another line on the Pricing tab.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

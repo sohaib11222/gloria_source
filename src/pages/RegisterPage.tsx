@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -17,6 +17,9 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [referralSlug, setReferralSlug] = useState<string | null>(null)
   const [referralLabel, setReferralLabel] = useState<string | null>(null)
+  const [registrationPhotoDataUrl, setRegistrationPhotoDataUrl] = useState<string | null>(null)
+  const [registrationPhotoName, setRegistrationPhotoName] = useState<string | null>(null)
+  const registrationPhotoInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const raw = searchParams.get('ref') || searchParams.get('referral')
@@ -75,6 +78,7 @@ export default function RegisterPage() {
       const response = await authApi.register({
         ...data,
         ...(referralSlug ? { referralSlug } : {}),
+        ...(registrationPhotoDataUrl ? { registrationPhotoDataUrl } : {}),
       })
       console.log('✅ Registration response:', response)
       
@@ -188,23 +192,82 @@ export default function RegisterPage() {
                 />
               </div>
 
-              <div className="bg-gray-50 border border-gray-200 rounded p-4">
-                <Input
-                  label="Account Type"
-                  value="SOURCE"
-                  disabled
-                  className="cursor-not-allowed bg-white"
-                />
-                <div className="flex items-center mt-2 space-x-1">
-                  <svg className="w-4 h-4 text-slate-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <p className="text-xs font-medium text-gray-700">
-                    Source registration only
-                  </p>
-                </div>
-              </div>
               <input type="hidden" {...register('type')} value="SOURCE" />
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Registration photo <span className="text-gray-500 font-normal">(optional)</span>
+                </label>
+                <input
+                  ref={registrationPhotoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="block w-full text-sm text-gray-600 file:mr-3 file:rounded file:border file:border-gray-200 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-50"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) {
+                      setRegistrationPhotoDataUrl(null)
+                      setRegistrationPhotoName(null)
+                      return
+                    }
+                    const maxBytes = 2 * 1024 * 1024
+                    if (file.size > maxBytes) {
+                      toast.error('Image must be 2 MB or smaller.')
+                      e.target.value = ''
+                      setRegistrationPhotoDataUrl(null)
+                      setRegistrationPhotoName(null)
+                      return
+                    }
+                    const reader = new FileReader()
+                    reader.onerror = () => {
+                      toast.error('Could not read this image. Try another file.')
+                      e.target.value = ''
+                      setRegistrationPhotoDataUrl(null)
+                      setRegistrationPhotoName(null)
+                    }
+                    reader.onload = () => {
+                      const result = reader.result
+                      if (typeof result === 'string') {
+                        setRegistrationPhotoDataUrl(result)
+                        setRegistrationPhotoName(file.name)
+                      }
+                    }
+                    reader.readAsDataURL(file)
+                  }}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  JPEG, PNG, or WebP. Shown to admins when reviewing your application.
+                </p>
+                {registrationPhotoDataUrl && (
+                  <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-xs text-gray-700 min-w-0 flex-1 truncate" title={registrationPhotoName ?? undefined}>
+                        {registrationPhotoName ? `Selected: ${registrationPhotoName}` : 'Preview'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRegistrationPhotoDataUrl(null)
+                          setRegistrationPhotoName(null)
+                          if (registrationPhotoInputRef.current) {
+                            registrationPhotoInputRef.current.value = ''
+                          }
+                        }}
+                        className="shrink-0 text-xs font-medium text-slate-700 hover:text-slate-900 underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <div className="mt-3 flex justify-center rounded-md border border-gray-200 bg-white p-2">
+                      <img
+                        src={registrationPhotoDataUrl}
+                        alt={registrationPhotoName ? `Preview of ${registrationPhotoName}` : 'Registration photo preview'}
+                        className="max-h-56 max-w-full object-contain"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div>
                 <Input

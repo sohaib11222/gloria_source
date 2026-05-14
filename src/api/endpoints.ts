@@ -314,12 +314,27 @@ export const endpointsApi = {
     citizenCountry?: string
     force?: boolean
   }): Promise<FetchAvailabilityResponse> => {
-    const response = await api.post('/sources/fetch-availability', params ?? {})
+    // Supplier pricing bodies can take 30–120s (large Gloria/PHP responses); must outlive backend supplier fetch + parse.
+    const response = await api.post('/sources/fetch-availability', params ?? {}, { timeout: 180_000 })
     return response.data
   },
 
   getAvailabilitySamples: async (): Promise<{ samples: StoredAvailabilitySample[] }> => {
     const response = await api.get('/sources/availability-samples')
+    return response.data
+  },
+
+  postManualAvailabilitySample: async (
+    payload: ManualAvailabilitySamplePayload
+  ): Promise<FetchAvailabilityResponse> => {
+    const response = await api.post('/sources/manual-availability-sample', payload)
+    return response.data
+  },
+
+  uploadManualAvailabilityVehicleImage: async (file: File): Promise<{ url: string }> => {
+    const form = new FormData()
+    form.append('image', file)
+    const response = await api.post('/sources/manual-availability-image', form)
     return response.data
   },
 
@@ -362,12 +377,16 @@ export interface IncludedTerm {
   excess?: string
   deposit?: string
   details?: string
+  currency?: string
+  cover_amount?: string
 }
 
 export interface PricedEquip {
   description?: string
   equip_type?: string
   vendor_equip_id?: string
+  currency?: string
+  long_description?: string
   charge?: {
     Amount?: string | number
     UnitCharge?: string | number
@@ -392,6 +411,16 @@ export interface OfferSummaryItem {
   included?: IncludedTerm[]
   not_included?: IncludedTerm[]
   priced_equips?: PricedEquip[]
+  /** Present on manually imported samples (lead times, mileage, seats). */
+  manual_business_rules?: Record<string, string | number | undefined>
+  /** GLORIA pricing @attributes (manual import or fetched GLORIA XML). */
+  gloria_pricing_attributes?: Record<string, string>
+  /** GLORIA vehdetails @attributes (fetched GLORIA XML / manual). */
+  gloria_vehdetails_attributes?: Record<string, string>
+  /** GLORIA Terms.Item[] snapshot (manual import). */
+  gloria_terms?: unknown[]
+  /** GLORIA root @attributes (manual import). */
+  gloria_response_meta?: { TimeStamp?: string; Target?: string; Version?: string }
 }
 
 export interface StoredAvailabilitySample {
@@ -402,7 +431,7 @@ export interface StoredAvailabilitySample {
   pickupIso: string
   returnIso: string
   offersCount: number
-  adapterType?: 'xml' | 'json' | 'grpc'
+  adapterType?: 'xml' | 'json' | 'grpc' | 'manual'
   offersSummary?: OfferSummaryItem[] | null
   criteria?: {
     pickupLoc: string
@@ -412,10 +441,78 @@ export interface StoredAvailabilitySample {
     requestorId?: string
     driverAge?: number
     citizenCountry?: string
-    adapterType?: 'xml' | 'json' | 'grpc'
+    adapterType?: 'xml' | 'json' | 'grpc' | 'manual'
   } | null
   fetchedAt: string
   updatedAt: string
+}
+
+export interface ManualGloriaLineItemPayload {
+  code?: string
+  description?: string
+  excess?: string
+  deposit?: string
+  price?: string
+  currency?: string
+  cover_amount?: string
+}
+
+export interface ManualGloriaExtraPayload {
+  code?: string
+  description?: string
+  name?: string
+  price: number
+  currency?: string
+  long_description?: string
+}
+
+export interface ManualGloriaPricingPayload {
+  car_order_id?: string
+  currency?: string
+  duration?: string | number
+  daily_net?: string | number
+  daily_tax?: string | number
+  daily_gross?: string | number
+  total_net?: string | number
+  total_tax?: string | number
+  total_gross?: string | number
+  tax_rate?: string | number
+}
+
+export interface ManualAvailabilitySamplePayload {
+  pickupLoc: string
+  returnLoc: string
+  pickupIso: string
+  returnIso: string
+  rental_duration?: number
+  requestorId?: string
+  driverAge?: number
+  citizenCountry?: string
+  force?: boolean
+  response_meta?: { timestamp?: string; target?: string; version?: string }
+  pricing?: ManualGloriaPricingPayload
+  vehicle: {
+    acriss: string
+    make: string
+    model: string
+    currency?: string
+    total_price?: number
+    daily_gross?: number
+    transmission?: string
+    doors?: string | number
+    seats?: string | number
+    bags_small?: string | number
+    bags_medium?: string | number
+    image_url?: string
+    car_order_id?: string
+    min_lead_hours?: number
+    max_lead_days?: number
+    mileage?: number
+  }
+  included?: ManualGloriaLineItemPayload[]
+  not_included?: ManualGloriaLineItemPayload[]
+  extras?: ManualGloriaExtraPayload[]
+  terms?: unknown[]
 }
 
 export interface FetchAvailabilityResponse {
@@ -424,7 +521,7 @@ export interface FetchAvailabilityResponse {
   stored: boolean
   isNew: boolean
   duplicate?: boolean
-  adapterType?: 'xml' | 'json' | 'grpc'
+  adapterType?: 'xml' | 'json' | 'grpc' | 'manual'
   offersSummary?: OfferSummaryItem[]
   criteria?: {
     pickupLoc: string
@@ -434,7 +531,7 @@ export interface FetchAvailabilityResponse {
     requestorId?: string
     driverAge?: number
     citizenCountry?: string
-    adapterType?: 'xml' | 'json' | 'grpc'
+    adapterType?: 'xml' | 'json' | 'grpc' | 'manual'
   }
   rawResponsePreview?: string
   parsedPreview?: any

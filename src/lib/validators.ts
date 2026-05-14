@@ -18,6 +18,8 @@ export const RegisterSchema = z.object({
     .url('Enter a valid URL (include https://)'),
   /** Set from URL ?ref= when present; not shown as a form field */
   referralSlug: z.string().max(64).optional(),
+  /** Optional data URL (image/jpeg|png|webp); sent only when user attaches a file */
+  registrationPhotoDataUrl: z.string().max(4_000_000).optional(),
 })
 
 export const EndpointSchema = z.object({

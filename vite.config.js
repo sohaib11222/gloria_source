@@ -18,6 +18,14 @@ export default defineConfig(({ mode }) => {
           target: 'http://localhost:8080',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, ''),
+          // Allow long-running POSTs (e.g. Fetch & Store → Gloria av.php) without proxy cutting the connection early
+          timeout: 180000,
+          proxyTimeout: 180000,
+        },
+        // Same host as API: static vehicle images (not under /api)
+        '/uploads': {
+          target: 'http://localhost:8080',
+          changeOrigin: true,
         },
       },
     },
