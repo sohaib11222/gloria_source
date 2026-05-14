@@ -1760,11 +1760,40 @@ export default function SourcePage() {
   }, [selectedAgreementFilterId, user?.company?.id])
   
   // Sync URL when tab changes
-  const handleTabChange = (tab: 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-branches' | 'pricing' | 'daily-pricing' | 'transactions' | 'reservations' | 'cancellations' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings') => {
+  const handleTabChange = (
+    tab: 'dashboard' | 'agreements' | 'locations' | 'branches' | 'location-branches' | 'pricing' | 'daily-pricing' | 'transactions' | 'reservations' | 'cancellations' | 'location-requests' | 'health' | 'verification' | 'support' | 'docs' | 'settings',
+    opts?: { branchImport?: 'endpoint' | 'manual' },
+  ) => {
+    // Legacy nav + tour: "Manual Branch import" → unified Location & Branches (manual tools)
+    if (tab === 'branches') {
+      setActiveTab('location-branches')
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('tab', 'location-branches')
+        next.set('branchImport', 'manual')
+        return next
+      })
+      return
+    }
+    if (tab === 'location-branches') {
+      setActiveTab('location-branches')
+      const mode = opts?.branchImport ?? 'endpoint'
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('tab', 'location-branches')
+        next.set('branchImport', mode === 'manual' ? 'manual' : 'endpoint')
+        return next
+      })
+      if (user?.company?.id) {
+        setTimeout(() => loadSyncedLocations(), 100)
+      }
+      return
+    }
     setActiveTab(tab)
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
       next.set('tab', tab)
+      if (next.has('branchImport')) next.delete('branchImport')
       return next
     })
     // When switching to locations tab, refresh the locations data
@@ -1784,7 +1813,17 @@ export default function SourcePage() {
   // Sync tab when URL changes (back/forward button)
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['dashboard', 'agreements', 'locations', 'branches', 'location-branches', 'pricing', 'daily-pricing', 'transactions', 'reservations', 'cancellations', 'location-requests', 'health', 'verification', 'support', 'docs', 'settings'].includes(tab)) {
+    if (tab === 'branches') {
+      setActiveTab('location-branches')
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('tab', 'location-branches')
+        next.set('branchImport', 'manual')
+        return next
+      }, { replace: true })
+      return
+    }
+    if (tab && ['dashboard', 'agreements', 'locations', 'location-branches', 'pricing', 'daily-pricing', 'transactions', 'reservations', 'cancellations', 'location-requests', 'health', 'verification', 'support', 'docs', 'settings'].includes(tab)) {
       setActiveTab(tab as any)
     } else if (!tab) {
       // If no tab in URL, set to dashboard and update URL
@@ -3302,11 +3341,17 @@ export default function SourcePage() {
     setAgreementRef(`AG-${year}-${random}`)
   }
 
+  const branchImportIsManual =
+    activeTab === 'location-branches' && searchParams.get('branchImport') === 'manual'
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
       <Sidebar 
-        activeTab={activeTab} 
+        activeTab={activeTab}
+        branchImport={
+          activeTab === 'location-branches' && searchParams.get('branchImport') === 'manual' ? 'manual' : 'endpoint'
+        }
         onTabChange={handleTabChange} 
         user={user} 
         onLogout={handleLogout}
@@ -3410,7 +3455,7 @@ export default function SourcePage() {
                     </Button>
                   </div>
                 )}
-                {(searchParams.get('renew') === '1' || (!isLoadingSubscription && !subscriptionActive && ['dashboard', 'locations', 'branches', 'location-branches', 'location-requests'].includes(activeTab))) ? (
+                {(searchParams.get('renew') === '1' || (!isLoadingSubscription && !subscriptionActive && ['dashboard', 'locations', 'location-branches', 'location-requests'].includes(activeTab))) ? (
                   <PlanPicker />
                 ) : (
                 <>
@@ -4221,39 +4266,6 @@ export default function SourcePage() {
                 </>
               )}
 
-              {activeTab === 'branches' && (
-                <>
-                  <div className="mb-8">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl shadow-sm">
-                        <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                      </div>
-                  <div>
-                        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                          Manual Branch import
-                        </h1>
-                        <p className="mt-2 text-gray-600 font-medium">
-                          Upload files, sync from endpoint, or edit branches — configure HTTP branch import under Location &amp; Branches
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-6">
-                    <BranchList
-                      subscriptionActive={subscriptionActive}
-                      onEdit={(branch) => {
-                        setSelectedBranch(branch)
-                        setIsEditBranchModalOpen(true)
-                      }}
-                      onQuotaExceeded={(payload, retry) => setQuotaModal({ payload, retry })}
-                    />
-                  </div>
-                </>
-              )}
-
               {activeTab === 'location-branches' && (
                 <>
                   <div className="mb-8">
@@ -4267,11 +4279,66 @@ export default function SourcePage() {
                         <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                           Location &amp; Branches
                         </h1>
-                        <p className="mt-2 text-gray-600 font-medium">Import locations and branches from your GLORIA location list endpoint</p>
+                        <p className="mt-2 text-gray-600 font-medium">
+                          {branchImportIsManual
+                            ? 'Upload branch files, sync from your branch HTTP endpoint, or add branches manually — or switch to supplier endpoint for GLORIA location list import.'
+                            : 'Import locations and branches from your GLORIA location list (HTTP or gRPC), or switch to manual tools for file upload and branch-endpoint sync.'}
+                        </p>
                       </div>
                     </div>
                   </div>
 
+                  <Card className="mb-6 border border-gray-200 shadow-sm" data-tour="location-branches-import-mode">
+                    <CardHeader className="bg-gray-50 border-b border-gray-200 py-3">
+                      <CardTitle className="text-base">How do you want to bring branch data in?</CardTitle>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Supplier <strong>location list</strong> (coverage + rich branch rows from XML) vs <strong>manual</strong> (file upload, dedicated branch HTTP sync, add branch).
+                      </p>
+                    </CardHeader>
+                    <CardContent className="pt-4">
+                      <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1 shadow-sm">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchParams((prev) => {
+                              const n = new URLSearchParams(prev)
+                              n.set('tab', 'location-branches')
+                              n.set('branchImport', 'endpoint')
+                              return n
+                            })
+                          }}
+                          className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                            !branchImportIsManual
+                              ? 'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200'
+                              : 'text-gray-600 hover:text-gray-900'
+                          }`}
+                        >
+                          Supplier endpoint
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchParams((prev) => {
+                              const n = new URLSearchParams(prev)
+                              n.set('tab', 'location-branches')
+                              n.set('branchImport', 'manual')
+                              return n
+                            })
+                          }}
+                          className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                            branchImportIsManual
+                              ? 'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200'
+                              : 'text-gray-600 hover:text-gray-900'
+                          }`}
+                        >
+                          Manual import
+                        </button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {!branchImportIsManual && (
+                  <>
                   <Card className="mb-6 border border-gray-200 shadow-sm">
                     <CardHeader className="bg-gray-50 border-b border-gray-200">
                       <CardTitle className="text-lg">Endpoint</CardTitle>
@@ -4397,6 +4464,21 @@ export default function SourcePage() {
                       </details>
                     </CardContent>
                   </Card>
+                  </>
+                  )}
+
+                  {branchImportIsManual && (
+                    <Card className="mb-6 border border-gray-200 shadow-sm">
+                      <CardHeader className="bg-gray-50 border-b border-gray-200">
+                        <CardTitle className="text-lg">Manual branch tools</CardTitle>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Use <strong>Upload File</strong> for XML / JSON / CSV / Excel batches. <strong>Sync</strong> pulls from your{' '}
+                          <strong>branch import HTTP endpoint</strong> saved under <strong>Settings</strong> (same behaviour as the previous “Manual Branch import” page).{' '}
+                          <strong>Add Branch</strong> creates a row directly; when an endpoint is configured, new branches can be merged with a follow-up sync.
+                        </p>
+                      </CardHeader>
+                    </Card>
+                  )}
 
                   <div className="mt-6">
                     <BranchList
@@ -4406,7 +4488,7 @@ export default function SourcePage() {
                         setIsEditBranchModalOpen(true)
                       }}
                       onQuotaExceeded={(payload, retry) => setQuotaModal({ payload, retry })}
-                      hideHeader={true}
+                      hideHeader={!branchImportIsManual}
                     />
                   </div>
 
@@ -6886,8 +6968,8 @@ service SourceProviderService {
       <SourcePanelTour
         open={panelTourOpen}
         onClose={() => setPanelTourOpen(false)}
-        onStepChangeTab={(tab) => {
-          if (tab !== activeTab) handleTabChange(tab)
+        onStepChangeTab={(tab, opts) => {
+          handleTabChange(tab as any, opts)
         }}
         onComplete={() => {
           const id = user?.company?.id

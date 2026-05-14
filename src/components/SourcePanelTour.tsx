@@ -2,14 +2,6 @@ import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { Button } from './ui/Button'
 import { X } from 'lucide-react'
 
-export type PanelTourStep = {
-  /** `data-tour` on sidebar control, or `_…` for a closing step with no highlight */
-  target: string
-  title: string
-  description: string
-  tab?: SourcePanelTab
-}
-
 type SourcePanelTab =
   | 'dashboard'
   | 'agreements'
@@ -25,6 +17,16 @@ type SourcePanelTab =
   | 'support'
   | 'docs'
   | 'settings'
+
+export type PanelTourStep = {
+  /** `data-tour` on sidebar control, or `_…` for a closing step with no highlight */
+  target: string
+  title: string
+  description: string
+  tab?: SourcePanelTab
+  /** When tab is `location-branches`, open supplier endpoint vs manual tools */
+  branchImport?: 'endpoint' | 'manual'
+}
 
 function isMetaStepTarget(target: string) {
   return target.startsWith('_')
@@ -49,50 +51,58 @@ const DEFAULT_STEPS: PanelTourStep[] = [
   {
     target: 'nav-branches',
     title: 'Manual Branch import',
-    description: 'Upload branch files, sync from your branch endpoint, and edit branch rows in a table.',
-    tab: 'branches',
+    description: 'Opens Location & Branches in manual mode: upload branch files, sync from your branch HTTP endpoint, and edit rows.',
+    tab: 'location-branches',
+    branchImport: 'manual',
   },
   {
     target: 'branches-upload-file',
     title: 'Upload File',
     description: 'Upload branch data manually from a file when you receive updates in batches.',
-    tab: 'branches',
+    tab: 'location-branches',
+    branchImport: 'manual',
   },
   {
     target: 'branches-sync-endpoint',
-    title: 'Sync (Manual Branch import)',
-    description: 'Pull branch data from the configured endpoint and merge changes into your branch table.',
-    tab: 'branches',
+    title: 'Sync (manual branch HTTP)',
+    description: 'Pull branch data from the branch import endpoint saved in Settings and merge changes into your branch table.',
+    tab: 'location-branches',
+    branchImport: 'manual',
   },
   {
     target: 'branches-add-branch',
     title: 'Add Branch',
     description: 'Create a branch record directly from the portal for quick fixes or one-off entries.',
-    tab: 'branches',
+    tab: 'location-branches',
+    branchImport: 'manual',
   },
   {
     target: 'nav-location-branches',
     title: 'Location & Branches',
     description: 'Configure the GLORIA location list (HTTP or gRPC), import/sync coverage and detailed branches in one flow.',
     tab: 'location-branches',
+    branchImport: 'endpoint',
   },
   {
     target: 'location-branches-configure-endpoint',
     title: 'Configure Endpoint',
     description: 'Set the location-list endpoint and choose HTTP or gRPC. Use Sample & Validate before importing.',
     tab: 'location-branches',
+    branchImport: 'endpoint',
   },
   {
     target: 'location-branches-import-endpoint',
     title: 'Import from endpoint',
     description: 'Runs a full import from your supplier endpoint into Gloria coverage and branch data.',
     tab: 'location-branches',
+    branchImport: 'endpoint',
   },
   {
     target: 'location-branches-sync-endpoint',
     title: 'Sync from endpoint',
     description: 'Re-fetches and upserts data. Existing rows are updated, new ones are added, and missing rows are not deleted.',
     tab: 'location-branches',
+    branchImport: 'endpoint',
   },
   {
     target: 'nav-pricing',
@@ -163,7 +173,7 @@ const DEFAULT_STEPS: PanelTourStep[] = [
     target: '_summary',
     title: 'Quick recap',
     description:
-      'Typical flow: confirm Overview, set up Agreements with agents, then Locations (coverage) and branch data via Manual Branch import or Location & Branches. Use Pricing and Daily Prices as needed, then monitor Reservations/Cancellations and billing in Transactions. Support, Settings, and Docs are always available from this menu.',
+      'Typical flow: confirm Overview, set up Agreements with agents, then Locations (coverage). Use Location & Branches for GLORIA location list import or manual file / branch-endpoint sync. Then Pricing and Daily Prices as needed, then monitor Reservations/Cancellations and billing in Transactions. Support, Settings, and Docs are always available from this menu.',
   },
 ]
 
@@ -177,7 +187,7 @@ export interface SourcePanelTourProps {
   /** Called when user finishes last step or skips (for persisting “seen”) */
   onComplete?: () => void
   steps?: PanelTourStep[]
-  onStepChangeTab?: (tab: SourcePanelTab) => void
+  onStepChangeTab?: (tab: SourcePanelTab, opts?: { branchImport?: 'endpoint' | 'manual' }) => void
 }
 
 export const SourcePanelTour: React.FC<SourcePanelTourProps> = ({
@@ -230,7 +240,7 @@ export const SourcePanelTour: React.FC<SourcePanelTourProps> = ({
 
   useEffect(() => {
     if (!open || !step?.tab || !onStepChangeTab) return
-    onStepChangeTab(step.tab)
+    onStepChangeTab(step.tab, step.branchImport ? { branchImport: step.branchImport } : undefined)
   }, [open, step, onStepChangeTab])
 
   useEffect(() => {
