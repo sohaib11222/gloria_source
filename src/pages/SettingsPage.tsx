@@ -110,6 +110,31 @@ function syncStoredUserCompany(partial: {
 	}
 }
 
+function mergeUserForStorage(next: MeUser, cached: MeUser | null): MeUser {
+	// Settings refreshes /auth/me, but older backend builds may omit some company
+	// fields used by ProtectedRoute (status / approvalStatus). Never replace a
+	// known-good session with a partial profile object, otherwise the next tab
+	// change can look like a logout/pending session to the user.
+	return {
+		...(cached || ({} as MeUser)),
+		...next,
+		companyId: next.companyId || cached?.companyId || next.company?.id || "",
+		company: {
+			...(cached?.company || ({} as MeUser["company"])),
+			...(next.company || ({} as MeUser["company"])),
+			id: next.company?.id || cached?.company?.id || next.companyId || "",
+			companyName:
+				next.company?.companyName || cached?.company?.companyName || "Source",
+			type: next.company?.type || cached?.company?.type || "SOURCE",
+			status: next.company?.status || cached?.company?.status || "ACTIVE",
+			approvalStatus:
+				next.company?.approvalStatus ||
+				cached?.company?.approvalStatus ||
+				"APPROVED",
+		},
+	};
+}
+
 export const SettingsPage: React.FC = () => {
 	const [settings, setSettings] = useState<SettingsDto | null>(null);
 	const [profile, setProfile] = useState<MeUser | null>(null);
@@ -175,7 +200,7 @@ export const SettingsPage: React.FC = () => {
 		try {
 			const meResp = await api.get("/auth/me");
 			if (meResp.status >= 200 && meResp.status < 300 && meResp.data) {
-				const data = meResp.data as MeUser;
+				const data = mergeUserForStorage(meResp.data as MeUser, cached);
 				setProfile(data);
 				localStorage.setItem("user", JSON.stringify(data));
 				applyDraftsFromProfile(data);
@@ -574,42 +599,83 @@ export const SettingsPage: React.FC = () => {
 
 	return (
 		<div className="space-y-8 animate-fade-in pb-8">
-			<div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-				<div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-					<div className="flex items-center gap-4">
-						<div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl shadow-sm">
-							<Settings className="w-8 h-8 text-blue-600" />
-						</div>
-						<div>
-							<h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-1">
+			<div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+				<div className="bg-gradient-to-br from-slate-950 via-indigo-950 to-blue-950 px-6 py-8 text-white sm:px-8">
+					<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+						<div className="max-w-4xl">
+							<div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-blue-100">
+								<Settings className="h-3.5 w-3.5" /> Source configuration
+							</div>
+							<h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
 								Settings
 							</h1>
-							<p className="text-gray-600">
-								Manage your Source profile, logo, company identifiers, security
-								whitelist, and password.
+							<p className="mt-3 text-sm leading-6 text-blue-100 sm:text-base">
+								Manage your public Source profile, company logo, default branch
+								details, security whitelist, and account password from one
+								place.
 							</p>
 						</div>
-					</div>
-					<div className="flex flex-wrap items-center gap-2">
-						<Badge variant="info" className="capitalize">
-							{companyType}
-						</Badge>
-						<Badge
-							variant={companyStatus === "ACTIVE" ? "success" : "warning"}
-							className="capitalize"
-						>
-							{companyStatus}
-						</Badge>
 						<Button
 							type="button"
 							variant="secondary"
 							size="sm"
 							onClick={() => loadAll()}
-							className="shrink-0 gap-2"
+							className="border-white/20 bg-white/10 text-white hover:bg-white/20"
 						>
-							<RefreshCw className="w-4 h-4" />
-							Refresh
+							<RefreshCw className="mr-2 h-4 w-4" /> Refresh settings
 						</Button>
+					</div>
+				</div>
+				<div className="grid gap-4 border-t border-slate-200 bg-white p-5 sm:grid-cols-2 lg:grid-cols-4">
+					<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+							Company
+						</p>
+						<p className="mt-2 truncate text-lg font-bold text-blue-950">
+							{displayCompanyName || "—"}
+						</p>
+						<p className="mt-1 text-xs text-blue-700">
+							Public supplier profile
+						</p>
+					</div>
+					<div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+							Status
+						</p>
+						<div className="mt-2">
+							<Badge
+								variant={companyStatus === "ACTIVE" ? "success" : "warning"}
+								className="capitalize"
+							>
+								{companyStatus}
+							</Badge>
+						</div>
+						<p className="mt-2 text-xs text-emerald-700">
+							Account availability
+						</p>
+					</div>
+					<div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+							Approval
+						</p>
+						<div className="mt-2">
+							<Badge
+								variant={approvalStatus === "APPROVED" ? "success" : "warning"}
+								className="capitalize"
+							>
+								{approvalStatus}
+							</Badge>
+						</div>
+						<p className="mt-2 text-xs text-indigo-700">Admin review state</p>
+					</div>
+					<div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+							Type
+						</p>
+						<p className="mt-2 text-lg font-bold capitalize text-slate-950">
+							{companyType}
+						</p>
+						<p className="mt-1 text-xs text-slate-500">Portal role</p>
 					</div>
 				</div>
 			</div>

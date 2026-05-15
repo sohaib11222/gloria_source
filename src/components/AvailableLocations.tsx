@@ -1,3 +1,18 @@
+import { useMemo } from "react";
+import {
+	AlertTriangle,
+	CheckCircle2,
+	Clock,
+	Database,
+	ExternalLink,
+	Globe2,
+	Map,
+	MapPin,
+	Navigation,
+	RefreshCw,
+	Search,
+	Trash2,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card";
 import { Button } from "./ui/Button";
 import { Location } from "../api/endpoints";
@@ -23,6 +38,48 @@ function formatCoordinates(loc: Location): string | null {
 	if (lat === 0 && lon === 0) return null;
 	if (Number.isNaN(lat) || Number.isNaN(lon)) return null;
 	return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+}
+
+function formatLinkedAt(value?: string | null) {
+	if (!value) return "—";
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return "—";
+	return date.toLocaleString(undefined, {
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+	});
+}
+
+function masterBadge(location: Location) {
+	if (location.hasMasterRecord === false) {
+		return (
+			<Badge variant="warning" className="gap-1 rounded-full">
+				<AlertTriangle className="h-3 w-3" /> Pending
+			</Badge>
+		);
+	}
+	if (location.enrichedFromBranch) {
+		return (
+			<Badge
+				variant="info"
+				className="gap-1 rounded-full"
+				title="Filled from an imported branch (natoLocode or branch code)"
+			>
+				<Database className="h-3 w-3" /> Branch
+			</Badge>
+		);
+	}
+	return (
+		<Badge
+			variant="success"
+			className="gap-1 rounded-full"
+			title="Gloria UN/LOCODE master record"
+		>
+			<CheckCircle2 className="h-3 w-3" /> Gloria
+		</Badge>
+	);
 }
 
 export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
@@ -64,36 +121,40 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
 	};
 
 	const showLinkedCol = locations.some((l) => !!l.synced_at);
+	const stats = useMemo(() => {
+		return {
+			total: locations.length,
+			master: locations.filter(
+				(location) =>
+					location.hasMasterRecord !== false && !location.enrichedFromBranch,
+			).length,
+			branch: locations.filter((location) => location.enrichedFromBranch)
+				.length,
+			pending: locations.filter(
+				(location) => location.hasMasterRecord === false,
+			).length,
+			mock: locations.filter((location) => location.isMock).length,
+		};
+	}, [locations]);
 
 	return (
 		<Card
-			className="transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100"
+			className="overflow-hidden border-0 shadow-sm ring-1 ring-slate-200"
 			data-tour="locations-table"
 		>
-			<CardHeader className="bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 border-b border-gray-200">
-				<div className="flex items-center justify-between">
-					<div className="flex items-center gap-3">
-						<div className="p-2 bg-white rounded-lg shadow-sm">
-							<svg
-								className="w-5 h-5 text-indigo-600"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-								/>
-							</svg>
+			<CardHeader className="border-b border-slate-200 bg-white">
+				<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+					<div className="flex items-start gap-3">
+						<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100">
+							<Map className="h-6 w-6" />
 						</div>
 						<div>
-							<CardTitle className="text-xl font-bold text-gray-900">
+							<CardTitle className="text-xl font-bold text-slate-950">
 								Available Locations
 							</CardTitle>
-							<p className="text-sm text-gray-600 mt-1">
-								UN/LOCODE coverage for pickups and drop-offs
+							<p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+								UN/LOCODE coverage used to decide where agents can pick up or
+								return vehicles before pricing is requested.
 							</p>
 						</div>
 					</div>
@@ -103,85 +164,88 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
 						loading={isLoadingLocations}
 						variant="secondary"
 						size="sm"
-						className="shadow-md hover:shadow-lg"
+						className="rounded-full shadow-sm"
 					>
-						<svg
-							className="w-4 h-4 mr-2"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-							/>
-						</svg>
-						Refresh
+						<RefreshCw className="mr-2 h-4 w-4" />
+						Refresh coverage
 					</Button>
 				</div>
+
+				<div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+					<div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+						<p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+							Rows
+						</p>
+						<p className="mt-1 text-2xl font-bold text-slate-950">
+							{stats.total}
+						</p>
+					</div>
+					<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
+						<p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+							Gloria master
+						</p>
+						<p className="mt-1 text-2xl font-bold text-emerald-950">
+							{stats.master}
+						</p>
+					</div>
+					<div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
+						<p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+							Branch filled
+						</p>
+						<p className="mt-1 text-2xl font-bold text-blue-950">
+							{stats.branch}
+						</p>
+					</div>
+					<div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+						<p className="text-xs font-bold uppercase tracking-wide text-amber-700">
+							Pending
+						</p>
+						<p className="mt-1 text-2xl font-bold text-amber-950">
+							{stats.pending}
+						</p>
+					</div>
+					<div className="rounded-2xl border border-slate-200 bg-white p-3">
+						<p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+							Data mode
+						</p>
+						<p className="mt-1 text-sm font-bold text-slate-950">
+							{stats.mock > 0 ? `${stats.mock} mock row(s)` : "Live"}
+						</p>
+					</div>
+				</div>
 			</CardHeader>
-			<CardContent className="pt-6">
+			<CardContent className="p-5">
 				<div
-					className="mb-6 p-4 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-l-4 border-blue-400 rounded-lg"
+					className="mb-6 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4"
 					data-tour="locations-about"
 				>
 					<div className="flex items-start gap-3">
-						<svg
-							className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5"
-							fill="currentColor"
-							viewBox="0 0 20 20"
-						>
-							<path
-								fillRule="evenodd"
-								d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-								clipRule="evenodd"
-							/>
-						</svg>
+						<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+							<Globe2 className="h-4 w-4" />
+						</div>
 						<div>
-							<p className="text-sm font-semibold text-blue-900 mb-1">
-								About Locations
+							<p className="text-sm font-bold text-blue-950">
+								How to read this table
 							</p>
-							<p className="text-xs text-blue-800 leading-relaxed">
+							<p className="mt-1 text-sm leading-6 text-blue-800">
 								{agreementFilterActive ? (
 									<>
-										Codes allowed for the selected agreement (including
-										overrides). Place, country, IATA, and coordinates come from
-										the Gloria UN/LOCODE master record when it exists.
+										You are viewing coverage allowed for the selected agreement.
+										Rows can include agreement overrides plus inherited source
+										coverage.
 										{listMeta?.inherited ? (
-											<span className="block mt-1 font-medium">
-												This source has no dedicated coverage rows yet — the
-												full global UN/LOCODE list is shown (inherited mode).
-											</span>
-										) : null}
-										{listMeta?.hasMockData ? (
-											<span className="block mt-1">
-												Some rows may be marked as mock when the source uses
-												mock data.
+											<span className="mt-1 block font-semibold">
+												No dedicated source rows exist yet, so the global
+												UN/LOCODE list is shown in inherited mode.
 											</span>
 										) : null}
 									</>
 								) : (
 									<>
-										Rows are your source <strong>coverage</strong> from{" "}
-										<strong>Sync Locations</strong>,{" "}
-										<strong>Import Locations</strong>,{" "}
-										<strong>Location &amp; Branches</strong> (list import), or
-										manual adds. Display fields use the Gloria{" "}
-										<strong>UN/LOCODE</strong> master when it exists; otherwise
-										we map from an imported <strong>branch</strong> whose{" "}
-										<code className="bg-white px-1 rounded text-[11px]">
-											natoLocode
-										</code>{" "}
-										(or{" "}
-										<code className="bg-white px-1 rounded text-[11px]">
-											branchCode
-										</code>
-										) matches the code. Set <strong>Master</strong> to{" "}
-										<strong>Gloria</strong> vs <strong>Branch</strong>{" "}
-										accordingly; <strong>Pending</strong> means no master row
-										and no matching branch yet.
+										Rows are your source coverage from syncs/imports. “Gloria”
+										means the code exists in the master location table, “Branch”
+										means display data came from an imported branch, and
+										“Pending” means the code still needs a master/branch match.
 									</>
 								)}
 							</p>
@@ -189,139 +253,126 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
 					</div>
 				</div>
 
-				{showLocations ? (
-					locations.length > 0 ? (
-						<div className="overflow-x-auto rounded border border-gray-200">
-							<table className="min-w-full divide-y divide-gray-200">
-								<thead className="bg-gray-50">
+				{isLoadingLocations ? (
+					<div className="rounded-3xl border border-slate-200 bg-slate-50 px-6 py-16 text-center">
+						<RefreshCw className="mx-auto h-8 w-8 animate-spin text-blue-600" />
+						<h3 className="mt-4 text-lg font-bold text-slate-950">
+							Loading coverage
+						</h3>
+						<p className="mt-2 text-sm text-slate-600">
+							Fetching your latest location rows…
+						</p>
+					</div>
+				) : showLocations && locations.length > 0 ? (
+					<div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+						<div className="overflow-x-auto">
+							<table className="min-w-full divide-y divide-slate-200">
+								<thead className="bg-slate-50">
 									<tr>
-										<th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-											UN/LOCODE
+										<th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+											Location
 										</th>
-										<th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-											Name
+										<th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+											Country / IATA
 										</th>
-										<th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-											Country
-										</th>
-										<th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-											IATA
-										</th>
-										<th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+										<th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
 											Coordinates
 										</th>
-										<th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-											Master
+										<th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+											Master source
 										</th>
-										<th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+										<th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
 											Data
 										</th>
 										{showLinkedCol && (
-											<th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+											<th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
 												Linked
 											</th>
 										)}
 										{showRemoveButton && (
-											<th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+											<th className="px-5 py-4 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
 												Actions
 											</th>
 										)}
 									</tr>
 								</thead>
-								<tbody className="bg-white divide-y divide-gray-200">
+								<tbody className="divide-y divide-slate-100 bg-white">
 									{locations.map((location) => {
 										const coords = formatCoordinates(location);
 										return (
 											<tr
 												key={location.unlocode}
-												className="hover:bg-gray-50 transition-colors"
+												className="transition hover:bg-blue-50/40"
 											>
-												<td className="px-4 py-3 whitespace-nowrap">
-													<code className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-mono">
-														{location.unlocode}
-													</code>
-												</td>
-												<td className="px-4 py-3">
-													<div className="text-sm text-gray-900">
-														{location.place || "—"}
+												<td className="px-5 py-4 align-top">
+													<div className="flex items-start gap-3">
+														<div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+															<MapPin className="h-4 w-4" />
+														</div>
+														<div className="min-w-0">
+															<code className="rounded-lg bg-slate-900 px-2 py-1 text-xs font-bold text-white">
+																{location.unlocode || "—"}
+															</code>
+															<p className="mt-2 max-w-xs truncate text-sm font-semibold text-slate-950">
+																{location.place || "Unnamed location"}
+															</p>
+														</div>
 													</div>
 												</td>
-												<td className="px-4 py-3 whitespace-nowrap">
-													{location.country ? (
-														<span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">
-															{location.country}
-														</span>
-													) : (
-														<span className="text-xs text-gray-400">—</span>
-													)}
+												<td className="px-5 py-4 align-top">
+													<div className="flex flex-wrap gap-2">
+														{location.country ? (
+															<span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
+																{location.country}
+															</span>
+														) : (
+															<span className="text-xs text-slate-400">
+																No country
+															</span>
+														)}
+														{location.iata_code ? (
+															<span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 ring-1 ring-indigo-100">
+																IATA {location.iata_code}
+															</span>
+														) : null}
+													</div>
 												</td>
-												<td className="px-4 py-3 whitespace-nowrap">
-													{location.iata_code ? (
-														<span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">
-															{location.iata_code}
-														</span>
-													) : (
-														<span className="text-xs text-gray-400">—</span>
-													)}
-												</td>
-												<td className="px-4 py-3 whitespace-nowrap">
+												<td className="px-5 py-4 align-top">
 													{coords ? (
-														<span className="text-xs text-gray-600 font-mono">
+														<span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
+															<Navigation className="h-3.5 w-3.5" />
 															{coords}
 														</span>
 													) : (
-														<span className="text-xs text-gray-400">—</span>
+														<span className="text-xs text-slate-400">
+															Missing
+														</span>
 													)}
 												</td>
-												<td className="px-4 py-3 whitespace-nowrap">
-													{location.hasMasterRecord === false ? (
-														<Badge variant="warning" className="text-[10px]">
-															Pending
-														</Badge>
-													) : location.enrichedFromBranch ? (
-														<Badge
-															variant="info"
-															className="text-[10px]"
-															title="Filled from an imported branch (natoLocode or branch code)"
-														>
-															Branch
-														</Badge>
-													) : (
-														<Badge
-															variant="success"
-															className="text-[10px]"
-															title="Gloria UN/LOCODE master record"
-														>
-															Gloria
-														</Badge>
-													)}
+												<td className="px-5 py-4 align-top">
+													{masterBadge(location)}
 												</td>
-												<td className="px-4 py-3 whitespace-nowrap">
+												<td className="px-5 py-4 align-top">
 													{location.isMock ? (
-														<Badge variant="default" className="text-[10px]">
+														<Badge variant="info" className="rounded-full">
 															Mock
 														</Badge>
 													) : (
-														<span className="text-xs text-gray-500">Live</span>
+														<span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-100">
+															<CheckCircle2 className="h-3.5 w-3.5" /> Live
+														</span>
 													)}
 												</td>
 												{showLinkedCol && (
-													<td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
-														{location.synced_at
-															? new Date(location.synced_at).toLocaleString(
-																	undefined,
-																	{
-																		month: "short",
-																		day: "numeric",
-																		hour: "2-digit",
-																		minute: "2-digit",
-																	},
-																)
-															: "—"}
+													<td className="px-5 py-4 align-top text-xs text-slate-600">
+														<span className="inline-flex items-center gap-1.5">
+															<Clock className="h-3.5 w-3.5 text-slate-400" />
+															{formatLinkedAt(location.synced_at)}
+														</span>
 													</td>
 												)}
 												{showRemoveButton && (
-													<td className="px-4 py-3 whitespace-nowrap">
+													<td className="px-5 py-4 text-right align-top">
 														<Button
 															onClick={() =>
 																handleRemoveLocation(
@@ -332,21 +383,9 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
 															loading={removeLocationMutation.isPending}
 															variant="secondary"
 															size="sm"
-															className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+															className="rounded-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
 														>
-															<svg
-																className="w-4 h-4 mr-1"
-																fill="none"
-																viewBox="0 0 24 24"
-																stroke="currentColor"
-															>
-																<path
-																	strokeLinecap="round"
-																	strokeLinejoin="round"
-																	strokeWidth={2}
-																	d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-																/>
-															</svg>
+															<Trash2 className="mr-1.5 h-4 w-4" />
 															Remove
 														</Button>
 													</td>
@@ -357,76 +396,43 @@ export const AvailableLocations: React.FC<AvailableLocationsProps> = ({
 								</tbody>
 							</table>
 						</div>
-					) : (
-						<div className="text-center py-16">
-							<div className="mx-auto w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-4">
-								<svg
-									className="h-8 w-8 text-gray-400"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-									/>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-									/>
-								</svg>
-							</div>
-							<h3 className="text-lg font-semibold text-gray-900 mb-2">
-								No locations found
-							</h3>
-							<p className="text-sm text-gray-500 mb-4">
-								No locations are configured for this agreement.
-							</p>
-							<Button
-								onClick={() => loadLocations()}
-								variant="secondary"
-								size="sm"
-							>
-								Try Loading Again
-							</Button>
-						</div>
-					)
-				) : (
-					<div className="text-center py-16">
-						<div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mb-4">
-							<svg
-								className="h-8 w-8 text-blue-500"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-								/>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-								/>
-							</svg>
-						</div>
-						<h3 className="text-lg font-semibold text-gray-900 mb-2">
-							Ready to Load Locations
+					</div>
+				) : showLocations ? (
+					<div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-16 text-center">
+						<MapPin className="mx-auto h-10 w-10 text-slate-400" />
+						<h3 className="mt-4 text-lg font-bold text-slate-950">
+							No locations found
 						</h3>
-						<p className="text-sm text-gray-500 mb-4">
-							Select an agreement and click &quot;Load Locations&quot; to view
-							available locations
+						<p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+							No coverage rows matched this view. Try a different agreement,
+							sync/import coverage, or request a missing location above.
 						</p>
-						<Button onClick={() => loadLocations()} variant="primary" size="sm">
-							Load Locations
+						<Button
+							onClick={() => loadLocations()}
+							variant="secondary"
+							size="sm"
+							className="mt-5 rounded-full"
+						>
+							<RefreshCw className="mr-2 h-4 w-4" /> Try loading again
+						</Button>
+					</div>
+				) : (
+					<div className="rounded-3xl border border-dashed border-blue-200 bg-blue-50 px-6 py-16 text-center">
+						<Search className="mx-auto h-10 w-10 text-blue-500" />
+						<h3 className="mt-4 text-lg font-bold text-blue-950">
+							Ready to load coverage
+						</h3>
+						<p className="mx-auto mt-2 max-w-md text-sm leading-6 text-blue-800">
+							Choose an agreement filter if needed, then load the table to view
+							available pickup and return locations.
+						</p>
+						<Button
+							onClick={() => loadLocations()}
+							variant="primary"
+							size="sm"
+							className="mt-5 rounded-full"
+						>
+							<ExternalLink className="mr-2 h-4 w-4" /> Load locations
 						</Button>
 					</div>
 				)}

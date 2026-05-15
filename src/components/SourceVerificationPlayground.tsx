@@ -194,39 +194,47 @@ export const SourceVerificationPlayground: React.FC<
 
 	return (
 		<div className="space-y-8">
-			<div className="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-blue-50 p-6 shadow-sm">
-				<div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-					<div className="flex items-start gap-4">
-						<div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
-							<CheckCircle2 className="h-8 w-8" />
-						</div>
-						<div>
-							<h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">
+			<div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+				<div className="bg-gradient-to-br from-slate-950 via-emerald-950 to-blue-950 px-6 py-8 text-white sm:px-8">
+					<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+						<div className="max-w-4xl">
+							<div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-emerald-100">
+								<CheckCircle2 className="h-3.5 w-3.5" />
+								Go-live readiness
+							</div>
+							<h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
 								Source verification playground
 							</h1>
-							<p className="mt-2 max-w-3xl text-sm leading-6 text-gray-700">
-								Use this page before going live: configure how Gloria calls your
-								supplier system, send real test requests, inspect parsed
-								responses, and compare your payloads with the expected GLORIA
-								shapes.
+							<p className="mt-3 text-sm leading-6 text-emerald-50 sm:text-base">
+								Use this page as your pre-launch checklist. Test location lists,
+								validate availability/pricing, confirm gRPC connectivity, and
+								run the automated verification report before agents quote live
+								vehicles.
 							</p>
 						</div>
+						<div className="rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-emerald-50 backdrop-blur">
+							<p className="font-bold text-white">Recommended order</p>
+							<ol className="mt-2 space-y-1 text-xs leading-5 text-emerald-100">
+								<li>1. Test location list endpoint.</li>
+								<li>2. Fetch availability and pricing.</li>
+								<li>3. Run automated verification.</li>
+							</ol>
+							<Button
+								type="button"
+								className="mt-4 w-full justify-center border-white/20 bg-white/10 text-white hover:bg-white/20"
+								onClick={runSourceVerification}
+								loading={verificationLoading}
+								disabled={verificationStatus === "RUNNING"}
+							>
+								<RefreshCw className="mr-2 h-4 w-4" />
+								Run full verification
+							</Button>
+						</div>
 					</div>
-					<Button
-						onClick={runSourceVerification}
-						loading={verificationLoading}
-						disabled={verificationStatus === "RUNNING"}
-					>
-						<RefreshCw className="mr-2 h-4 w-4" />
-						Run full verification
-					</Button>
 				</div>
-			</div>
-
-			<div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-				<Card className="border-gray-200">
-					<CardContent className="p-5">
-						<p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+				<div className="grid gap-4 border-t border-slate-200 bg-white p-5 sm:grid-cols-2 lg:grid-cols-4">
+					<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
 							Location list
 						</p>
 						<div className="mt-3">
@@ -236,14 +244,12 @@ export const SourceVerificationPlayground: React.FC<
 									: undefined,
 							)}
 						</div>
-						<p className="mt-2 text-xs text-gray-500">
-							Branches and locations returned by your supplier.
+						<p className="mt-2 text-xs leading-5 text-blue-700">
+							Confirms branch/location data can be parsed.
 						</p>
-					</CardContent>
-				</Card>
-				<Card className="border-gray-200">
-					<CardContent className="p-5">
-						<p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+					</div>
+					<div className="rounded-2xl border border-violet-100 bg-violet-50 p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-violet-700">
 							Availability/pricing
 						</p>
 						<div className="mt-3">
@@ -253,49 +259,49 @@ export const SourceVerificationPlayground: React.FC<
 									: undefined,
 							)}
 						</div>
-						<p className="mt-2 text-xs text-gray-500">
-							Vehicle offers, rates, terms, and extras.
+						<p className="mt-2 text-xs leading-5 text-violet-700">
+							Checks vehicle offers, rates, terms, and extras.
 						</p>
-					</CardContent>
-				</Card>
-				<Card className="border-gray-200">
-					<CardContent className="p-5">
-						<p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+					</div>
+					<div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
 							gRPC health
 						</p>
 						<div className="mt-3">
 							{resultBadge(grpcTestResult ? grpcTestResult.ok : undefined)}
 						</div>
-						<p className="mt-2 text-xs text-gray-500">
-							SourceProviderService connectivity.
+						<p className="mt-2 text-xs leading-5 text-emerald-700">
+							Verifies SourceProviderService connectivity.
 						</p>
-					</CardContent>
-				</Card>
-				<Card className="border-gray-200">
-					<CardContent className="p-5">
-						<p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-							Automated verification
+					</div>
+					<div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+							Automated report
 						</p>
 						<div className="mt-3">
 							{resultBadge(
 								verificationResult ? verificationResult.passed : undefined,
 							)}
 						</div>
-						<p className="mt-2 text-xs text-gray-500">
+						<p className="mt-2 text-xs leading-5 text-amber-700">
 							{passedSteps}/{verificationSteps.length || 0} checks passed.
 						</p>
-					</CardContent>
-				</Card>
+					</div>
+				</div>
 			</div>
 
-			<Card className="border-blue-100 shadow-sm">
-				<CardHeader className="border-b border-blue-100 bg-blue-50/60">
+			<Card className="overflow-hidden border-0 shadow-sm ring-1 ring-slate-200">
+				<CardHeader className="border-b border-slate-200 bg-gradient-to-r from-white via-white to-blue-50">
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 						<div>
-							<CardTitle className="text-xl font-bold text-gray-900">
-								1. Location list endpoint playground
+							<div className="mb-2 inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-blue-700">
+								<Settings className="h-3.5 w-3.5" />
+								Step 1 · Location data
+							</div>
+							<CardTitle className="text-2xl font-bold text-slate-950">
+								Location list endpoint playground
 							</CardTitle>
-							<p className="mt-1 text-sm text-gray-600">
+							<p className="mt-2 text-sm leading-6 text-slate-600">
 								Gloria can fetch your complete location/branch list via HTTP XML
 								or gRPC GetLocations. Test it here and confirm Gloria can parse
 								locations before you rely on them in pricing.
@@ -310,9 +316,11 @@ export const SourceVerificationPlayground: React.FC<
 						</Badge>
 					</div>
 				</CardHeader>
-				<CardContent className="space-y-6 p-6">
+				<CardContent className="space-y-6 p-5 sm:p-6">
 					<div className="grid gap-3 md:grid-cols-2">
-						<label className="flex cursor-pointer gap-3 rounded-xl border border-gray-200 bg-white p-4 hover:border-blue-200">
+						<label
+							className={`flex cursor-pointer gap-3 rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-sm ${locationListTransport === "http" ? "border-blue-300 bg-blue-50 ring-2 ring-blue-100" : "border-slate-200 bg-white hover:border-blue-200"}`}
+						>
 							<input
 								type="radio"
 								name="verificationLocationTransport"
@@ -331,7 +339,9 @@ export const SourceVerificationPlayground: React.FC<
 								</span>
 							</span>
 						</label>
-						<label className="flex cursor-pointer gap-3 rounded-xl border border-gray-200 bg-white p-4 hover:border-blue-200">
+						<label
+							className={`flex cursor-pointer gap-3 rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-sm ${locationListTransport === "grpc" ? "border-blue-300 bg-blue-50 ring-2 ring-blue-100" : "border-slate-200 bg-white hover:border-blue-200"}`}
+						>
 							<input
 								type="radio"
 								name="verificationLocationTransport"
@@ -564,14 +574,18 @@ export const SourceVerificationPlayground: React.FC<
 				</CardContent>
 			</Card>
 
-			<Card className="border-violet-100 shadow-sm">
-				<CardHeader className="border-b border-violet-100 bg-violet-50/60">
+			<Card className="overflow-hidden border-0 shadow-sm ring-1 ring-slate-200">
+				<CardHeader className="border-b border-slate-200 bg-gradient-to-r from-white via-white to-violet-50">
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 						<div>
-							<CardTitle className="text-xl font-bold text-gray-900">
-								2. Availability & pricing playground
+							<div className="mb-2 inline-flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-violet-700">
+								<RefreshCw className="h-3.5 w-3.5" />
+								Step 2 · Rates data
+							</div>
+							<CardTitle className="text-2xl font-bold text-slate-950">
+								Availability & pricing playground
 							</CardTitle>
-							<p className="mt-1 text-sm text-gray-600">
+							<p className="mt-2 text-sm leading-6 text-slate-600">
 								Send the same availability request used in the Pricing tab.
 								Confirm vehicles, rates, terms, and extras are returned in a
 								GLORIA-compatible shape.
@@ -795,14 +809,18 @@ export const SourceVerificationPlayground: React.FC<
 				</CardContent>
 			</Card>
 
-			<Card className="border-gray-200 shadow-sm">
-				<CardHeader className="border-b border-gray-200 bg-gray-50">
+			<Card className="overflow-hidden border-0 shadow-sm ring-1 ring-slate-200">
+				<CardHeader className="border-b border-slate-200 bg-gradient-to-r from-white via-white to-amber-50">
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<div>
-							<CardTitle className="text-xl font-bold text-gray-900">
-								3. Automated verification run
+							<div className="mb-2 inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-amber-700">
+								<CheckCircle2 className="h-3.5 w-3.5" />
+								Step 3 · Final report
+							</div>
+							<CardTitle className="text-2xl font-bold text-slate-950">
+								Automated verification run
 							</CardTitle>
-							<p className="mt-1 text-sm text-gray-600">
+							<p className="mt-2 text-sm leading-6 text-slate-600">
 								Runs backend checks and stores the latest verification report
 								for admin review.
 							</p>

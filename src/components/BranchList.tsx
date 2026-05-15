@@ -272,10 +272,11 @@ interface BranchListProps {
   subscriptionActive?: boolean
   onEdit?: (branch: Branch) => void
   onQuotaExceeded?: (payload: BranchQuotaExceededPayload, retry: () => Promise<void>) => void
+  onRequirePlan?: (action: string, description?: string) => void
   hideHeader?: boolean // When true, hides the CardHeader with title and action buttons
 }
 
-export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = true, onEdit, onQuotaExceeded, hideHeader = false }) => {
+export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = true, onEdit, onQuotaExceeded, onRequirePlan, hideHeader = false }) => {
   const [filters, setFilters] = useState({
     status: '',
     locationType: '',
@@ -291,6 +292,13 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
   const limit = 25
 
   const queryClient = useQueryClient()
+
+  const requirePlan = (action: string, description?: string) => {
+    if (subscriptionActive) return true
+    onRequirePlan?.(action, description)
+    if (!onRequirePlan) toast.error(PLAN_REQUIRED_TITLE)
+    return false
+  }
 
   // Load endpoint configuration
   const { data: endpointConfig } = useQuery({
@@ -445,6 +453,7 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
   })
 
   const handleImportBranches = async () => {
+    if (!requirePlan('sync branches', 'Branch sync writes endpoint data into Gloria. Choose a plan before importing or syncing branches.')) return
     setIsImporting(true)
     try {
       await importBranchesMutation.mutateAsync()
@@ -580,7 +589,10 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
                   variant="secondary"
                   size="sm"
                   data-tour="branches-upload-file"
-                  onClick={() => setIsUploadModalOpen(true)}
+                  onClick={() => {
+                    if (!requirePlan('upload branch file', 'Uploading a branch file creates operational branch records. Choose a plan before uploading branches.')) return
+                    setIsUploadModalOpen(true)
+                  }}
                   className="flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
                   <Upload className="w-4 h-4" />
@@ -603,7 +615,10 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
                   variant="primary"
                   size="sm"
                   data-tour="branches-add-branch"
-                  onClick={() => setIsCreateModalOpen(true)}
+                  onClick={() => {
+                    if (!requirePlan('add a branch', 'Adding a branch creates an operational branch record. Choose a plan before adding branches.')) return
+                    setIsCreateModalOpen(true)
+                  }}
                   className="flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
                   <Plus className="w-4 h-4" />
@@ -634,8 +649,10 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => setIsUploadModalOpen(true)}
-                        disabled={!subscriptionActive}
+                        onClick={() => {
+                          if (!requirePlan('upload branch file', 'Uploading a branch file creates operational branch records. Choose a plan before uploading branches.')) return
+                          setIsUploadModalOpen(true)
+                        }}
                         title={!subscriptionActive ? PLAN_REQUIRED_TITLE : undefined}
                         className="flex items-center gap-2"
                       >
@@ -645,8 +662,10 @@ export const BranchList: React.FC<BranchListProps> = ({ subscriptionActive = tru
                       <Button
                         variant="primary"
                         size="sm"
-                        onClick={() => setIsCreateModalOpen(true)}
-                        disabled={!subscriptionActive}
+                        onClick={() => {
+                          if (!requirePlan('add a branch', 'Adding a branch creates an operational branch record. Choose a plan before adding branches.')) return
+                          setIsCreateModalOpen(true)
+                        }}
                         title={!subscriptionActive ? PLAN_REQUIRED_TITLE : undefined}
                         className="flex items-center gap-2"
                       >

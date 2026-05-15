@@ -110,7 +110,7 @@ const DEFAULT_STEPS: PanelTourStep[] = [
 		tab: "locations",
 		bullets: [
 			"Sync or import coverage from supplier systems.",
-			"Manually add UN/LOCODEs when needed.",
+			"Request missing locations for admin review when the master list is incomplete.",
 			"Filter coverage by agreement to review overrides.",
 		],
 		targetLabel: "Locations tab",
@@ -134,7 +134,7 @@ const DEFAULT_STEPS: PanelTourStep[] = [
 		eyebrow: "Locations panel",
 		title: "Coverage action buttons",
 		description:
-			"These buttons are the operational controls for the Locations panel. They are disabled until the source has an active plan.",
+			"These buttons are the operational controls for the Locations panel. Explore them freely; write actions such as sync/import will ask for an active plan before saving data.",
 		tab: "locations",
 		bullets: [
 			"Use Sync Locations for adapter/gRPC coverage refreshes.",
@@ -146,32 +146,32 @@ const DEFAULT_STEPS: PanelTourStep[] = [
 		targetLabel: "Location action buttons",
 	},
 	{
-		target: "locations-add-card",
+		target: "locations-request-card",
 		eyebrow: "Locations panel",
-		title: "Add a location manually",
+		title: "Request a missing location",
 		description:
-			"Use this card for one-off coverage fixes. Search by UN/LOCODE, city, country, or IATA code, select the correct result, then add it to your source coverage.",
+			"Use this card when the place you need is not available in Gloria’s location master. The request goes to the admin team instead of trying to add incomplete coverage directly.",
 		tab: "locations",
 		bullets: [
-			"Best for small adjustments or emergency additions.",
-			"The list uses Gloria’s UN/LOCODE master data where available.",
-			"Manual coverage does not create full branch address/contact rows.",
+			"Submit the location name, country, city/IATA code, address, and business reason.",
+			"Admins review, normalize codes, and approve or reject with notes.",
+			"Approved locations can then be used for coverage and future imports.",
 		],
-		targetLabel: "Add Location card",
+		targetLabel: "Missing location request card",
 	},
 	{
-		target: "locations-search-input",
+		target: "locations-requests-list",
 		eyebrow: "Locations panel",
-		title: "Search the UN/LOCODE master",
+		title: "Track submitted location requests",
 		description:
-			"Type a location code or city name here. After choosing a result, the add button appears so you can save the location to coverage.",
+			"This section shows every missing-location request you already sent, including pending, approved, rejected, review date, reason, and admin notes.",
 		tab: "locations",
 		bullets: [
-			"Examples: AEDXB, Dubai, GBLON, London, MAN.",
-			"Press Escape to close search results.",
-			"After add, the locations list refreshes.",
+			"Filter by status when you have many requests.",
+			"Open a request to view full details and admin notes.",
+			"Use this instead of the old separate Location Requests page.",
 		],
-		targetLabel: "Location search field",
+		targetLabel: "Request history",
 	},
 	{
 		target: "locations-filter-card",
@@ -379,15 +379,6 @@ const DEFAULT_STEPS: PanelTourStep[] = [
 		targetLabel: "Cancellations tab",
 	},
 	{
-		target: "nav-location-requests",
-		eyebrow: "Coverage requests",
-		title: "Location Requests",
-		description:
-			"Request new or corrected locations when a location is missing or needs review by the Gloria team.",
-		tab: "location-requests",
-		targetLabel: "Location Requests tab",
-	},
-	{
 		target: "nav-health",
 		eyebrow: "Monitoring",
 		title: "Health",
@@ -461,7 +452,6 @@ const DEFAULT_STEPS: PanelTourStep[] = [
 	},
 ];
 
-
 const TOUR_TAB_LABELS: Partial<Record<SourcePanelTab, string>> = {
 	dashboard: "Overview",
 	agreements: "Agreements",
@@ -472,7 +462,6 @@ const TOUR_TAB_LABELS: Partial<Record<SourcePanelTab, string>> = {
 	transactions: "Transactions",
 	reservations: "Reservations",
 	cancellations: "Cancellations",
-	"location-requests": "Location Requests",
 	health: "Health",
 	verification: "Verification",
 	support: "Support",
@@ -762,10 +751,30 @@ export const SourcePanelTour: React.FC<SourcePanelTourProps> = ({
 		>
 			{hasBox && box ? (
 				<>
-					<div className="source-tour-dim source-tour-dim--top" style={{ height: box.top }} aria-hidden />
-					<div className="source-tour-dim source-tour-dim--bottom" style={{ top: box.top + box.height }} aria-hidden />
-					<div className="source-tour-dim source-tour-dim--left" style={{ top: box.top, width: box.left, height: box.height }} aria-hidden />
-					<div className="source-tour-dim source-tour-dim--right" style={{ top: box.top, left: box.left + box.width, height: box.height }} aria-hidden />
+					<div
+						className="source-tour-dim source-tour-dim--top"
+						style={{ height: box.top }}
+						aria-hidden
+					/>
+					<div
+						className="source-tour-dim source-tour-dim--bottom"
+						style={{ top: box.top + box.height }}
+						aria-hidden
+					/>
+					<div
+						className="source-tour-dim source-tour-dim--left"
+						style={{ top: box.top, width: box.left, height: box.height }}
+						aria-hidden
+					/>
+					<div
+						className="source-tour-dim source-tour-dim--right"
+						style={{
+							top: box.top,
+							left: box.left + box.width,
+							height: box.height,
+						}}
+						aria-hidden
+					/>
 				</>
 			) : (
 				<div className="source-tour-backdrop" aria-hidden />

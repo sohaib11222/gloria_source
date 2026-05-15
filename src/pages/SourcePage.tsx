@@ -33,7 +33,6 @@ import { BranchEditModal } from "../components/BranchEditModal";
 import { SourceBookingsPanel } from "../components/SourceBookingsPanel";
 import { LocationRequestForm } from "../components/LocationRequestForm";
 import { LocationRequestList } from "../components/LocationRequestList";
-import { AddLocationForm } from "../components/AddLocationForm";
 import { AgreementDetailModal } from "../components/AgreementDetailModal";
 import { MyAgreements } from "../components/MyAgreements";
 import { DailyPricingCalendar } from "../components/DailyPricingCalendar";
@@ -2192,40 +2191,97 @@ function SourceTransactionsTab() {
 		queryFn: () => transactionsApi.getMyTransactions(),
 	});
 	const items: SourceTransaction[] = data?.items ?? [];
+	const paidCount = items.filter((t) => t.status === "paid").length;
+	const openCount = items.filter(
+		(t) => t.status === "open" || t.status === "draft",
+	).length;
+	const totalPaidCents = items.reduce((sum, t) => sum + (t.amountPaid || 0), 0);
+	const primaryCurrency = items[0]?.currency || "EUR";
 
 	return (
 		<>
-			<div className="mb-8">
-				<div className="flex items-center justify-between flex-wrap gap-4 mb-4">
-					<div className="flex items-center gap-4">
-						<div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl shadow-sm">
-							<Receipt className="w-8 h-8 text-blue-600" />
-						</div>
-						<div>
-							<h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-								My Transactions
+			<div className="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+				<div className="bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 px-6 py-8 text-white sm:px-8">
+					<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+						<div className="max-w-3xl">
+							<div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-blue-100">
+								<Receipt className="h-3.5 w-3.5" /> Billing ledger
+							</div>
+							<h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+								Transactions
 							</h1>
-							<p className="mt-2 text-gray-600 font-medium">
-								View your billing history and invoices
+							<p className="mt-3 text-sm leading-6 text-blue-100 sm:text-base">
+								Review plan payments, invoice status, billing periods, and
+								downloadable invoice documents from Stripe.
 							</p>
 						</div>
+						<Button
+							variant="secondary"
+							size="sm"
+							onClick={() => refetch()}
+							disabled={isLoading}
+							className="border-white/20 bg-white/10 text-white hover:bg-white/20"
+						>
+							<RefreshCw
+								className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
+							/>
+							Refresh transactions
+						</Button>
 					</div>
-					<Button
-						variant="secondary"
-						size="sm"
-						onClick={() => refetch()}
-						disabled={isLoading}
-					>
-						<RefreshCw
-							className={`w-4 h-4 mr-1 ${isLoading ? "animate-spin" : ""}`}
-						/>
-						Refresh
-					</Button>
+				</div>
+				<div className="grid gap-4 border-t border-slate-200 bg-white p-5 sm:grid-cols-2 lg:grid-cols-4">
+					<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+							Total records
+						</p>
+						<p className="mt-2 text-lg font-bold text-blue-950">
+							{items.length}
+						</p>
+						<p className="mt-1 text-xs text-blue-700">Loaded billing items</p>
+					</div>
+					<div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+							Paid
+						</p>
+						<p className="mt-2 text-lg font-bold text-emerald-950">
+							{paidCount}
+						</p>
+						<p className="mt-1 text-xs text-emerald-700">Completed invoices</p>
+					</div>
+					<div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+							Open/draft
+						</p>
+						<p className="mt-2 text-lg font-bold text-amber-950">{openCount}</p>
+						<p className="mt-1 text-xs text-amber-700">
+							Need attention if unpaid
+						</p>
+					</div>
+					<div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+						<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+							Paid total
+						</p>
+						<p className="mt-2 text-lg font-bold text-slate-950">
+							{formatAmount(totalPaidCents, primaryCurrency)}
+						</p>
+						<p className="mt-1 text-xs text-slate-500">
+							Based on loaded invoices
+						</p>
+					</div>
 				</div>
 			</div>
 
-			<Card className="border border-gray-200 shadow-sm">
-				<CardContent className="pt-6">
+			<Card className="overflow-hidden border-0 shadow-sm ring-1 ring-slate-200">
+				<CardHeader className="border-b border-slate-200 bg-gradient-to-r from-white via-white to-blue-50">
+					<CardTitle className="text-xl font-bold text-slate-950">
+						Invoice history
+					</CardTitle>
+					<p className="mt-1 text-sm leading-6 text-slate-600">
+						Use hosted invoice links for payment details, tax information, and
+						downloadable PDF invoices.
+					</p>
+				</CardHeader>
+				<CardContent className="p-0">
 					{isLoading ? (
 						<div className="py-12 flex justify-center">
 							<Loader size="lg" />
@@ -2236,38 +2292,43 @@ function SourceTransactionsTab() {
 						</p>
 					) : (
 						<div className="overflow-x-auto">
-							<table className="w-full text-sm">
+							<table className="min-w-[900px] w-full text-sm">
 								<thead>
-									<tr className="border-b">
-										<th className="text-left py-2">Date</th>
-										<th className="text-left py-2">Plan</th>
-										<th className="text-left py-2">Status</th>
-										<th className="text-right py-2">Amount</th>
-										<th className="text-right py-2">Period</th>
-										<th className="text-right py-2">Actions</th>
+									<tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
+										<th className="text-left px-4 py-3">Date</th>
+										<th className="text-left px-4 py-3">Plan</th>
+										<th className="text-left px-4 py-3">Status</th>
+										<th className="text-right px-4 py-3">Amount</th>
+										<th className="text-right px-4 py-3">Period</th>
+										<th className="text-right px-4 py-3">Actions</th>
 									</tr>
 								</thead>
 								<tbody>
 									{items.map((t) => (
-										<tr key={t.id} className="border-b border-gray-100">
-											<td className="py-2 text-gray-700">
+										<tr
+											key={t.id}
+											className="border-b border-slate-100 hover:bg-blue-50/40"
+										>
+											<td className="px-4 py-3 text-slate-700">
 												{t.createdAt ? formatDate(t.createdAt) : "—"}
 											</td>
-											<td className="py-2">{t.planName ?? "—"}</td>
-											<td className="py-2">
+											<td className="px-4 py-3 font-semibold text-slate-900">
+												{t.planName ?? "—"}
+											</td>
+											<td className="px-4 py-3">
 												<Badge variant={STATUS_VARIANTS[t.status] ?? "default"}>
 													{t.status}
 												</Badge>
 											</td>
-											<td className="py-2 text-right font-medium">
+											<td className="px-4 py-3 text-right font-bold text-slate-950">
 												{formatAmount(t.amountPaid || t.amountDue, t.currency)}
 											</td>
-											<td className="py-2 text-right text-gray-600">
+											<td className="px-4 py-3 text-right text-slate-600">
 												{t.periodStart && t.periodEnd
 													? `${formatDate(t.periodStart).split(" ")[0]} – ${formatDate(t.periodEnd).split(" ")[0]}`
 													: "—"}
 											</td>
-											<td className="py-2 text-right">
+											<td className="px-4 py-3 text-right">
 												{t.hostedInvoiceUrl && (
 													<a
 														href={t.hostedInvoiceUrl}
@@ -2297,10 +2358,16 @@ function SourceTransactionsTab() {
 								</tbody>
 							</table>
 							{items.length === 0 && (
-								<p className="text-gray-500 py-4">
-									No transactions yet. Transactions appear when you pay for a
-									plan via Stripe.
-								</p>
+								<div className="px-6 py-12 text-center">
+									<Receipt className="mx-auto h-10 w-10 text-slate-300" />
+									<p className="mt-3 font-semibold text-slate-900">
+										No transactions yet
+									</p>
+									<p className="mt-1 text-sm text-slate-500">
+										Transactions appear here after a plan payment is created
+										through Stripe.
+									</p>
+								</div>
 							)}
 						</div>
 					)}
@@ -2351,6 +2418,8 @@ export default function SourcePage() {
 		| "docs"
 		| "settings"
 		| null;
+	const initialTab =
+		tabFromUrl === "location-requests" ? "locations" : tabFromUrl;
 	const [activeTab, setActiveTab] = useState<
 		| "dashboard"
 		| "agreements"
@@ -2368,10 +2437,16 @@ export default function SourcePage() {
 		| "support"
 		| "docs"
 		| "settings"
-	>(tabFromUrl || "dashboard");
+	>(initialTab || "dashboard");
 	const [panelTourOpen, setPanelTourOpen] = useState(false);
 	const [panelTourStartTab, setPanelTourStartTab] = useState(activeTab);
 	const [panelTourNudgeDismissed, setPanelTourNudgeDismissed] = useState(false);
+	const [planRequiredContext, setPlanRequiredContext] = useState<{
+		action: string;
+		description?: string;
+	} | null>(null);
+	const [isLocationRequestModalOpen, setIsLocationRequestModalOpen] =
+		useState(false);
 	const startPanelTour = useCallback(() => {
 		setPanelTourStartTab(activeTab);
 		setPanelTourOpen(true);
@@ -2528,6 +2603,19 @@ export default function SourcePage() {
 			| "settings",
 		opts?: { branchImport?: "endpoint" | "manual" },
 	) => {
+		if (tab === "location-requests") {
+			setActiveTab("locations");
+			setSearchParams((prev) => {
+				const next = new URLSearchParams(prev);
+				next.set("tab", "locations");
+				if (next.has("branchImport")) next.delete("branchImport");
+				return next;
+			});
+			if (user?.company?.id) {
+				setTimeout(() => loadSyncedLocations(), 100);
+			}
+			return;
+		}
 		// Legacy nav + tour: "Manual Branch import" → unified Location & Branches (manual tools)
 		if (tab === "branches") {
 			setActiveTab("location-branches");
@@ -2577,6 +2665,19 @@ export default function SourcePage() {
 	// Sync tab when URL changes (back/forward button)
 	useEffect(() => {
 		const tab = searchParams.get("tab");
+		if (tab === "location-requests") {
+			setActiveTab("locations");
+			setSearchParams(
+				(prev) => {
+					const next = new URLSearchParams(prev);
+					next.set("tab", "locations");
+					if (next.has("branchImport")) next.delete("branchImport");
+					return next;
+				},
+				{ replace: true },
+			);
+			return;
+		}
 		if (tab === "branches") {
 			setActiveTab("location-branches");
 			setSearchParams(
@@ -2602,7 +2703,6 @@ export default function SourcePage() {
 				"transactions",
 				"reservations",
 				"cancellations",
-				"location-requests",
 				"health",
 				"verification",
 				"support",
@@ -2904,6 +3004,27 @@ export default function SourcePage() {
 			(7 * 24 * 60 * 60 * 1000) <
 			1;
 
+	const openPlanRequired = useCallback(
+		(action = "continue", description?: string) => {
+			setPlanRequiredContext({ action, description });
+			toast.error("Choose a plan first to continue.");
+		},
+		[],
+	);
+
+	const requireActivePlan = useCallback(
+		(action = "continue", description?: string) => {
+			if (subscriptionActive) return true;
+			if (isLoadingSubscription) {
+				toast("Checking your plan status…");
+				return false;
+			}
+			openPlanRequired(action, description);
+			return false;
+		},
+		[subscriptionActive, isLoadingSubscription, openPlanRequired],
+	);
+
 	const dashboardDataEnabled =
 		activeTab === "dashboard" &&
 		!!user?.company?.id &&
@@ -2974,7 +3095,7 @@ export default function SourcePage() {
 	);
 	const showPanelTourNudge = Boolean(
 		user?.company?.id &&
-			subscriptionActive &&
+			user?.company?.status === "ACTIVE" &&
 			!panelTourOpen &&
 			!panelTourNudgeDismissed &&
 			!localStorage.getItem(SOURCE_PANEL_TOUR_STORAGE_KEY(user.company.id)),
@@ -3097,6 +3218,32 @@ export default function SourcePage() {
 		setPanelTourStartTab("dashboard");
 		setPanelTourOpen(true);
 	}, [user?.company?.id, isLoadingSubscription, subscriptionActive]);
+
+	useEffect(() => {
+		const companyId = user?.company?.id;
+		if (!companyId || user?.company?.status !== "ACTIVE") return;
+		if (isLoadingSubscription || panelTourOpen || activeTab !== "dashboard")
+			return;
+		if (searchParams.get("renew") === "1") return;
+		if (localStorage.getItem(SOURCE_PANEL_TOUR_STORAGE_KEY(companyId))) return;
+
+		const sessionKey = `source_panel_tour_auto_started_${companyId}`;
+		if (sessionStorage.getItem(sessionKey) === "1") return;
+		sessionStorage.setItem(sessionKey, "1");
+
+		const timer = window.setTimeout(() => {
+			setPanelTourStartTab("dashboard");
+			setPanelTourOpen(true);
+		}, 650);
+		return () => window.clearTimeout(timer);
+	}, [
+		user?.company?.id,
+		user?.company?.status,
+		isLoadingSubscription,
+		panelTourOpen,
+		activeTab,
+		searchParams,
+	]);
 
 	// Form state for creating agreement
 	const [selectedAgentId, setSelectedAgentId] = useState("");
@@ -3470,6 +3617,13 @@ export default function SourcePage() {
 			toast.error("Company ID not found");
 			return;
 		}
+		if (
+			!requireActivePlan(
+				"sync locations",
+				"Location sync writes coverage from your endpoint into Gloria. Choose a plan before running live imports.",
+			)
+		)
+			return;
 
 		setIsSyncingLocations(true);
 		try {
@@ -3541,6 +3695,13 @@ export default function SourcePage() {
 	};
 
 	const importBranches = async () => {
+		if (
+			!requireActivePlan(
+				"import branches",
+				"Branch imports create or update operational branch records. Select a branch plan before importing.",
+			)
+		)
+			return;
 		setIsImportingBranches(true);
 		try {
 			const result = await endpointsApi.importBranches();
@@ -3579,6 +3740,13 @@ export default function SourcePage() {
 	};
 
 	const importLocations = async () => {
+		if (
+			!requireActivePlan(
+				"import locations",
+				"Location imports save supplier coverage into Gloria. Choose a plan before running imports.",
+			)
+		)
+			return;
 		setIsImportingLocations(true);
 		try {
 			const result = await endpointsApi.importLocations();
@@ -3759,6 +3927,13 @@ export default function SourcePage() {
 
 	/** Re-fetch location list (+ branch rows from XML/JSON). Upserts only — server does not delete existing branches. */
 	const runLocationListImport = async (mode: "import" | "sync") => {
+		if (
+			!requireActivePlan(
+				mode === "sync" ? "sync from endpoint" : "import from endpoint",
+				"Location & Branches endpoint imports write coverage and branch records into Gloria. Choose a plan before running them.",
+			)
+		)
+			return;
 		setIsImportingLocationList(true);
 		setLocationListImportResult(null);
 		setShowLocationListImportResult(false);
@@ -3915,6 +4090,13 @@ export default function SourcePage() {
 	}, [manualMake, makeTrimmed, vpicMakeDebounced, nhtsaModelsQuery.data]);
 
 	const openManualImportModal = () => {
+		if (
+			!requireActivePlan(
+				"store manual availability",
+				"Manual availability entries are saved as pricing/availability samples for agents. Choose a plan before storing them.",
+			)
+		)
+			return;
 		setManualModalPickupLoc(otaPickupLoc);
 		setManualModalReturnLoc(otaReturnLoc);
 		setManualModalPickupDt(otaPickupDateTime);
@@ -3994,6 +4176,13 @@ export default function SourcePage() {
 	};
 
 	const handleManualImportSubmit = async () => {
+		if (
+			!requireActivePlan(
+				"store manual availability",
+				"Manual availability entries are saved as pricing/availability samples for agents. Choose a plan before storing them.",
+			)
+		)
+			return;
 		const pickupIso = manualModalPickupDt ? `${manualModalPickupDt}:00` : "";
 		const returnIso = manualModalReturnDt ? `${manualModalReturnDt}:00` : "";
 		if (!manualModalPickupLoc.trim() || !manualModalReturnLoc.trim()) {
@@ -4170,6 +4359,13 @@ export default function SourcePage() {
 	};
 
 	const handleFetchAvailability = async () => {
+		if (
+			!requireActivePlan(
+				"fetch and store availability",
+				"Pricing and availability fetches are stored for agent search readiness. Choose a plan before saving supplier responses.",
+			)
+		)
+			return;
 		const isGrpc = availabilityAdapterType === "grpc";
 		const urlToUse = isGrpc
 			? grpcEndpointAddress.trim() || (endpointConfig as any)?.grpcEndpoint
@@ -4814,15 +5010,65 @@ export default function SourcePage() {
 											</Button>
 										</div>
 									)}
-								{searchParams.get("renew") === "1" ||
-								(!isLoadingSubscription &&
+								{!isLoadingSubscription &&
 									!subscriptionActive &&
-									[
-										"dashboard",
-										"locations",
-										"location-branches",
-										"location-requests",
-									].includes(activeTab)) ? (
+									searchParams.get("renew") !== "1" &&
+									user?.company?.status === "ACTIVE" && (
+										<div className="mb-6 overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-blue-50 to-cyan-50 p-5 shadow-sm">
+											<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+												<div className="flex items-start gap-4">
+													<div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg">
+														<span className="absolute inset-0 rounded-2xl bg-cyan-300/30 animate-ping" />
+														<Sparkles className="relative h-5 w-5" />
+													</div>
+													<div>
+														<p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">
+															Approved source onboarding
+														</p>
+														<h3 className="mt-1 text-xl font-bold text-slate-950">
+															Explore the portal first, choose a plan when you
+															are ready to import.
+														</h3>
+														<p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+															Your Source company is approved. You can tour the
+															dashboard, branches, pricing, verification,
+															health, and docs before paying. Import, sync, and
+															stored availability actions will ask for a plan
+															first.
+														</p>
+													</div>
+												</div>
+												<div className="flex flex-wrap gap-2 lg:justify-end">
+													<Button
+														type="button"
+														variant="secondary"
+														onClick={() => {
+															setPanelTourStartTab("dashboard");
+															setPanelTourOpen(true);
+														}}
+														className="bg-white"
+													>
+														<Sparkles className="mr-2 h-4 w-4" />
+														Take portal tour
+													</Button>
+													<Button
+														type="button"
+														variant="primary"
+														onClick={() =>
+															setSearchParams((prev) => {
+																const next = new URLSearchParams(prev);
+																next.set("renew", "1");
+																return next;
+															})
+														}
+													>
+														Choose plan
+													</Button>
+												</div>
+											</div>
+										</div>
+									)}
+								{searchParams.get("renew") === "1" ? (
 									<PlanPicker />
 								) : (
 									<>
@@ -5677,29 +5923,202 @@ export default function SourcePage() {
 
 										{activeTab === "agreements" && (
 											<>
-												<div>
-													<h1 className="text-3xl font-bold text-gray-900">
-														Agreements
-													</h1>
-													<p className="mt-2 text-gray-600">
-														Manage your agreements with agents
-													</p>
+												<div className="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+													<div className="relative bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 px-6 py-8 text-white sm:px-8">
+														<div
+															className="absolute inset-0 opacity-25"
+															aria-hidden="true"
+														>
+															<div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-blue-400 blur-3xl" />
+															<div className="absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-cyan-300 blur-3xl" />
+														</div>
+														<div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+															<div className="max-w-3xl">
+																<div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-cyan-100">
+																	<FileText className="h-3.5 w-3.5" />
+																	Commercial access
+																</div>
+																<h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+																	Agreements made easy
+																</h1>
+																<p className="mt-3 text-sm leading-6 text-blue-100 sm:text-base">
+																	Agreements decide which agents may search,
+																	price, book, amend, cancel, and check
+																	reservation status against your Source supply.
+																</p>
+															</div>
+															<div className="rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-blue-50 backdrop-blur">
+																<p className="font-bold text-white">
+																	Your company contact
+																</p>
+																<p className="mt-1 text-blue-100">
+																	Share this email with agents/admins for
+																	external signing.
+																</p>
+																<div className="mt-3 flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 font-mono text-xs">
+																	<span className="min-w-0 flex-1 truncate">
+																		{user?.email || "source@example.com"}
+																	</span>
+																	<button
+																		type="button"
+																		className="rounded-lg bg-white/15 px-2 py-1 text-[11px] font-bold text-white hover:bg-white/25"
+																		onClick={() => {
+																			if (user?.email) {
+																				navigator.clipboard.writeText(
+																					user.email,
+																				);
+																				toast.success("Email copied");
+																			}
+																		}}
+																	>
+																		Copy
+																	</button>
+																</div>
+															</div>
+														</div>
+													</div>
+													<div className="grid gap-4 border-t border-slate-200 bg-white p-5 sm:grid-cols-2 lg:grid-cols-4">
+														<div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+																Available agents
+															</p>
+															<p className="mt-2 text-2xl font-bold text-slate-950">
+																{(agents || []).length}
+															</p>
+															<p className="mt-1 text-xs text-slate-500">
+																{
+																	(agents || []).filter(
+																		(agent) => agent.status === "ACTIVE",
+																	).length
+																}{" "}
+																active
+															</p>
+														</div>
+														<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+																Agreement refs
+															</p>
+															<p className="mt-2 text-2xl font-bold text-blue-950">
+																{
+																	(agents || []).flatMap(
+																		(agent) => agent.agentAgreements || [],
+																	).length
+																}
+															</p>
+															<p className="mt-1 text-xs text-blue-700">
+																All statuses
+															</p>
+														</div>
+														<div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+																Ready to trade
+															</p>
+															<p className="mt-2 text-2xl font-bold text-emerald-950">
+																{
+																	(agents || [])
+																		.flatMap(
+																			(agent) => agent.agentAgreements || [],
+																		)
+																		.filter(
+																			(agreement) =>
+																				agreement.status === "ACTIVE" ||
+																				agreement.status === "ACCEPTED",
+																		).length
+																}
+															</p>
+															<p className="mt-1 text-xs text-emerald-700">
+																Accepted / active
+															</p>
+														</div>
+														<div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+																Pending offers
+															</p>
+															<p className="mt-2 text-2xl font-bold text-amber-950">
+																{
+																	(agents || [])
+																		.flatMap(
+																			(agent) => agent.agentAgreements || [],
+																		)
+																		.filter(
+																			(agreement) =>
+																				agreement.status === "OFFERED" ||
+																				agreement.status === "DRAFT",
+																		).length
+																}
+															</p>
+															<p className="mt-1 text-xs text-amber-700">
+																Needs follow-up
+															</p>
+														</div>
+													</div>
+												</div>
+
+												<div className="mb-6 grid gap-4 lg:grid-cols-3">
+													<Card className="border border-blue-100 bg-blue-50">
+														<CardContent className="p-4">
+															<div className="flex items-start gap-3">
+																<FileText className="mt-0.5 h-5 w-5 text-blue-700" />
+																<div>
+																	<p className="font-bold text-blue-950">
+																		Agreement reference
+																	</p>
+																	<p className="mt-1 text-sm leading-6 text-blue-800">
+																		The reference authorizes agent search,
+																		pricing, booking, cancellation, and status
+																		calls.
+																	</p>
+																</div>
+															</div>
+														</CardContent>
+													</Card>
+													<Card className="border border-emerald-100 bg-emerald-50">
+														<CardContent className="p-4">
+															<div className="flex items-start gap-3">
+																<CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-700" />
+																<div>
+																	<p className="font-bold text-emerald-950">
+																		Accepted means usable
+																	</p>
+																	<p className="mt-1 text-sm leading-6 text-emerald-800">
+																		Accepted or active agreements are ready for
+																		agent trading against your supply.
+																	</p>
+																</div>
+															</div>
+														</CardContent>
+													</Card>
+													<Card className="border border-amber-100 bg-amber-50">
+														<CardContent className="p-4">
+															<div className="flex items-start gap-3">
+																<Info className="mt-0.5 h-5 w-5 text-amber-700" />
+																<div>
+																	<p className="font-bold text-amber-950">
+																		Signing stays external
+																	</p>
+																	<p className="mt-1 text-sm leading-6 text-amber-800">
+																		Use this portal for visibility; complete
+																		commercial signing with the agent/admin
+																		team.
+																	</p>
+																</div>
+															</div>
+														</CardContent>
+													</Card>
 												</div>
 
 												<div className="mt-6 space-y-6">
-													<Card className="border border-blue-200 bg-blue-50">
-														<CardContent className="p-4">
-															<p className="text-sm text-blue-900">
-																Agreements are managed externally. Share your
-																company email, complete signing outside the
-																platform, and use provisioned account/agreement
-																references for operations.
-															</p>
-														</CardContent>
-													</Card>
-													{/* My Agreements Section */}
-													{user?.company.status === "ACTIVE" && (
+													{user?.company?.status === "ACTIVE" ? (
 														<MyAgreements user={user} />
+													) : (
+														<Card className="border border-amber-200 bg-amber-50">
+															<CardContent className="p-4 text-sm text-amber-900">
+																Your Source company must be active before
+																agreement references can be used. Once approved,
+																this section will show your connected
+																agreements.
+															</CardContent>
+														</Card>
 													)}
 													<AvailableAgents
 														agents={agents}
@@ -5713,33 +6132,100 @@ export default function SourcePage() {
 										{activeTab === "locations" && (
 											<>
 												{/* Header */}
-												<div className="mb-8" data-tour="locations-header">
-													<div className="flex items-center gap-4 mb-4">
-														<svg
-															className="w-8 h-8 text-gray-600"
-															fill="none"
-															viewBox="0 0 24 24"
-															stroke="currentColor"
+												<div
+													className="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+													data-tour="locations-header"
+												>
+													<div className="relative bg-gradient-to-br from-slate-950 via-blue-950 to-cyan-950 px-6 py-8 text-white sm:px-8">
+														<div
+															className="absolute inset-0 opacity-25"
+															aria-hidden="true"
 														>
-															<path
-																strokeLinecap="round"
-																strokeLinejoin="round"
-																strokeWidth={2}
-																d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-															/>
-															<path
-																strokeLinecap="round"
-																strokeLinejoin="round"
-																strokeWidth={2}
-																d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-															/>
-														</svg>
-														<div>
-															<h1 className="text-3xl font-semibold text-gray-900">
-																Locations
-															</h1>
-															<p className="mt-2 text-gray-600 font-medium">
-																Manage your pickup and drop-off locations
+															<div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-cyan-400 blur-3xl" />
+															<div className="absolute bottom-0 left-1/4 h-40 w-40 rounded-full bg-blue-300 blur-3xl" />
+														</div>
+														<div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+															<div className="max-w-3xl">
+																<div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-cyan-100">
+																	<Info className="h-3.5 w-3.5" />
+																	Coverage control center
+																</div>
+																<h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+																	Locations
+																</h1>
+																<p className="mt-3 text-sm leading-6 text-blue-100 sm:text-base">
+																	Manage where agents can pick up and return
+																	vehicles. Sync or import your supplier
+																	coverage, request missing places for admin
+																	review, then verify the final UN/LOCODE table
+																	below.
+																</p>
+															</div>
+															<div className="rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-blue-50 backdrop-blur">
+																<p className="font-bold text-white">
+																	Recommended setup order
+																</p>
+																<ol className="mt-2 space-y-1 text-xs leading-5 text-blue-100">
+																	<li>1. Configure/sync supplier coverage.</li>
+																	<li>
+																		2. Request missing locations if a code is
+																		not available.
+																	</li>
+																	<li>
+																		3. Load and review table status before agent
+																		testing.
+																	</li>
+																</ol>
+															</div>
+														</div>
+													</div>
+													<div className="grid gap-4 border-t border-slate-200 bg-white p-5 sm:grid-cols-2 lg:grid-cols-4">
+														<div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+																Loaded rows
+															</p>
+															<p className="mt-2 text-2xl font-bold text-slate-950">
+																{locations.length || "—"}
+															</p>
+															<p className="mt-1 text-xs text-slate-500">
+																Current table data
+															</p>
+														</div>
+														<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+																Last sync
+															</p>
+															<p className="mt-2 text-sm font-bold text-blue-950">
+																{lastSyncTime
+																	? new Date(lastSyncTime).toLocaleDateString()
+																	: "Never"}
+															</p>
+															<p className="mt-1 text-xs text-blue-700">
+																Coverage refresh
+															</p>
+														</div>
+														<div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+																Agreement filter
+															</p>
+															<p className="mt-2 text-sm font-bold text-emerald-950">
+																{selectedAgreementFilterId
+																	? "Active"
+																	: "All coverage"}
+															</p>
+															<p className="mt-1 text-xs text-emerald-700">
+																Current view
+															</p>
+														</div>
+														<div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+																Missing places
+															</p>
+															<p className="mt-2 text-sm font-bold text-amber-950">
+																Request to admin
+															</p>
+															<p className="mt-1 text-xs text-amber-700">
+																Tracked on this page
 															</p>
 														</div>
 													</div>
@@ -5747,34 +6233,31 @@ export default function SourcePage() {
 
 												<div className="mt-6 space-y-6">
 													{/* Location Sync Status */}
-													<Card data-tour="locations-sync-status">
-														<CardHeader>
-															<div className="flex items-center justify-between w-full">
-																<div className="flex items-center gap-3">
-																	<svg
-																		className="w-5 h-5 text-gray-600"
-																		fill="none"
-																		viewBox="0 0 24 24"
-																		stroke="currentColor"
-																	>
-																		<path
-																			strokeLinecap="round"
-																			strokeLinejoin="round"
-																			strokeWidth={2}
-																			d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-																		/>
-																	</svg>
+													<Card
+														className="overflow-hidden border-0 shadow-sm ring-1 ring-slate-200"
+														data-tour="locations-sync-status"
+													>
+														<CardHeader className="border-b border-slate-200 bg-white">
+															<div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+																<div className="flex items-start gap-3">
+																	<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">
+																		<RefreshCw className="h-5 w-5" />
+																	</div>
 																	<div>
-																		<CardTitle className="text-xl font-semibold text-gray-900">
-																			Location Sync Status
+																		<CardTitle className="text-xl font-bold text-slate-950">
+																			Coverage actions
 																		</CardTitle>
-																		<p className="text-sm text-gray-600 mt-1">
-																			Sync your coverage and import branches
+																		<p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+																			Use these controls to refresh coverage
+																			from your source adapter, branch endpoint,
+																			or location endpoint. Write actions will
+																			ask for a plan if you have not subscribed
+																			yet.
 																		</p>
 																	</div>
 																</div>
 																<div
-																	className="flex items-center gap-3 flex-shrink-0"
+																	className="flex flex-wrap gap-2"
 																	data-tour="locations-sync-actions"
 																>
 																	<Button
@@ -5786,27 +6269,15 @@ export default function SourcePage() {
 																		loading={isSyncingLocations}
 																		variant="primary"
 																		size="sm"
-																		disabled={!subscriptionActive}
+																		disabled={isSyncingLocations}
 																		title={
 																			!subscriptionActive
-																				? "Select a plan to continue."
+																				? "Choose a plan before syncing locations."
 																				: undefined
 																		}
-																		className="shadow-md hover:shadow-lg"
+																		className="rounded-full shadow-sm"
 																	>
-																		<svg
-																			className="w-4 h-4 mr-2"
-																			fill="none"
-																			viewBox="0 0 24 24"
-																			stroke="currentColor"
-																		>
-																			<path
-																				strokeLinecap="round"
-																				strokeLinejoin="round"
-																				strokeWidth={2}
-																				d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-																			/>
-																		</svg>
+																		<RefreshCw className="mr-2 h-4 w-4" />
 																		Sync Locations
 																	</Button>
 																	<Button
@@ -5818,27 +6289,15 @@ export default function SourcePage() {
 																		loading={isImportingBranches}
 																		variant="secondary"
 																		size="sm"
-																		disabled={!subscriptionActive}
+																		disabled={isImportingBranches}
 																		title={
 																			!subscriptionActive
-																				? "Select a plan to continue."
+																				? "Choose a plan before importing branches."
 																				: undefined
 																		}
-																		className="shadow-md hover:shadow-lg"
+																		className="rounded-full shadow-sm"
 																	>
-																		<svg
-																			className="w-4 h-4 mr-2"
-																			fill="none"
-																			viewBox="0 0 24 24"
-																			stroke="currentColor"
-																		>
-																			<path
-																				strokeLinecap="round"
-																				strokeLinejoin="round"
-																				strokeWidth={2}
-																				d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-																			/>
-																		</svg>
+																		<ExternalLink className="mr-2 h-4 w-4" />
 																		Import Branches
 																	</Button>
 																	<Button
@@ -5847,35 +6306,12 @@ export default function SourcePage() {
 																			e.stopPropagation();
 																			setIsLocationEndpointConfigOpen(true);
 																		}}
-																		variant="ghost"
+																		variant="secondary"
 																		size="sm"
-																		disabled={!subscriptionActive}
-																		className="shadow-md hover:shadow-lg"
-																		title={
-																			!subscriptionActive
-																				? "Select a plan to continue."
-																				: "Configure location import endpoint URL"
-																		}
+																		className="rounded-full shadow-sm"
+																		title="Configure location import endpoint URL"
 																	>
-																		<svg
-																			className="w-4 h-4 mr-2"
-																			fill="none"
-																			viewBox="0 0 24 24"
-																			stroke="currentColor"
-																		>
-																			<path
-																				strokeLinecap="round"
-																				strokeLinejoin="round"
-																				strokeWidth={2}
-																				d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-																			/>
-																			<path
-																				strokeLinecap="round"
-																				strokeLinejoin="round"
-																				strokeWidth={2}
-																				d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-																			/>
-																		</svg>
+																		<Settings className="mr-2 h-4 w-4" />
 																		Configure Endpoint
 																	</Button>
 																	<Button
@@ -5887,297 +6323,176 @@ export default function SourcePage() {
 																		loading={isImportingLocations}
 																		variant="secondary"
 																		size="sm"
-																		disabled={!subscriptionActive}
-																		className="shadow-md hover:shadow-lg"
+																		disabled={isImportingLocations}
+																		className="rounded-full shadow-sm"
 																		title={
 																			!subscriptionActive
-																				? "Select a plan to continue."
+																				? "Choose a plan before importing locations."
 																				: endpointConfig?.locationEndpointUrl
 																					? `Import from ${endpointConfig.locationEndpointUrl}`
 																					: "Import from configured endpoint"
 																		}
 																	>
-																		<svg
-																			className="w-4 h-4 mr-2"
-																			fill="none"
-																			viewBox="0 0 24 24"
-																			stroke="currentColor"
-																		>
-																			<path
-																				strokeLinecap="round"
-																				strokeLinejoin="round"
-																				strokeWidth={2}
-																				d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-																			/>
-																			<path
-																				strokeLinecap="round"
-																				strokeLinejoin="round"
-																				strokeWidth={2}
-																				d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-																			/>
-																		</svg>
+																		<ExternalLink className="mr-2 h-4 w-4" />
 																		Import Locations
 																	</Button>
 																</div>
 															</div>
 														</CardHeader>
-														<CardContent className="pt-6">
-															<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-																<div className="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
-																	<div className="flex items-center gap-3 mb-2">
-																		<div className="p-2 bg-blue-100 rounded-lg">
-																			<svg
-																				className="w-4 h-4 text-blue-600"
-																				fill="none"
-																				viewBox="0 0 24 24"
-																				stroke="currentColor"
-																			>
-																				<path
-																					strokeLinecap="round"
-																					strokeLinejoin="round"
-																					strokeWidth={2}
-																					d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-																				/>
-																			</svg>
-																		</div>
-																		<div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-																			Last Sync
-																		</div>
-																	</div>
-																	<div className="text-lg font-bold text-gray-900">
+														<CardContent className="p-5">
+															<div className="grid gap-4 md:grid-cols-3">
+																<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+																	<p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+																		Last sync
+																	</p>
+																	<p className="mt-2 text-lg font-bold text-blue-950">
 																		{lastSyncTime
 																			? new Date(lastSyncTime).toLocaleString()
-																			: "Never"}
-																	</div>
+																			: "Never synced"}
+																	</p>
+																	<p className="mt-1 text-xs text-blue-700">
+																		Updated after successful sync/import.
+																	</p>
 																</div>
-																<div className="p-5 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border border-purple-100">
-																	<div className="flex items-center gap-3 mb-2">
-																		<div className="p-2 bg-purple-100 rounded-lg">
-																			<svg
-																				className="w-4 h-4 text-purple-600"
-																				fill="none"
-																				viewBox="0 0 24 24"
-																				stroke="currentColor"
-																			>
-																				<path
-																					strokeLinecap="round"
-																					strokeLinejoin="round"
-																					strokeWidth={2}
-																					d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-																				/>
-																				<path
-																					strokeLinecap="round"
-																					strokeLinejoin="round"
-																					strokeWidth={2}
-																					d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-																				/>
-																			</svg>
-																		</div>
-																		<div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-																			Total Locations
-																		</div>
-																	</div>
-																	<div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-																		{locations.length > 0
-																			? locations.length
-																			: "—"}
-																	</div>
+																<div className="rounded-2xl border border-purple-100 bg-purple-50 p-4">
+																	<p className="text-xs font-bold uppercase tracking-wide text-purple-700">
+																		Table rows
+																	</p>
+																	<p className="mt-2 text-3xl font-bold text-purple-950">
+																		{locations.length || "—"}
+																	</p>
+																	<p className="mt-1 text-xs text-purple-700">
+																		Load coverage below to refresh this count.
+																	</p>
 																</div>
-																<div className="p-5 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-100">
-																	<div className="flex items-center gap-3 mb-2">
-																		<div className="p-2 bg-green-100 rounded-lg">
-																			<svg
-																				className="w-4 h-4 text-green-600"
-																				fill="none"
-																				viewBox="0 0 24 24"
-																				stroke="currentColor"
-																			>
-																				<path
-																					strokeLinecap="round"
-																					strokeLinejoin="round"
-																					strokeWidth={2}
-																					d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-																				/>
-																			</svg>
-																		</div>
-																		<div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-																			Sync Method
-																		</div>
-																	</div>
-																	<div className="text-lg font-bold text-gray-900">
-																		Manual
-																	</div>
-																</div>
-															</div>
-															<div className="p-4 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-l-4 border-blue-400 rounded-lg">
-																<div className="flex items-start gap-3">
-																	<svg
-																		className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5"
-																		fill="currentColor"
-																		viewBox="0 0 20 20"
-																	>
-																		<path
-																			fillRule="evenodd"
-																			d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-																			clipRule="evenodd"
-																		/>
-																	</svg>
-																	<div>
-																		<p className="text-sm font-semibold text-blue-900 mb-1">
-																			Sync Information
-																		</p>
-																		<p className="text-xs text-blue-800 leading-relaxed">
-																			Click "Sync Locations" to sync your
-																			coverage from supplier adapter. Click
-																			"Import Branches" to import branches from
-																			your HTTP endpoint. Click "Configure
-																			Endpoint" to set up your location import
-																			endpoint, then click "Import Locations" to
-																			import locations/UN/LOCODEs from your HTTP
-																			endpoint (supports JSON, XML, and PHP
-																			var_dump / OTA_VehLocSearchRS, same as
-																			branch import).
-																		</p>
-																	</div>
-																</div>
-															</div>
-														</CardContent>
-													</Card>
-
-													{/* Add Location Form */}
-													<Card
-														className="transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100"
-														data-tour="locations-add-card"
-													>
-														<CardHeader className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border-b border-gray-200">
-															<div className="flex items-center gap-3">
-																<button
-																	type="button"
-																	onClick={(e) => {
-																		e.preventDefault();
-																		e.stopPropagation();
-
-																		console.log(
-																			"Plus button clicked! Attempting to focus search input...",
-																		);
-
-																		// Small delay to ensure DOM is ready
-																		setTimeout(() => {
-																			const searchInput =
-																				document.getElementById(
-																					"add-location-search-input",
-																				) as HTMLInputElement;
-																			if (searchInput) {
-																				searchInput.focus();
-																				searchInput.scrollIntoView({
-																					behavior: "smooth",
-																					block: "center",
-																				});
-																				console.log(
-																					"Search input focused successfully!",
-																				);
-																			} else {
-																				console.error(
-																					"Search input not found!",
-																				);
-																			}
-																		}, 10);
-																	}}
-																	onMouseDown={(e) => {
-																		e.stopPropagation();
-																	}}
-																	onMouseUp={(e) => {
-																		e.stopPropagation();
-																	}}
-																	className="p-2 bg-white rounded-lg shadow-sm hover:shadow-md hover:bg-emerald-50 active:bg-emerald-100 transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 relative z-10"
-																	style={{ pointerEvents: "auto" }}
-																	aria-label="Focus search to add location"
-																	title="Click to start searching for a location"
-																>
-																	<svg
-																		className="w-5 h-5 text-emerald-600"
-																		fill="none"
-																		viewBox="0 0 24 24"
-																		stroke="currentColor"
-																	>
-																		<path
-																			strokeLinecap="round"
-																			strokeLinejoin="round"
-																			strokeWidth={2}
-																			d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-																		/>
-																	</svg>
-																</button>
-																<div>
-																	<CardTitle className="text-xl font-bold text-gray-900">
-																		Add Location to Coverage
-																	</CardTitle>
-																	<p className="text-sm text-gray-600 mt-1">
-																		Search and add new locations to your
-																		coverage
+																<div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+																	<p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+																		Best source for branches
+																	</p>
+																	<p className="mt-2 text-lg font-bold text-emerald-950">
+																		Location & Branches
+																	</p>
+																	<p className="mt-1 text-xs text-emerald-700">
+																		Use detailed branch imports for
+																		address/contact rows.
 																	</p>
 																</div>
 															</div>
-														</CardHeader>
-														<CardContent className="pt-6">
-															<AddLocationForm
-																disabled={!subscriptionActive}
-																onSuccess={() => {
-																	// Reload synced locations after adding
-																	if (user?.company?.id) {
-																		loadSyncedLocations();
-																	}
-																}}
-																onLocationAdded={() => {
-																	// Reload synced locations after adding
-																	if (user?.company?.id) {
-																		loadSyncedLocations();
-																	}
-																}}
-															/>
+															<div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+																<strong className="text-slate-950">Tip:</strong>{" "}
+																Sync Locations refreshes coverage-only data.
+																Import Branches or Location & Branches is better
+																when you need desk names, addresses, phone
+																numbers, opening hours, or pickup instructions.
+															</div>
 														</CardContent>
 													</Card>
+
+													{/* Missing Location Requests */}
+													<Card
+														className="overflow-hidden border-2 border-cyan-100 bg-white shadow-sm transition-all duration-300 hover:shadow-xl"
+														data-tour="locations-request-card"
+													>
+														<CardHeader className="border-b border-cyan-100 bg-gradient-to-r from-cyan-50 via-blue-50 to-indigo-50">
+															<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+																<div className="flex items-start gap-3">
+																	<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-cyan-100">
+																		<Plus className="h-5 w-5 text-cyan-700" />
+																	</div>
+																	<div>
+																		<CardTitle className="text-xl font-bold text-gray-900">
+																			Request a Missing Location
+																		</CardTitle>
+																		<p className="mt-1 max-w-3xl text-sm leading-6 text-gray-600">
+																			If a pickup/return place is not available
+																			in Gloria’s location master, send it to
+																			the admin team for review. Approved
+																			requests become visible for coverage and
+																			future imports.
+																		</p>
+																	</div>
+																</div>
+																<Button
+																	type="button"
+																	variant="primary"
+																	onClick={() =>
+																		setIsLocationRequestModalOpen(true)
+																	}
+																	data-tour="locations-request-button"
+																	className="shadow-md hover:shadow-lg"
+																>
+																	<Plus className="mr-2 h-4 w-4" />
+																	Request missing location
+																</Button>
+															</div>
+														</CardHeader>
+														<CardContent className="p-5">
+															<div className="grid gap-3 md:grid-cols-3">
+																<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+																	<p className="text-sm font-bold text-blue-950">
+																		1. Submit details
+																	</p>
+																	<p className="mt-1 text-xs leading-5 text-blue-800">
+																		Provide name, country, city/IATA code,
+																		address, and why agents need this location.
+																	</p>
+																</div>
+																<div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+																	<p className="text-sm font-bold text-amber-950">
+																		2. Admin review
+																	</p>
+																	<p className="mt-1 text-xs leading-5 text-amber-800">
+																		Admins verify the place, normalize codes,
+																		and approve or reject with notes.
+																	</p>
+																</div>
+																<div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+																	<p className="text-sm font-bold text-emerald-950">
+																		3. Track status here
+																	</p>
+																	<p className="mt-1 text-xs leading-5 text-emerald-800">
+																		Your submitted requests and admin decisions
+																		are listed below on this Locations page.
+																	</p>
+																</div>
+															</div>
+														</CardContent>
+													</Card>
+
+													<div data-tour="locations-requests-list">
+														<LocationRequestList />
+													</div>
 
 													{/* Filter and Load Section */}
 													<Card
-														className="transform transition-all duration-300 hover:shadow-xl border-2 border-gray-100"
+														className="overflow-hidden border-0 shadow-sm ring-1 ring-slate-200"
 														data-tour="locations-filter-card"
 													>
-														<CardHeader className="bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 border-b border-gray-200">
-															<div className="flex items-center gap-3">
-																<div className="p-2 bg-white rounded-lg shadow-sm">
-																	<svg
-																		className="w-5 h-5 text-amber-600"
-																		fill="none"
-																		viewBox="0 0 24 24"
-																		stroke="currentColor"
-																	>
-																		<path
-																			strokeLinecap="round"
-																			strokeLinejoin="round"
-																			strokeWidth={2}
-																			d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
-																		/>
-																	</svg>
+														<CardHeader className="border-b border-slate-200 bg-white">
+															<div className="flex items-start gap-3">
+																<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-700 ring-1 ring-amber-100">
+																	<ChevronDown className="h-5 w-5" />
 																</div>
 																<div>
-																	<CardTitle className="text-xl font-bold text-gray-900">
-																		Filter Locations
+																	<CardTitle className="text-xl font-bold text-slate-950">
+																		Load coverage table
 																	</CardTitle>
-																	<p className="text-sm text-gray-600 mt-1">
-																		View locations by agreement or all locations
+																	<p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+																		Choose whether to view all Source coverage
+																		or the locations allowed by a specific
+																		agreement reference.
 																	</p>
 																</div>
 															</div>
 														</CardHeader>
-														<CardContent className="pt-6">
-															<div className="flex items-center gap-3">
-																<div className="flex-1">
-																	<label className="block text-sm font-medium text-gray-700 mb-2">
-																		Filter by Agreement
+														<CardContent className="p-5">
+															<div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+																<div>
+																	<label className="mb-2 block text-sm font-bold text-slate-700">
+																		Agreement scope
 																	</label>
 																	<select
-																		className="w-full border-2 border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm hover:shadow-md"
+																		className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
 																		value={selectedAgreementFilterId}
 																		onChange={(e) =>
 																			setSelectedAgreementFilterId(
@@ -6185,43 +6500,36 @@ export default function SourcePage() {
 																			)
 																		}
 																	>
-																		<option value="">All locations</option>
+																		<option value="">
+																			All source coverage
+																		</option>
 																		{(agents || [])
 																			.flatMap((a) => a.agentAgreements || [])
 																			.map((ag) => (
 																				<option key={ag.id} value={ag.id}>
-																					{ag.agreementRef}
+																					{ag.agreementRef} · {ag.status}
 																				</option>
 																			))}
 																	</select>
+																	<p className="mt-2 text-xs leading-5 text-slate-500">
+																		All source coverage shows what your supplier
+																		serves. Agreement scope helps verify what a
+																		specific agent can use.
+																	</p>
 																</div>
-																<div className="flex items-end">
-																	<Button
-																		onClick={(e) => {
-																			e.preventDefault();
-																			e.stopPropagation();
-																			loadLocations(true);
-																		}}
-																		size="sm"
-																		variant="primary"
-																		className="shadow-md hover:shadow-lg"
-																	>
-																		<svg
-																			className="w-4 h-4 mr-2"
-																			fill="none"
-																			viewBox="0 0 24 24"
-																			stroke="currentColor"
-																		>
-																			<path
-																				strokeLinecap="round"
-																				strokeLinejoin="round"
-																				strokeWidth={2}
-																				d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-																			/>
-																		</svg>
-																		Load Locations
-																	</Button>
-																</div>
+																<Button
+																	onClick={(e) => {
+																		e.preventDefault();
+																		e.stopPropagation();
+																		loadLocations(true);
+																	}}
+																	size="sm"
+																	variant="primary"
+																	className="h-11 rounded-full px-5 shadow-sm"
+																>
+																	<RefreshCw className="mr-2 h-4 w-4" />
+																	Load table
+																</Button>
 															</div>
 														</CardContent>
 													</Card>
@@ -6521,223 +6829,403 @@ export default function SourcePage() {
 
 										{activeTab === "location-branches" && (
 											<>
-												<div className="mb-8">
-													<div className="flex items-center gap-4 mb-4">
-														<div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl shadow-sm">
-															<svg
-																className="w-8 h-8 text-blue-600"
-																fill="none"
-																viewBox="0 0 24 24"
-																stroke="currentColor"
-															>
-																<path
-																	strokeLinecap="round"
-																	strokeLinejoin="round"
-																	strokeWidth={2}
-																	d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-																/>
-															</svg>
+												<div className="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+													<div className="bg-gradient-to-br from-slate-950 via-indigo-950 to-blue-950 px-6 py-8 text-white sm:px-8">
+														<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+															<div className="max-w-3xl">
+																<div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-cyan-100">
+																	<FileText className="h-3.5 w-3.5" />
+																	Branch onboarding
+																</div>
+																<h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+																	Location &amp; Branches
+																</h1>
+																<p className="mt-3 text-sm leading-6 text-blue-100 sm:text-base">
+																	{branchImportIsManual
+																		? "Upload branch files, sync from your branch HTTP endpoint, or add branches manually — or switch to supplier endpoint for GLORIA location list import."
+																		: "Connect your supplier Location List feed, validate a real sample, then import coverage and branch details into GLORIA."}
+																</p>
+															</div>
+															<div className="rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-blue-50 backdrop-blur">
+																<p className="font-bold text-white">
+																	Endpoint mode flow
+																</p>
+																<ol className="mt-2 space-y-1 text-xs leading-5 text-blue-100">
+																	<li>1. Configure HTTP/XML or gRPC source.</li>
+																	<li>2. Validate the supplier response.</li>
+																	<li>
+																		3. Import, sync, and review rows below.
+																	</li>
+																</ol>
+															</div>
 														</div>
-														<div>
-															<h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-																Location &amp; Branches
-															</h1>
-															<p className="mt-2 text-gray-600 font-medium">
+													</div>
+													<div className="grid gap-4 border-t border-slate-200 bg-white p-5 sm:grid-cols-2 lg:grid-cols-4">
+														<div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+																Current mode
+															</p>
+															<p className="mt-2 text-lg font-bold text-slate-950">
 																{branchImportIsManual
-																	? "Upload branch files, sync from your branch HTTP endpoint, or add branches manually — or switch to supplier endpoint for GLORIA location list import."
-																	: "Import locations and branches from your GLORIA location list (HTTP or gRPC), or switch to manual tools for file upload and branch-endpoint sync."}
+																	? "Manual tools"
+																	: "Supplier endpoint"}
+															</p>
+															<p className="mt-1 text-xs text-slate-500">
+																Switch anytime below
+															</p>
+														</div>
+														<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+																Transport
+															</p>
+															<p className="mt-2 text-lg font-bold text-blue-950">
+																{locationListTransport === "grpc"
+																	? "gRPC"
+																	: "HTTP/XML"}
+															</p>
+															<p className="mt-1 text-xs text-blue-700">
+																Saved in endpoint settings
+															</p>
+														</div>
+														<div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+																HTTP/XML result
+															</p>
+															<p className="mt-2 text-lg font-bold text-emerald-950">
+																Branches + coverage
+															</p>
+															<p className="mt-1 text-xs text-emerald-700">
+																Best for rich desk data
+															</p>
+														</div>
+														<div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+																gRPC result
+															</p>
+															<p className="mt-2 text-lg font-bold text-amber-950">
+																Coverage only
+															</p>
+															<p className="mt-1 text-xs text-amber-700">
+																No branch detail rows
 															</p>
 														</div>
 													</div>
 												</div>
 
 												<Card
-													className="mb-6 border border-gray-200 shadow-sm"
+													className="mb-6 overflow-hidden border-0 shadow-sm ring-1 ring-slate-200"
 													data-tour="location-branches-import-mode"
 												>
-													<CardHeader className="bg-gray-50 border-b border-gray-200 py-3">
-														<CardTitle className="text-base">
-															How do you want to bring branch data in?
-														</CardTitle>
-														<p className="text-sm text-gray-600 mt-1">
-															Supplier <strong>location list</strong> (coverage
-															+ rich branch rows from XML) vs{" "}
-															<strong>manual</strong> (file upload, dedicated
-															branch HTTP sync, add branch).
-														</p>
-													</CardHeader>
-													<CardContent className="pt-4">
-														<div
-															className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1 shadow-sm"
-															role="group"
-															aria-label="Branch import source"
-														>
-															<button
-																type="button"
-																role="radio"
-																aria-checked={!branchImportIsManual}
-																onClick={() => {
-																	setSearchParams((prev) => {
-																		const n = new URLSearchParams(prev);
-																		n.set("tab", "location-branches");
-																		n.set("branchImport", "endpoint");
-																		return n;
-																	});
-																}}
-																className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
-																	!branchImportIsManual
-																		? "bg-white text-blue-700 shadow-sm ring-1 ring-gray-200"
-																		: "text-gray-600 hover:text-gray-900"
-																}`}
-															>
-																Supplier endpoint
-															</button>
-															<button
-																type="button"
-																role="radio"
-																aria-checked={branchImportIsManual}
-																onClick={() => {
-																	setSearchParams((prev) => {
-																		const n = new URLSearchParams(prev);
-																		n.set("tab", "location-branches");
-																		n.set("branchImport", "manual");
-																		return n;
-																	});
-																}}
-																className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
-																	branchImportIsManual
-																		? "bg-white text-blue-700 shadow-sm ring-1 ring-gray-200"
-																		: "text-gray-600 hover:text-gray-900"
-																}`}
-															>
-																Manual import
-															</button>
+													<CardHeader className="border-b border-slate-200 bg-gradient-to-r from-white via-white to-slate-50">
+														<div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+															<div>
+																<div className="mb-2 inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-blue-700">
+																	<Info className="h-3.5 w-3.5" />
+																	Start here
+																</div>
+																<CardTitle className="text-xl font-bold text-slate-950">
+																	How do you want to add branches?
+																</CardTitle>
+																<p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600">
+																	Choose one option below. You can switch later,
+																	and switching does not delete existing
+																	branches. The selected option controls which
+																	setup tools appear on this page.
+																</p>
+															</div>
+															<div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+																<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+																	Currently selected
+																</p>
+																<p className="mt-1 font-bold text-slate-950">
+																	{branchImportIsManual
+																		? "Manual & file tools"
+																		: "Supplier Location List"}
+																</p>
+															</div>
 														</div>
+													</CardHeader>
+													<CardContent className="grid gap-4 p-5 lg:grid-cols-2">
+														<button
+															type="button"
+															role="radio"
+															aria-checked={!branchImportIsManual}
+															onClick={() => {
+																setSearchParams((prev) => {
+																	const n = new URLSearchParams(prev);
+																	n.set("tab", "location-branches");
+																	n.set("branchImport", "endpoint");
+																	return n;
+																});
+															}}
+															className={`group relative rounded-2xl border p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${!branchImportIsManual ? "border-blue-300 bg-blue-50 shadow-sm" : "border-slate-200 bg-white hover:border-blue-200"}`}
+														>
+															<div className="flex items-start gap-4">
+																<div className="rounded-xl bg-blue-600 p-2 text-white shadow-sm">
+																	<RefreshCw className="h-5 w-5" />
+																</div>
+																<div className="min-w-0 flex-1">
+																	<div className="flex flex-wrap items-center gap-2">
+																		<p className="font-bold text-slate-950">
+																			Supplier Location List
+																		</p>
+																		{!branchImportIsManual ? (
+																			<span className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-2.5 py-1 text-xs font-bold text-white">
+																				<CheckCircle2 className="h-3.5 w-3.5" />{" "}
+																				Selected
+																			</span>
+																		) : (
+																			<span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+																				Click to switch
+																			</span>
+																		)}
+																	</div>
+																	<p className="mt-2 text-sm leading-6 text-slate-600">
+																		Use this when your supplier system has a
+																		repeatable location-list feed. HTTP/XML
+																		imports detailed branch rows; gRPC only
+																		updates served locations.
+																	</p>
+																	<div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+																		<span className="rounded-xl bg-white/80 px-3 py-2 ring-1 ring-slate-200">
+																			Best for scheduled imports
+																		</span>
+																		<span className="rounded-xl bg-white/80 px-3 py-2 ring-1 ring-slate-200">
+																			Opens endpoint setup below
+																		</span>
+																	</div>
+																</div>
+															</div>
+														</button>
+														<button
+															type="button"
+															role="radio"
+															aria-checked={branchImportIsManual}
+															onClick={() => {
+																setSearchParams((prev) => {
+																	const n = new URLSearchParams(prev);
+																	n.set("tab", "location-branches");
+																	n.set("branchImport", "manual");
+																	return n;
+																});
+															}}
+															className={`group relative rounded-2xl border p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 ${branchImportIsManual ? "border-slate-400 bg-slate-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}
+														>
+															<div className="flex items-start gap-4">
+																<div className="rounded-xl bg-slate-900 p-2 text-white shadow-sm">
+																	<Plus className="h-5 w-5" />
+																</div>
+																<div className="min-w-0 flex-1">
+																	<div className="flex flex-wrap items-center gap-2">
+																		<p className="font-bold text-slate-950">
+																			Manual & file tools
+																		</p>
+																		{branchImportIsManual ? (
+																			<span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-xs font-bold text-white">
+																				<CheckCircle2 className="h-3.5 w-3.5" />{" "}
+																				Selected
+																			</span>
+																		) : (
+																			<span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+																				Click to switch
+																			</span>
+																		)}
+																	</div>
+																	<p className="mt-2 text-sm leading-6 text-slate-600">
+																		Use this for first uploads, quick
+																		corrections, or when you do not have a
+																		repeatable supplier feed yet. Supports JSON,
+																		XML, CSV, Excel, and manual add.
+																	</p>
+																	<div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+																		<span className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200">
+																			Best for one-time setup
+																		</span>
+																		<span className="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200">
+																			Shows upload & add tools
+																		</span>
+																	</div>
+																</div>
+															</div>
+														</button>
 													</CardContent>
 												</Card>
 
 												{!branchImportIsManual && (
 													<>
-														<Card className="mb-6 border border-gray-200 shadow-sm">
-															<CardHeader className="bg-gray-50 border-b border-gray-200">
-																<CardTitle className="text-lg">
-																	Endpoint
-																</CardTitle>
-																<p className="text-sm text-gray-600 mt-1">
-																	Choose <strong>HTTP</strong> (POST XML to your
-																	URL; GLORIA location list response) or{" "}
-																	<strong>gRPC</strong> (
-																	<code className="bg-gray-100 px-1 rounded text-xs">
-																		SourceProviderService.GetLocations
-																	</code>{" "}
-																	on your saved{" "}
-																	<code className="bg-gray-100 px-1 rounded text-xs">
-																		host:port
-																	</code>
-																	). Use <strong>Sample &amp; Validate</strong>{" "}
-																	in the modal for both formats.
-																</p>
+														<Card className="mb-6 overflow-hidden border-0 shadow-sm ring-1 ring-slate-200">
+															<CardHeader className="border-b border-slate-200 bg-gradient-to-r from-white to-blue-50">
+																<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+																	<div>
+																		<div className="mb-2 inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-blue-700">
+																			<RefreshCw className="h-3.5 w-3.5" /> Live
+																			endpoint workflow
+																		</div>
+																		<CardTitle className="text-2xl font-bold text-slate-950">
+																			Supplier Location List endpoint
+																		</CardTitle>
+																		<p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
+																			Configure your saved endpoint once,
+																			validate the response shape, then import
+																			or re-sync safely. Sync upserts matching
+																			branch codes and never deletes missing
+																			supplier rows.
+																		</p>
+																	</div>
+																	<div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+																		<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+																			Active transport
+																		</p>
+																		<p className="mt-1 font-bold text-slate-950">
+																			{locationListTransport === "grpc"
+																				? "gRPC GetLocations"
+																				: "HTTP POST XML"}
+																		</p>
+																	</div>
+																</div>
 															</CardHeader>
-															<CardContent className="pt-4 flex flex-wrap items-center gap-3">
-																<Button
-																	variant="secondary"
-																	onClick={() =>
-																		setIsLocationListConfigOpen(true)
-																	}
-																	type="button"
-																	data-tour="location-branches-configure-endpoint"
-																>
-																	Configure Endpoint
-																</Button>
-																<Button
-																	variant="primary"
-																	onClick={importLocationList}
-																	loading={isImportingLocationList}
-																	disabled={
-																		locationListTransport === "grpc"
-																			? !(
+															<CardContent className="space-y-5 p-5">
+																<div className="grid gap-3 md:grid-cols-3">
+																	<div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+																		<p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+																			1. Settings
+																		</p>
+																		<p className="mt-1 text-sm font-semibold text-slate-950">
+																			URL or host:port
+																		</p>
+																		<p className="mt-1 text-xs leading-5 text-slate-600">
+																			Store endpoint, transport, and credentials
+																			in the configuration modal.
+																		</p>
+																	</div>
+																	<div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+																		<p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+																			2. Validate
+																		</p>
+																		<p className="mt-1 text-sm font-semibold text-blue-950">
+																			Sample & response checks
+																		</p>
+																		<p className="mt-1 text-xs leading-5 text-blue-700">
+																			Use sample payloads to verify XML
+																			LocationDetail rows or gRPC coverage
+																			output.
+																		</p>
+																	</div>
+																	<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+																		<p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+																			3. Import / sync
+																		</p>
+																		<p className="mt-1 text-sm font-semibold text-emerald-950">
+																			Safe upsert pipeline
+																		</p>
+																		<p className="mt-1 text-xs leading-5 text-emerald-700">
+																			Existing branch codes are updated, new
+																			codes are added, and omitted rows stay
+																			untouched.
+																		</p>
+																	</div>
+																</div>
+																<div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+																	<Button
+																		variant="secondary"
+																		onClick={() => {
+																			setLocationListConfigTab("settings");
+																			setIsLocationListConfigOpen(true);
+																		}}
+																		type="button"
+																		data-tour="location-branches-configure-endpoint"
+																	>
+																		Configure Endpoint
+																	</Button>
+																	<Button
+																		variant="primary"
+																		onClick={importLocationList}
+																		loading={isImportingLocationList}
+																		disabled={
+																			isImportingLocationList ||
+																			(subscriptionActive &&
+																				(locationListTransport === "grpc"
+																					? !(
+																							grpcEndpoint ||
+																							endpointConfig?.grpcEndpoint ||
+																							""
+																						)
+																							.toString()
+																							.trim()
+																					: !locationListEndpointUrl.trim()))
+																		}
+																		type="button"
+																		data-tour="location-branches-import-endpoint"
+																	>
+																		Import from endpoint
+																	</Button>
+																	<Button
+																		variant="secondary"
+																		onClick={syncLocationListFromEndpoint}
+																		loading={isImportingLocationList}
+																		disabled={
+																			isImportingLocationList ||
+																			(subscriptionActive &&
+																				(locationListTransport === "grpc"
+																					? !(
+																							grpcEndpoint ||
+																							endpointConfig?.grpcEndpoint ||
+																							""
+																						)
+																							.toString()
+																							.trim()
+																					: !locationListEndpointUrl.trim()))
+																		}
+																		type="button"
+																		className="gap-2"
+																		title="Re-fetch from supplier. Branches and locations are upserted; nothing is deleted."
+																		data-tour="location-branches-sync-endpoint"
+																	>
+																		<RefreshCw
+																			className={`w-4 h-4 shrink-0 ${isImportingLocationList ? "animate-spin" : ""}`}
+																		/>
+																		Sync from endpoint
+																	</Button>
+																	{locationListTransport === "http" &&
+																		locationListEndpointUrl && (
+																			<span
+																				className="min-w-0 truncate rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
+																				title={locationListEndpointUrl}
+																			>
+																				{locationListEndpointUrl}
+																			</span>
+																		)}
+																	{locationListTransport === "grpc" &&
+																		(grpcEndpoint ||
+																			endpointConfig?.grpcEndpoint) && (
+																			<span
+																				className="min-w-0 truncate rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
+																				title={
 																					grpcEndpoint ||
 																					endpointConfig?.grpcEndpoint ||
 																					""
-																				)
-																					.toString()
-																					.trim()
-																			: !locationListEndpointUrl.trim()
-																	}
-																	type="button"
-																	data-tour="location-branches-import-endpoint"
-																>
-																	Import from endpoint
-																</Button>
-																<Button
-																	variant="secondary"
-																	onClick={syncLocationListFromEndpoint}
-																	loading={isImportingLocationList}
-																	disabled={
-																		locationListTransport === "grpc"
-																			? !(
-																					grpcEndpoint ||
-																					endpointConfig?.grpcEndpoint ||
-																					""
-																				)
-																					.toString()
-																					.trim()
-																			: !locationListEndpointUrl.trim()
-																	}
-																	type="button"
-																	className="gap-2"
-																	title="Re-fetch from supplier. Branches and locations are upserted; nothing is deleted."
-																	data-tour="location-branches-sync-endpoint"
-																>
-																	<RefreshCw
-																		className={`w-4 h-4 shrink-0 ${isImportingLocationList ? "animate-spin" : ""}`}
-																	/>
-																	Sync from endpoint
-																</Button>
-																{locationListTransport === "http" &&
-																	locationListEndpointUrl && (
-																		<span
-																			className="text-sm text-gray-500 truncate max-w-md"
-																			title={locationListEndpointUrl}
-																		>
-																			{locationListEndpointUrl}
-																		</span>
-																	)}
-																{locationListTransport === "grpc" &&
-																	(grpcEndpoint ||
-																		endpointConfig?.grpcEndpoint) && (
-																		<span
-																			className="text-sm text-gray-500 truncate max-w-md"
-																			title={
-																				grpcEndpoint ||
-																				endpointConfig?.grpcEndpoint ||
-																				""
-																			}
-																		>
-																			gRPC:{" "}
-																			{grpcEndpoint ||
-																				endpointConfig?.grpcEndpoint}
-																		</span>
-																	)}
-																<p className="text-xs text-gray-600 w-full basis-full border-t border-gray-100 pt-3 mt-1 leading-relaxed">
-																	<strong>Sync from endpoint</strong> calls the
-																	same pipeline as import: your supplier
-																	response is merged into Gloria. Branches are
-																	matched by branch code — existing rows are
-																	updated, new codes are added, and branches not
-																	present in the response are{" "}
-																	<strong>not</strong> removed. With{" "}
-																	<strong>gRPC</strong>, only coverage
-																	(UN/LOCODE) is updated from{" "}
-																	<code className="bg-gray-100 px-1 rounded text-[11px]">
-																		GetLocations
-																	</code>
-																	; use HTTP/XML for full branch rows from{" "}
-																	<code className="bg-gray-100 px-1 rounded text-[11px]">
+																				}
+																			>
+																				gRPC:{" "}
+																				{grpcEndpoint ||
+																					endpointConfig?.grpcEndpoint}
+																			</span>
+																		)}
+																</div>
+																<div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+																	<strong>Important:</strong> HTTP/XML imports
+																	full{" "}
+																	<code className="rounded bg-white px-1 text-xs">
 																		LocationDetail
-																	</code>
-																	.
-																</p>
+																	</code>{" "}
+																	branch rows. gRPC{" "}
+																	<code className="rounded bg-white px-1 text-xs">
+																		GetLocations
+																	</code>{" "}
+																	only updates served UN/LOCODE coverage, so use
+																	manual/file tools if you need branch addresses
+																	after a gRPC coverage import.
+																</div>
 															</CardContent>
 														</Card>
 
@@ -6765,8 +7253,14 @@ export default function SourcePage() {
 																		variant="secondary"
 																		className="border-white/20 bg-white/10 text-white hover:bg-white/20"
 																		onClick={() => {
-																			setLocationConfigTab("sample");
-																			setIsLocationEndpointConfigOpen(true);
+																			setLocationListConfigTab("sample");
+																			setLocationListSampleFormat(
+																				locationListTransport === "grpc"
+																					? "grpc"
+																					: "xml",
+																			);
+																			setLocationListSampleValidation(null);
+																			setIsLocationListConfigOpen(true);
 																		}}
 																	>
 																		Open Sample &amp; Validate
@@ -6944,9 +7438,36 @@ export default function SourcePage() {
 													</Card>
 												)}
 
-												<div className="mt-6">
+												<div className="mt-6 space-y-4">
+													{!branchImportIsManual && (
+														<Card className="overflow-hidden border-0 shadow-sm ring-1 ring-slate-200">
+															<CardContent className="flex flex-col gap-3 bg-white p-5 lg:flex-row lg:items-center lg:justify-between">
+																<div>
+																	<p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+																		Imported branch workspace
+																	</p>
+																	<h2 className="mt-1 text-xl font-bold text-slate-950">
+																		Review and maintain supplier branch rows
+																	</h2>
+																	<p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+																		After an HTTP/XML import, branch rows appear
+																		here for review and editing. Coverage-only
+																		gRPC imports may not add detailed rows until
+																		you upload or create them manually.
+																	</p>
+																</div>
+																<div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+																	<strong className="block text-slate-900">
+																		Matching rule
+																	</strong>
+																	Stable branch codes update existing records.
+																</div>
+															</CardContent>
+														</Card>
+													)}
 													<BranchList
 														subscriptionActive={subscriptionActive}
+														onRequirePlan={openPlanRequired}
 														onEdit={(branch) => {
 															setSelectedBranch(branch);
 															setIsEditBranchModalOpen(true);
@@ -7607,77 +8128,95 @@ message LocationsResponse {
 											</>
 										)}
 
-										{activeTab === "location-requests" && (
-											<>
-												<div className="mb-8">
-													<div className="flex items-center gap-4 mb-4">
-														<div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl shadow-sm">
-															<svg
-																className="w-8 h-8 text-blue-600"
-																fill="none"
-																viewBox="0 0 24 24"
-																stroke="currentColor"
-															>
-																<path
-																	strokeLinecap="round"
-																	strokeLinejoin="round"
-																	strokeWidth={2}
-																	d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-																/>
-																<path
-																	strokeLinecap="round"
-																	strokeLinejoin="round"
-																	strokeWidth={2}
-																	d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-																/>
-															</svg>
-														</div>
-														<div>
-															<h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-																Location Requests
-															</h1>
-															<p className="mt-2 text-gray-600 font-medium">
-																Request new locations not in the UN/LOCODE
-																database
-															</p>
-														</div>
-													</div>
-												</div>
-
-												<div className="mt-6 space-y-6">
-													<LocationRequestForm onSuccess={() => {}} />
-													<LocationRequestList />
-												</div>
-											</>
-										)}
-
 										{activeTab === "pricing" && (
 											<>
-												<div className="mb-8">
-													<div className="flex items-center gap-4 mb-4">
-														<div className="p-3 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-xl shadow-sm">
-															<svg
-																className="w-8 h-8 text-emerald-600"
-																fill="none"
-																viewBox="0 0 24 24"
-																stroke="currentColor"
-															>
-																<path
-																	strokeLinecap="round"
-																	strokeLinejoin="round"
-																	strokeWidth={2}
-																	d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-																/>
-															</svg>
+												<div className="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+													<div className="bg-gradient-to-br from-emerald-950 via-teal-950 to-slate-950 px-6 py-8 text-white sm:px-8">
+														<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+															<div className="max-w-3xl">
+																<div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-emerald-100">
+																	<Receipt className="h-3.5 w-3.5" />
+																	Rates workspace
+																</div>
+																<h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+																	Pricing &amp; Availability
+																</h1>
+																<p className="mt-3 text-sm leading-6 text-emerald-50 sm:text-base">
+																	Validate live pricing responses or manually
+																	store clean samples before agents quote your
+																	vehicles. Use the same page for OTA XML,
+																	Gloria JSON, Gloria gRPC, and manual
+																	availability entry.
+																</p>
+															</div>
+															<div className="rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-emerald-50 backdrop-blur">
+																<p className="font-bold text-white">
+																	Recommended flow
+																</p>
+																<ol className="mt-2 space-y-1 text-xs leading-5 text-emerald-100">
+																	<li>1. Pick Endpoint or Manual.</li>
+																	<li>
+																		2. Fill request details and preview payload.
+																	</li>
+																	<li>
+																		3. Fetch/store samples, then review results
+																		below.
+																	</li>
+																</ol>
+															</div>
 														</div>
-														<div>
-															<h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-																Pricing &amp; Availability
-															</h1>
-															<p className="mt-2 text-gray-600 font-medium">
-																Test your pricing endpoint and store
-																availability samples (OTA XML · Gloria JSON ·
-																Gloria gRPC)
+													</div>
+													<div className="grid gap-4 border-t border-slate-200 bg-white p-5 sm:grid-cols-2 lg:grid-cols-4">
+														<div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+																Data source
+															</p>
+															<p className="mt-2 text-lg font-bold text-slate-950">
+																{pricingEntryMode === "manual"
+																	? "Manual entry"
+																	: "Live endpoint"}
+															</p>
+															<p className="mt-1 text-xs text-slate-500">
+																Switch in the setup card
+															</p>
+														</div>
+														<div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+																Format
+															</p>
+															<p className="mt-2 text-lg font-bold text-emerald-950">
+																{pricingEntryMode === "manual"
+																	? "GLORIA sample"
+																	: availabilityAdapterType === "xml"
+																		? "OTA / XML"
+																		: availabilityAdapterType === "json"
+																			? "Gloria JSON"
+																			: "Gloria gRPC"}
+															</p>
+															<p className="mt-1 text-xs text-emerald-700">
+																Normalized before storing
+															</p>
+														</div>
+														<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+																Action
+															</p>
+															<p className="mt-2 text-lg font-bold text-blue-950">
+																Fetch &amp; Store
+															</p>
+															<p className="mt-1 text-xs text-blue-700">
+																Creates availability samples
+															</p>
+														</div>
+														<div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+															<p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+																Plan note
+															</p>
+															<p className="mt-2 text-lg font-bold text-amber-950">
+																Store actions
+															</p>
+															<p className="mt-1 text-xs text-amber-700">
+																May require an active plan
 															</p>
 														</div>
 													</div>
@@ -7685,116 +8224,237 @@ message LocationsResponse {
 
 												<div className="mt-6 space-y-6">
 													{/* ── Format Selector + Endpoint + Request Parameters ── */}
-													<Card className="border border-gray-200 shadow-sm">
-														<CardHeader>
-															<CardTitle className="text-lg">
-																Format &amp; Endpoint
-															</CardTitle>
-															<p className="text-sm text-gray-500 mt-1 max-w-3xl">
-																Choose <strong>Endpoint</strong> to test OTA
-																XML, Gloria JSON, or gRPC, or{" "}
-																<strong>Manual</strong> to enter a GLORIA-shaped
-																sample without a live pricing API.
-															</p>
-														</CardHeader>
-														<CardContent className="space-y-4">
-															{/* Endpoint vs Manual (top-level) */}
-															<div>
-																<p className="text-xs font-medium text-gray-600 mb-2">
-																	Data source
-																</p>
-																<div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
-																	<button
-																		type="button"
-																		data-tour="pricing-entry-endpoint"
-																		onClick={() =>
-																			setPricingEntryMode("endpoint")
-																		}
-																		className={`flex-1 py-2 px-3 transition-colors ${
-																			pricingEntryMode === "endpoint"
-																				? "bg-slate-800 text-white"
-																				: "bg-white text-gray-600 hover:bg-gray-50"
-																		}`}
-																	>
-																		Endpoint
-																	</button>
-																	<button
-																		type="button"
-																		data-tour="pricing-entry-manual"
-																		onClick={() =>
-																			setPricingEntryMode("manual")
-																		}
-																		className={`flex-1 py-2 px-3 transition-colors ${
-																			pricingEntryMode === "manual"
-																				? "bg-slate-800 text-white"
-																				: "bg-white text-gray-600 hover:bg-gray-50"
-																		}`}
-																	>
-																		Manual
-																	</button>
+													<Card className="overflow-hidden border-0 shadow-sm ring-1 ring-slate-200">
+														<CardHeader className="border-b border-slate-200 bg-gradient-to-r from-white via-white to-emerald-50">
+															<div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+																<div>
+																	<div className="mb-2 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-700">
+																		<Sparkles className="h-3.5 w-3.5" /> Step 1
+																		· Choose source
+																	</div>
+																	<CardTitle className="text-2xl font-bold text-slate-950">
+																		How will GLORIA receive prices?
+																	</CardTitle>
+																	<p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
+																		Use a live endpoint when your system can
+																		return rates on demand. Use manual entry for
+																		demos, first setup, or clean one-off
+																		samples.
+																	</p>
 																</div>
+																<div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+																	<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+																		Selected
+																	</p>
+																	<p className="mt-1 font-bold text-slate-950">
+																		{pricingEntryMode === "manual"
+																			? "Manual sample"
+																			: "Live endpoint"}
+																	</p>
+																</div>
+															</div>
+														</CardHeader>
+														<CardContent className="space-y-5 p-5">
+															<div
+																className="grid gap-4 lg:grid-cols-2"
+																role="group"
+																aria-label="Pricing data source"
+															>
+																<button
+																	type="button"
+																	data-tour="pricing-entry-endpoint"
+																	onClick={() =>
+																		setPricingEntryMode("endpoint")
+																	}
+																	className={`rounded-2xl border p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${pricingEntryMode === "endpoint" ? "border-emerald-300 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-emerald-200"}`}
+																>
+																	<div className="flex items-start gap-4">
+																		<div className="rounded-xl bg-emerald-600 p-2 text-white shadow-sm">
+																			<ExternalLink className="h-5 w-5" />
+																		</div>
+																		<div className="min-w-0 flex-1">
+																			<div className="flex flex-wrap items-center gap-2">
+																				<p className="font-bold text-slate-950">
+																					Live endpoint
+																				</p>
+																				{pricingEntryMode === "endpoint" ? (
+																					<span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white">
+																						<CheckCircle2 className="h-3.5 w-3.5" />{" "}
+																						Selected
+																					</span>
+																				) : (
+																					<span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+																						Click to use
+																					</span>
+																				)}
+																			</div>
+																			<p className="mt-2 text-sm leading-6 text-slate-600">
+																				GLORIA sends a request to your pricing
+																				API and stores the normalized vehicle
+																				offers returned by your system.
+																			</p>
+																			<div className="mt-4 flex flex-wrap gap-2 text-xs">
+																				<span className="rounded-full bg-white px-3 py-1 font-semibold text-emerald-700 ring-1 ring-emerald-100">
+																					OTA XML
+																				</span>
+																				<span className="rounded-full bg-white px-3 py-1 font-semibold text-blue-700 ring-1 ring-blue-100">
+																					JSON
+																				</span>
+																				<span className="rounded-full bg-white px-3 py-1 font-semibold text-purple-700 ring-1 ring-purple-100">
+																					gRPC
+																				</span>
+																			</div>
+																		</div>
+																	</div>
+																</button>
+																<button
+																	type="button"
+																	data-tour="pricing-entry-manual"
+																	onClick={() => setPricingEntryMode("manual")}
+																	className={`rounded-2xl border p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 ${pricingEntryMode === "manual" ? "border-slate-400 bg-slate-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}
+																>
+																	<div className="flex items-start gap-4">
+																		<div className="rounded-xl bg-slate-900 p-2 text-white shadow-sm">
+																			<Plus className="h-5 w-5" />
+																		</div>
+																		<div className="min-w-0 flex-1">
+																			<div className="flex flex-wrap items-center gap-2">
+																				<p className="font-bold text-slate-950">
+																					Manual sample
+																				</p>
+																				{pricingEntryMode === "manual" ? (
+																					<span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-xs font-bold text-white">
+																						<CheckCircle2 className="h-3.5 w-3.5" />{" "}
+																						Selected
+																					</span>
+																				) : (
+																					<span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+																						Click to use
+																					</span>
+																				)}
+																			</div>
+																			<p className="mt-2 text-sm leading-6 text-slate-600">
+																				Enter vehicle, dates, included items,
+																				extras, terms, and price manually. Best
+																				for onboarding, demos, and quick
+																				corrections.
+																			</p>
+																			<div className="mt-4 flex flex-wrap gap-2 text-xs">
+																				<span className="rounded-full bg-white px-3 py-1 font-semibold text-slate-700 ring-1 ring-slate-200">
+																					No API call
+																				</span>
+																				<span className="rounded-full bg-white px-3 py-1 font-semibold text-slate-700 ring-1 ring-slate-200">
+																					Stores same samples
+																				</span>
+																			</div>
+																		</div>
+																	</div>
+																</button>
 															</div>
 
 															{pricingEntryMode === "manual" ? (
-																<div className="rounded-lg border border-emerald-200 bg-emerald-50/90 p-4 space-y-3">
-																	<p className="text-sm text-emerald-950 leading-relaxed">
-																		Enter vehicle, pricing, included /
-																		not-included lines, optional extras, and
-																		optional{" "}
-																		<code className="bg-white/80 px-1 rounded text-xs">
-																			Terms
-																		</code>{" "}
-																		JSON — same store as{" "}
-																		<strong>Fetch &amp; Store</strong>, without
-																		calling your URL.
-																	</p>
-																	<Button
-																		type="button"
-																		variant="primary"
-																		onClick={openManualImportModal}
-																		data-tour="pricing-manual-import"
-																	>
-																		Open manual import form
-																	</Button>
-																	<p className="text-xs text-emerald-900">
-																		Use the <strong>next card</strong> for
-																		requestor ID, locations, and dates — they
-																		prefill the form and are sent with the
-																		manual sample.
-																	</p>
+																<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+																	<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+																		<div>
+																			<p className="text-sm font-bold text-emerald-950">
+																				Manual availability entry is selected
+																			</p>
+																			<p className="mt-1 max-w-3xl text-sm leading-6 text-emerald-800">
+																				Create a GLORIA-shaped sample with
+																				vehicle, price, inclusions, optional
+																				extras, and terms. It is stored in the
+																				same samples list as live endpoint
+																				fetches.
+																			</p>
+																			<p className="mt-2 text-xs text-emerald-800">
+																				Tip: request fields in the next card can
+																				prefill the manual sample.
+																			</p>
+																		</div>
+																		<Button
+																			type="button"
+																			variant="primary"
+																			onClick={openManualImportModal}
+																			data-tour="pricing-manual-import"
+																		>
+																			Open manual import form
+																		</Button>
+																	</div>
 																</div>
 															) : (
 																<>
-																	{/* Format tabs */}
-																	<div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
-																		{(["xml", "json", "grpc"] as const).map(
-																			(fmt) => {
-																				const labels = {
-																					xml: "Gloria XML",
-																					json: "Gloria JSON",
-																					grpc: "Gloria gRPC",
-																				};
-																				const active =
-																					availabilityAdapterType === fmt;
-																				return (
-																					<button
-																						key={fmt}
-																						type="button"
-																						onClick={() =>
-																							setAvailabilityAdapterType(fmt)
-																						}
-																						data-tour={`pricing-format-${fmt}`}
-																						className={`flex-1 py-2 px-3 transition-colors ${
-																							active
-																								? "bg-blue-600 text-white"
-																								: "bg-white text-gray-600 hover:bg-gray-50"
-																						}`}
-																					>
-																						{labels[fmt]}
-																					</button>
-																				);
-																			},
-																		)}
+																	<div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+																		<p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">
+																			Choose response format
+																		</p>
+																		<div className="grid gap-3 md:grid-cols-3">
+																			<button
+																				type="button"
+																				onClick={() =>
+																					setAvailabilityAdapterType("xml")
+																				}
+																				data-tour="pricing-format-xml"
+																				className={`rounded-2xl border p-4 text-left transition hover:shadow-sm ${availabilityAdapterType === "xml" ? "border-emerald-300 bg-white ring-2 ring-emerald-100" : "border-slate-200 bg-white hover:border-emerald-200"}`}
+																			>
+																				<div className="flex items-center justify-between gap-2">
+																					<p className="font-bold text-slate-950">
+																						Gloria XML
+																					</p>
+																					{availabilityAdapterType ===
+																						"xml" && (
+																						<CheckCircle2 className="h-5 w-5 text-emerald-600" />
+																					)}
+																				</div>
+																				<p className="mt-2 text-xs leading-5 text-slate-600">
+																					POST GLORIA_availabilityrq XML and
+																					receive OTA/GLORIA XML rates.
+																				</p>
+																			</button>
+																			<button
+																				type="button"
+																				onClick={() =>
+																					setAvailabilityAdapterType("json")
+																				}
+																				data-tour="pricing-format-json"
+																				className={`rounded-2xl border p-4 text-left transition hover:shadow-sm ${availabilityAdapterType === "json" ? "border-blue-300 bg-white ring-2 ring-blue-100" : "border-slate-200 bg-white hover:border-blue-200"}`}
+																			>
+																				<div className="flex items-center justify-between gap-2">
+																					<p className="font-bold text-slate-950">
+																						Gloria JSON
+																					</p>
+																					{availabilityAdapterType ===
+																						"json" && (
+																						<CheckCircle2 className="h-5 w-5 text-blue-600" />
+																					)}
+																				</div>
+																				<p className="mt-2 text-xs leading-5 text-slate-600">
+																					POST Gloria field names and receive a
+																					vehicles[] response.
+																				</p>
+																			</button>
+																			<button
+																				type="button"
+																				onClick={() =>
+																					setAvailabilityAdapterType("grpc")
+																				}
+																				data-tour="pricing-format-grpc"
+																				className={`rounded-2xl border p-4 text-left transition hover:shadow-sm ${availabilityAdapterType === "grpc" ? "border-purple-300 bg-white ring-2 ring-purple-100" : "border-slate-200 bg-white hover:border-purple-200"}`}
+																			>
+																				<div className="flex items-center justify-between gap-2">
+																					<p className="font-bold text-slate-950">
+																						Gloria gRPC
+																					</p>
+																					{availabilityAdapterType ===
+																						"grpc" && (
+																						<CheckCircle2 className="h-5 w-5 text-purple-600" />
+																					)}
+																				</div>
+																				<p className="mt-2 text-xs leading-5 text-slate-600">
+																					Call
+																					SourceProviderService.GetAvailability.
+																				</p>
+																			</button>
+																		</div>
 																	</div>
 
 																	{/* Endpoint field — HTTP for xml/json, gRPC address for grpc */}
@@ -7805,9 +8465,9 @@ message LocationsResponse {
 																					? "Gloria POSTs a GLORIA_availabilityrq XML body (Content-Type: text/xml) to match Postman / av.php. The response can be OTA_VehAvailRateRS XML or GLORIA_availabilityrs with VehAvairsdetails + availcars[]."
 																					: "Gloria POSTs a JSON body with Gloria field names (Content-Type: application/json) and expects { vehicles: [...] } back."}
 																			</p>
-																			<div className="flex gap-2 items-end">
+																			<div className="flex flex-col gap-3 lg:flex-row lg:items-end">
 																				<div className="flex-1">
-																					<label className="block text-sm font-medium text-gray-700 mb-1">
+																					<label className="mb-1 block text-sm font-semibold text-slate-700">
 																						Endpoint URL
 																					</label>
 																					<Input
@@ -7894,15 +8554,36 @@ message LocationsResponse {
 													</Card>
 
 													{/* ── Request Parameters ── */}
-													<Card className="border border-gray-200 shadow-sm">
-														<CardHeader>
-															<CardTitle className="text-lg">
-																{pricingEntryMode === "manual"
-																	? "Manual availability entry"
-																	: `${availabilityAdapterType === "xml" ? "GLORIA_availabilityrq" : availabilityAdapterType === "json" ? "Gloria JSON" : "Gloria gRPC"} request parameters`}
-															</CardTitle>
+													<Card className="overflow-hidden border-0 shadow-sm ring-1 ring-slate-200">
+														<CardHeader className="border-b border-slate-200 bg-white">
+															<div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+																<div>
+																	<div className="mb-2 inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-blue-700">
+																		<FileText className="h-3.5 w-3.5" /> Step 2
+																		· Request details
+																	</div>
+																	<CardTitle className="text-2xl font-bold text-slate-950">
+																		{pricingEntryMode === "manual"
+																			? "Manual availability entry"
+																			: `${availabilityAdapterType === "xml" ? "GLORIA_availabilityrq" : availabilityAdapterType === "json" ? "Gloria JSON" : "Gloria gRPC"} request parameters`}
+																	</CardTitle>
+																	<p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
+																		Fill the operational details GLORIA sends to
+																		your supplier system. Use the preview to
+																		confirm the exact payload before storing
+																		samples.
+																	</p>
+																</div>
+																<div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+																	<strong className="block text-slate-900">
+																		Result
+																	</strong>
+																	Stored samples power agent quoting and
+																	testing.
+																</div>
+															</div>
 														</CardHeader>
-														<CardContent className="space-y-4">
+														<CardContent className="space-y-5 p-5">
 															{pricingEntryMode === "manual" ? (
 																<>
 																	<p className="text-sm text-gray-600 leading-relaxed">
@@ -8181,13 +8862,15 @@ message AvailabilityRequest {
 																			loading={isFetchingAvailability}
 																			data-tour="pricing-fetch-store"
 																			disabled={
-																				availabilityAdapterType === "grpc"
-																					? !grpcEndpointAddress.trim() &&
-																						!(endpointConfig as any)
-																							?.grpcEndpoint
-																					: !availabilityEndpointUrl.trim() &&
-																						!endpointConfig?.availabilityEndpointUrl &&
-																						!endpointConfig?.httpEndpoint
+																				isFetchingAvailability ||
+																				(subscriptionActive &&
+																					(availabilityAdapterType === "grpc"
+																						? !grpcEndpointAddress.trim() &&
+																							!(endpointConfig as any)
+																								?.grpcEndpoint
+																						: !availabilityEndpointUrl.trim() &&
+																							!endpointConfig?.availabilityEndpointUrl &&
+																							!endpointConfig?.httpEndpoint))
 																			}
 																		>
 																			Fetch &amp; Store
@@ -9974,6 +10657,20 @@ service SourceProviderService {
 				</main>
 			</div>
 
+			{/* Request Missing Location Modal */}
+			<Modal
+				isOpen={isLocationRequestModalOpen}
+				onClose={() => setIsLocationRequestModalOpen(false)}
+				title="Request a Missing Location"
+				size="xl"
+			>
+				<div className="max-h-[85vh] overflow-y-auto pr-1">
+					<LocationRequestForm
+						onSuccess={() => setIsLocationRequestModalOpen(false)}
+					/>
+				</div>
+			</Modal>
+
 			{/* Branch Edit Modal */}
 			<BranchEditModal
 				branch={selectedBranch}
@@ -10041,6 +10738,39 @@ service SourceProviderService {
 								Confirm and add branches
 							</Button>
 						</div>
+					</div>
+				</Modal>
+			)}
+
+			{/* Plan required modal: first-time users can explore, but imports/storage require a plan */}
+			{planRequiredContext && (
+				<Modal
+					isOpen={!!planRequiredContext}
+					onClose={() => setPlanRequiredContext(null)}
+					title="Choose a plan to continue"
+					size="xl"
+				>
+					<div className="max-h-[85vh] overflow-y-auto pr-1">
+						<div className="mb-6 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-5">
+							<div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+								<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg">
+									<Sparkles className="h-5 w-5" />
+								</div>
+								<div>
+									<p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">
+										Plan required
+									</p>
+									<h3 className="mt-1 text-xl font-bold text-slate-950">
+										Subscribe before you {planRequiredContext.action}.
+									</h3>
+									<p className="mt-2 text-sm leading-6 text-slate-600">
+										{planRequiredContext.description ||
+											"You can keep exploring the Source Portal and docs, but write actions such as imports, syncs, and stored availability require an active plan."}
+									</p>
+								</div>
+							</div>
+						</div>
+						<PlanPicker />
 					</div>
 				</Modal>
 			)}
