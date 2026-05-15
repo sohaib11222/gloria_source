@@ -24,8 +24,6 @@ import logoImage from '../../assets/logo.jpg'
 
 interface SidebarProps {
   activeTab: string
-  /** When on Location & Branches, whether the manual branch tools sub-view is active (for highlighting nav). */
-  branchImport?: 'endpoint' | 'manual'
   onTabChange: (tab: string) => void
   user: User
   onLogout: () => void
@@ -36,7 +34,6 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
-  branchImport = 'endpoint',
   onTabChange,
   user,
   onLogout,
@@ -50,7 +47,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { key: 'dashboard', label: 'Overview', icon: LayoutDashboard },
     { key: 'agreements', label: 'Agreements', icon: FileText },
     { key: 'locations', label: 'Locations', icon: MapPin },
-    { key: 'branches', label: 'Manual Branch import', icon: Store },
     { key: 'location-branches', label: 'Location & Branches', icon: Store },
     { key: 'pricing', label: 'Pricing', icon: DollarSign },
     { key: 'daily-pricing', label: 'Daily Prices', icon: CalendarDays },
@@ -150,12 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon
-            const isActive =
-              item.key === 'branches'
-                ? activeTab === 'location-branches' && branchImport === 'manual'
-                : item.key === 'location-branches'
-                  ? activeTab === 'location-branches' && branchImport !== 'manual'
-                  : activeTab === item.key
+            const isActive = activeTab === item.key
 
             if (item.key === 'docs') {
               // Get base path for production

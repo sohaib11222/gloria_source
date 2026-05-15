@@ -1,202 +1,307 @@
-import React, { useState, useEffect } from 'react';
-import './docs.css';
+import React, { useEffect, useMemo, useState } from "react";
+import "./docs.css";
+
+type Section = { id: string; label: string };
+type ApiMethod = {
+	name: string;
+	type: string;
+	direction: string;
+	request: string;
+	response: string;
+	notes: string[];
+};
+
+const sections: Section[] = [
+	{ id: "overview", label: "API overview" },
+	{ id: "source-provider", label: "Source Provider gRPC" },
+	{ id: "health", label: "GetHealth" },
+	{ id: "locations", label: "GetLocations" },
+	{ id: "availability", label: "GetAvailability" },
+	{ id: "http-location", label: "HTTP location list" },
+	{ id: "http-pricing", label: "HTTP pricing XML/JSON" },
+	{ id: "bookings", label: "Bookings" },
+	{ id: "formats", label: "Data rules" },
+	{ id: "errors-performance", label: "Errors & performance" },
+	{ id: "implementation", label: "Implementation example" },
+];
+
+const CodeBlock: React.FC<{ title?: string; children: string }> = ({
+	title,
+	children,
+}) => (
+	<div className="source-doc-code-card">
+		{title && <div className="source-doc-code-title">{title}</div>}
+		<pre className="source-doc-code">
+			<code>{children}</code>
+		</pre>
+	</div>
+);
+
+const ApiCard: React.FC<{
+	eyebrow: string;
+	title: string;
+	children: React.ReactNode;
+}> = ({ eyebrow, title, children }) => (
+	<div className="source-doc-panel source-api-card">
+		<span className="source-doc-pill">{eyebrow}</span>
+		<h3>{title}</h3>
+		{children}
+	</div>
+);
+
+const FieldTable: React.FC<{
+	columns?: [string, string, string];
+	rows: Array<[string, string, string]>;
+}> = ({ columns = ["Field", "Required", "Description"], rows }) => (
+	<div className="source-doc-table-wrap">
+		<table className="source-doc-table">
+			<thead>
+				<tr>
+					{columns.map((column) => (
+						<th key={column}>{column}</th>
+					))}
+				</tr>
+			</thead>
+			<tbody>
+				{rows.map((row) => (
+					<tr key={row.join("-")}>
+						<td>
+							<code>{row[0]}</code>
+						</td>
+						<td>{row[1]}</td>
+						<td>{row[2]}</td>
+					</tr>
+				))}
+			</tbody>
+		</table>
+	</div>
+);
+
+const MethodMatrix: React.FC<{ methods: ApiMethod[] }> = ({ methods }) => (
+	<div className="source-api-method-grid">
+		{methods.map((method) => (
+			<div className="source-api-method" key={method.name}>
+				<div className="source-api-method-header">
+					<span>{method.type}</span>
+					<strong>{method.name}</strong>
+				</div>
+				<p>{method.direction}</p>
+				<dl>
+					<div>
+						<dt>Request</dt>
+						<dd>{method.request}</dd>
+					</div>
+					<div>
+						<dt>Response</dt>
+						<dd>{method.response}</dd>
+					</div>
+				</dl>
+				<ul>
+					{method.notes.map((note) => (
+						<li key={note}>{note}</li>
+					))}
+				</ul>
+			</div>
+		))}
+	</div>
+);
 
 const SourceApiReference: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<string>('overview');
+	const [activeSection, setActiveSection] = useState("overview");
 
-  useEffect(() => {
-    const hash = window.location.hash.replace('#', '');
-    if (hash) {
-      setActiveSection(hash);
-      const element = document.getElementById(hash);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    } else {
-      setActiveSection('overview');
-    }
+	const methods = useMemo<ApiMethod[]>(
+		() => [
+			{
+				name: "GetHealth",
+				type: "gRPC",
+				direction: "Gloria → Source",
+				request: "Empty",
+				response: "HealthResponse { ok, note }",
+				notes: [
+					"Used by endpoint testing and monitoring.",
+					"Return ok=false only when you want traffic considered unhealthy.",
+				],
+			},
+			{
+				name: "GetLocations",
+				type: "gRPC",
+				direction: "Gloria → Source",
+				request: "Empty",
+				response: "LocationsResponse { locations[] }",
+				notes: [
+					"Coverage only: unlocode + name.",
+					"Does not create detailed branch records. Use branch upload or HTTP/XML for that.",
+				],
+			},
+			{
+				name: "GetAvailability",
+				type: "gRPC",
+				direction: "Gloria → Source",
+				request: "AvailabilityRequest",
+				response: "AvailabilityResponse { vehicles[] }",
+				notes: [
+					"agreement_ref is always passed and should drive rates/eligibility.",
+					"Optional rich fields can carry picture, ACRISS, terms, extras, and charges.",
+				],
+			},
+			{
+				name: "CreateBooking",
+				type: "gRPC",
+				direction: "Gloria → Source",
+				request: "BookingCreateRequest",
+				response: "BookingResponse",
+				notes: [
+					"Requires agreement_ref, supplier_offer_ref, and idempotency_key.",
+					"Gloria can pass optional pickup, vehicle, customer, and payment fields when available.",
+				],
+			},
+			{
+				name: "Modify / Cancel / CheckBooking",
+				type: "gRPC",
+				direction: "Gloria → Source",
+				request: "BookingRef",
+				response: "BookingResponse",
+				notes: [
+					"Requires agreement_ref and supplier_booking_ref.",
+					"Return your latest supplier status.",
+				],
+			},
+		],
+		[],
+	);
 
-    const handleScroll = () => {
-      const sections = [
-        'overview',
-        'grpc-service',
-        'health-endpoint',
-        'locations-endpoint',
-        'availability-endpoint',
-        'booking-endpoints',
-        'data-formats',
-        'error-handling',
-        'implementation-examples'
-      ];
+	useEffect(() => {
+		const applyHash = () => {
+			const hash = window.location.hash.replace("#", "") || "overview";
+			setActiveSection(hash);
+			document
+				.getElementById(hash)
+				?.scrollIntoView({ behavior: "smooth", block: "start" });
+		};
 
-      for (let i = sections.length - 1; i >= 0; i--) {
-        const section = document.getElementById(sections[i]);
-        if (section) {
-          const rect = section.getBoundingClientRect();
-          if (rect.top <= 100) {
-            setActiveSection(sections[i]);
-            window.history.replaceState(null, '', `#${sections[i]}`);
-            break;
-          }
-        }
-      }
-    };
+		applyHash();
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+		const handleScroll = () => {
+			for (let i = sections.length - 1; i >= 0; i -= 1) {
+				const element = document.getElementById(sections[i].id);
+				if (!element) continue;
+				if (element.getBoundingClientRect().top <= 140) {
+					setActiveSection(sections[i].id);
+					break;
+				}
+			}
+		};
 
-  const scrollToSection = (id: string) => {
-    const element = document.getElementById(id);
-    if (element) {
-      setActiveSection(id);
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      window.history.replaceState(null, '', `#${id}`);
-    }
-  };
+		window.addEventListener("scroll", handleScroll, { passive: true });
+		window.addEventListener("hashchange", applyHash);
+		return () => {
+			window.removeEventListener("scroll", handleScroll);
+			window.removeEventListener("hashchange", applyHash);
+		};
+	}, []);
 
-  const sidebarItems = [
-    { id: 'overview', label: 'Overview', icon: '📋' },
-    { id: 'grpc-service', label: 'gRPC Service Definition', icon: '🔌' },
-    { id: 'health-endpoint', label: 'Health Endpoint', icon: '❤️' },
-    { id: 'locations-endpoint', label: 'Locations Endpoint', icon: '📍' },
-    { id: 'availability-endpoint', label: 'Availability Endpoint', icon: '🚗' },
-    { id: 'booking-endpoints', label: 'Booking Endpoints', icon: '📝' },
-    { id: 'data-formats', label: 'Data Formats', icon: '📊' },
-    { id: 'error-handling', label: 'Error Handling', icon: '⚠️' },
-    { id: 'implementation-examples', label: 'Implementation Examples', icon: '💻' },
-  ];
+	const navigateTo = (id: string) => {
+		setActiveSection(id);
+		window.history.replaceState(null, "", `#${id}`);
+		document
+			.getElementById(id)
+			?.scrollIntoView({ behavior: "smooth", block: "start" });
+	};
 
-  return (
-    <div style={{ display: 'flex', gap: '2rem', maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
-      {/* Sidebar */}
-      <aside style={{
-        width: '280px',
-        flexShrink: 0,
-        position: 'sticky',
-        top: '100px',
-        height: 'fit-content',
-        maxHeight: 'calc(100vh - 120px)',
-        overflowY: 'auto',
-        padding: '1.5rem',
-        background: 'white',
-        borderRadius: '0.75rem',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-        border: '1px solid #e5e7eb'
-      }}>
-        <h3 style={{
-          fontSize: '0.875rem',
-          fontWeight: 700,
-          color: '#4b5563',
-          textTransform: 'uppercase',
-          letterSpacing: '0.1em',
-          margin: '0 0 1rem 0',
-          paddingBottom: '0.75rem',
-          borderBottom: '2px solid #e5e7eb'
-        }}>
-          Table of Contents
-        </h3>
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {sidebarItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => scrollToSection(item.id)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.75rem',
-                padding: '0.75rem 1rem',
-                border: 'none',
-                borderRadius: '0.5rem',
-                background: activeSection === item.id
-                  ? 'linear-gradient(to right, #dbeafe, #bfdbfe)'
-                  : 'transparent',
-                color: activeSection === item.id ? '#1e40af' : '#4b5563',
-                fontWeight: activeSection === item.id ? 600 : 400,
-                cursor: 'pointer',
-                textAlign: 'left',
-                fontSize: '0.875rem',
-                transition: 'all 0.15s',
-                boxShadow: activeSection === item.id ? '0 2px 4px rgba(59, 130, 246, 0.2)' : 'none'
-              }}
-            >
-              <span style={{ fontSize: '1rem', flexShrink: 0 }}>{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-      </aside>
+	return (
+		<div className="source-doc-shell">
+			<aside className="source-doc-sidebar">
+				<div className="source-doc-sidebar-title">API reference</div>
+				<nav>
+					{sections.map((section) => (
+						<button
+							key={section.id}
+							type="button"
+							className={activeSection === section.id ? "active" : ""}
+							onClick={() => navigateTo(section.id)}
+						>
+							<span>{section.label}</span>
+						</button>
+					))}
+				</nav>
+			</aside>
 
-      {/* Main Content */}
-      <div className="docs-main" style={{ flex: 1, maxWidth: '900px', padding: '2rem' }}>
-        <h1 id="overview" style={{ scrollMarginTop: '100px' }}>Source API Reference</h1>
-        <p style={{ fontSize: '1.125rem', color: '#6b7280', marginBottom: '2rem' }}>
-          Complete reference for implementing the Source Provider API that the middleware calls.
-        </p>
+			<article className="source-doc-content">
+				<section id="overview" className="source-doc-hero source-api-hero">
+					<div className="source-doc-eyebrow">Supplier API contract</div>
+					<h1>Source API reference</h1>
+					<p>
+						This page documents the interfaces Gloria calls when a Source goes
+						live: gRPC service methods, HTTP/XML location imports, Gloria
+						XML/JSON availability testing, booking callbacks, validation rules,
+						and health behavior. It mirrors the actual Source Portal tabs and
+						backend adapters.
+					</p>
+					<div className="source-doc-hero-actions">
+						<a href="#source-provider">gRPC contract</a>
+						<a href="#http-location">Location payloads</a>
+						<a href="#http-pricing">Pricing payloads</a>
+						<a
+							href="/docs/proto/source_provider.proto"
+							download="source_provider.proto"
+						>
+							Download proto
+						</a>
+					</div>
+				</section>
 
-        {/* Overview */}
-        <section id="overview" style={{ marginBottom: '3rem', scrollMarginTop: '100px' }}>
-          <h2>How the Middleware Calls Your API</h2>
-          <p>
-            The middleware connects to your gRPC server at the endpoint you configure (e.g., <code>localhost:51061</code>).
-            When an Agent searches for availability or creates a booking, the middleware:
-          </p>
-          <ol style={{ lineHeight: '1.8' }}>
-            <li>Receives the request from the Agent</li>
-            <li>Looks up your configured gRPC endpoint from the database</li>
-            <li>Calls your gRPC server using the <code>SourceProviderService</code> interface</li>
-            <li>Passes the <code>agreement_ref</code> in every request (REQUIRED)</li>
-            <li>Waits for your response (timeout: 120 seconds)</li>
-            <li>Returns the response to the Agent</li>
-          </ol>
+				<section className="source-doc-section">
+					<div className="source-api-lifecycle">
+						<div>
+							<span>1</span>
+							<strong>Agent searches</strong>
+							<p>
+								Gloria validates agreement, source status, plan, coverage, and
+								dates.
+							</p>
+						</div>
+						<div>
+							<span>2</span>
+							<strong>Gloria calls Source</strong>
+							<p>
+								gRPC, Gloria XML, or Gloria JSON endpoint is selected from
+								Source endpoint settings.
+							</p>
+						</div>
+						<div>
+							<span>3</span>
+							<strong>Source responds</strong>
+							<p>
+								Vehicle offers, branch coverage, health, or booking status are
+								parsed and normalized.
+							</p>
+						</div>
+						<div>
+							<span>4</span>
+							<strong>Portal monitors</strong>
+							<p>
+								Samples, verification, health rate, slow calls, strikes, and
+								backoff are displayed in Source.
+							</p>
+						</div>
+					</div>
+				</section>
 
-          <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '0.5rem' }}>
-            <strong>⚠️ Important:</strong> You must implement all required gRPC methods defined in the proto file.
-            The middleware will call these methods with specific data formats.
-          </div>
-        </section>
-
-        {/* gRPC Service Definition */}
-        <section id="grpc-service" style={{ marginBottom: '3rem', scrollMarginTop: '100px' }}>
-          <h2>gRPC Service Definition</h2>
-          <p>
-            You must implement the <code>SourceProviderService</code> interface defined in the proto file.
-          </p>
-
-          <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f0f9ff', border: '1px solid #3b82f6', borderRadius: '0.5rem' }}>
-            <strong>📥 Download Proto File:</strong>
-            <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-              <a 
-                href="/docs/proto/source_provider.proto" 
-                download="source_provider.proto"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.625rem 1.25rem',
-                  backgroundColor: '#3b82f6',
-                  color: 'white',
-                  textDecoration: 'none',
-                  borderRadius: '0.375rem',
-                  fontWeight: 600,
-                  fontSize: '0.875rem',
-                  transition: 'background-color 0.2s'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
-              >
-                <span>⬇️</span>
-                <span>Download source_provider.proto</span>
-              </a>
-              <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                API: <code style={{ backgroundColor: '#f3f4f6', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>GET /docs/proto/source_provider.proto</code>
-              </span>
-            </div>
-          </div>
-
-          <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`service SourceProviderService {
+				<section id="source-provider" className="source-doc-section">
+					<div className="source-doc-section-heading">
+						<span>gRPC service</span>
+						<h2>SourceProviderService</h2>
+						<p>
+							If you configure a gRPC endpoint, Gloria creates a client from{" "}
+							<code>source_provider.proto</code> and calls your service at the
+							configured <code>host:port</code>. Local bind addresses such as{" "}
+							<code>0.0.0.0:51061</code> are normalized to{" "}
+							<code>localhost:51061</code> for client calls.
+						</p>
+					</div>
+					<MethodMatrix methods={methods} />
+					<CodeBlock title="source_provider.proto service">
+						{`service SourceProviderService {
   rpc GetHealth (Empty) returns (HealthResponse);
   rpc GetLocations (Empty) returns (LocationsResponse);
   rpc GetAvailability (AvailabilityRequest) returns (AvailabilityResponse);
@@ -205,484 +310,601 @@ const SourceApiReference: React.FC = () => {
   rpc CancelBooking (BookingRef) returns (BookingResponse);
   rpc CheckBooking  (BookingRef) returns (BookingResponse);
 }`}
-            </pre>
-          </div>
+					</CodeBlock>
+				</section>
 
-          <h3 style={{ marginTop: '1.5rem' }}>Required Methods</h3>
-          <ul style={{ lineHeight: '1.8' }}>
-            <li><strong>GetHealth</strong> - Health check endpoint (used for connectivity testing)</li>
-            <li><strong>GetLocations</strong> - Return all supported locations (UN/LOCODEs)</li>
-            <li><strong>GetAvailability</strong> - Return vehicle availability for search criteria</li>
-            <li><strong>CreateBooking</strong> - Create a new booking</li>
-            <li><strong>ModifyBooking</strong> - Modify an existing booking</li>
-            <li><strong>CancelBooking</strong> - Cancel an existing booking</li>
-            <li><strong>CheckBooking</strong> - Retrieve booking status/details</li>
-          </ul>
-        </section>
-
-        {/* Health Endpoint */}
-        <section id="health-endpoint" style={{ marginBottom: '3rem', scrollMarginTop: '100px' }}>
-          <h2>GetHealth Endpoint</h2>
-          <p>
-            Simple health check endpoint used by the middleware to verify your gRPC server is running.
-          </p>
-
-          <h3>Request</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`message Empty {}`}
-            </pre>
-          </div>
-          <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#6b7280' }}>
-            Empty message - no parameters required
-          </p>
-
-          <h3 style={{ marginTop: '1.5rem' }}>Response</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`message HealthResponse {
-  bool ok = 1;      // true if healthy
-  string note = 2;  // optional status message
-}`}
-            </pre>
-          </div>
-
-          <h3 style={{ marginTop: '1.5rem' }}>Example Response</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`{
+				<section id="health" className="source-doc-section">
+					<div className="source-doc-section-heading">
+						<span>Health tab / verification</span>
+						<h2>GetHealth</h2>
+						<p>
+							Implement this lightweight check so the portal can confirm that
+							your service is reachable.
+						</p>
+					</div>
+					<div className="source-doc-two-col">
+						<ApiCard eyebrow="Request" title="Empty message">
+							<p>No fields are sent.</p>
+						</ApiCard>
+						<ApiCard eyebrow="Response" title="HealthResponse">
+							<FieldTable
+								rows={[
+									["ok", "Yes", "true when your API can accept traffic."],
+									[
+										"note",
+										"Optional",
+										"Human-readable message for diagnostics.",
+									],
+								]}
+							/>
+						</ApiCard>
+					</div>
+					<CodeBlock title="Example response">
+						{`{
   "ok": true,
   "note": "Service is healthy"
 }`}
-            </pre>
-          </div>
-        </section>
+					</CodeBlock>
+				</section>
 
-        {/* Locations Endpoint */}
-        <section id="locations-endpoint" style={{ marginBottom: '3rem', scrollMarginTop: '100px' }}>
-          <h2>GetLocations Endpoint</h2>
-          <p>
-            Returns all locations (branches) that your source supports. Locations must be in UN/LOCODE format.
-          </p>
-
-          <h3>Request</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`message Empty {}`}
-            </pre>
-          </div>
-
-          <h3 style={{ marginTop: '1.5rem' }}>Response</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`message LocationsResponse {
-  repeated Location locations = 1;
-}
-
-message Location {
-  string unlocode = 1;  // UN/LOCODE format (e.g., "GBMAN")
-  string name = 2;      // Location name (e.g., "Manchester")
-}`}
-            </pre>
-          </div>
-
-          <h3 style={{ marginTop: '1.5rem' }}>Example Response</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`{
+				<section id="locations" className="source-doc-section">
+					<div className="source-doc-section-heading">
+						<span>Locations / coverage</span>
+						<h2>GetLocations</h2>
+						<p>
+							gRPC location sync is coverage-only. Return supported UN/LOCODE
+							values so Gloria knows where your source can be searched. It does
+							not contain branch address, desk, phone, email, or opening-hour
+							detail.
+						</p>
+					</div>
+					<FieldTable
+						rows={[
+							[
+								"locations[].unlocode",
+								"Yes",
+								"2-letter country code + 3-character location code, e.g. AEDXB or GBLON.",
+							],
+							[
+								"locations[].name",
+								"Recommended",
+								"Display name used in verification and admin review.",
+							],
+						]}
+					/>
+					<CodeBlock title="GetLocations response">
+						{`{
   "locations": [
-    { "unlocode": "GBMAN", "name": "Manchester" },
-    { "unlocode": "GBLON", "name": "London" },
-    { "unlocode": "USNYC", "name": "New York" }
+    { "unlocode": "AEDXB", "name": "Dubai" },
+    { "unlocode": "GBLON", "name": "London" }
   ]
 }`}
-            </pre>
-          </div>
+					</CodeBlock>
+					<div className="source-api-note">
+						For full branch records use the manual branch form, branch upload,
+						or HTTP/XML location list endpoint.
+					</div>
+				</section>
 
-          <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '0.5rem' }}>
-            <strong>💡 Important:</strong> UN/LOCODEs must be in format: 2-letter country code + 3-character location code (e.g., GBMAN, USNYC).
-            The middleware validates these against the UN/LOCODE database.
-          </div>
-        </section>
-
-        {/* Availability Endpoint */}
-        <section id="availability-endpoint" style={{ marginBottom: '3rem', scrollMarginTop: '100px' }}>
-          <h2>GetAvailability Endpoint</h2>
-          <p>
-            Returns vehicle availability and pricing for the given search criteria. This is called when an Agent searches for vehicles.
-          </p>
-
-          <h3>Request</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`message AvailabilityRequest {
-  string agreement_ref = 1;        // REQUIRED: Agreement reference
-  string pickup_unlocode = 2;       // Pickup location (UN/LOCODE)
-  string dropoff_unlocode = 3;      // Dropoff location (UN/LOCODE)
-  string pickup_iso = 4;            // Pickup date/time (ISO 8601)
-  string dropoff_iso = 5;           // Dropoff date/time (ISO 8601)
-  int32 driver_age = 6;              // Driver age
-  string residency_country = 7;     // Residency country (ISO 3166-1 alpha-2)
-  repeated string vehicle_classes = 8; // Vehicle class filters (optional)
-}`}
-            </pre>
-          </div>
-
-          <h3 style={{ marginTop: '1.5rem' }}>Response</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`message AvailabilityResponse {
-  repeated VehicleOffer vehicles = 1;
-}
-
-message VehicleOffer {
-  string supplier_offer_ref = 1;    // Your unique offer reference
-  string vehicle_class = 2;          // OTA vehicle class code (e.g., "CDMR")
-  string make_model = 3;            // Vehicle make/model (e.g., "Ford Focus")
-  string currency = 4;               // Currency code (ISO 4217, e.g., "GBP")
-  double total_price = 5;            // Total rental price
-  string availability_status = 6;    // "AVAILABLE" | "ON_REQUEST" | "SOLD_OUT"
-}`}
-            </pre>
-          </div>
-
-          <h3 style={{ marginTop: '1.5rem' }}>Example Request</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`{
-  "agreement_ref": "AGR-2024-001",
-  "pickup_unlocode": "GBMAN",
-  "dropoff_unlocode": "GBLON",
-  "pickup_iso": "2024-06-15T10:00:00Z",
-  "dropoff_iso": "2024-06-20T14:00:00Z",
+				<section id="availability" className="source-doc-section">
+					<div className="source-doc-section-heading">
+						<span>Pricing / availability</span>
+						<h2>GetAvailability</h2>
+						<p>
+							This is called when Gloria routes an agent search to your gRPC
+							endpoint. Gloria transforms search criteria into
+							<code> AvailabilityRequest</code> and normalizes your returned
+							vehicles into stored offers.
+						</p>
+					</div>
+					<div className="source-doc-two-col">
+						<div>
+							<h3>Request fields</h3>
+							<FieldTable
+								rows={[
+									[
+										"agreement_ref",
+										"Yes",
+										"Agreement reference. Use this to select rates, rules, and eligibility.",
+									],
+									["pickup_unlocode", "Yes", "Pickup UN/LOCODE."],
+									["dropoff_unlocode", "Yes", "Return/dropoff UN/LOCODE."],
+									["pickup_iso", "Yes", "Pickup date/time in ISO-8601."],
+									["dropoff_iso", "Yes", "Dropoff date/time in ISO-8601."],
+									[
+										"driver_age",
+										"Recommended",
+										"Driver age. Defaults to 0 if not supplied to adapter.",
+									],
+									[
+										"residency_country",
+										"Recommended",
+										"ISO-3166 alpha-2 country code.",
+									],
+									[
+										"vehicle_classes",
+										"Optional",
+										"Filter list for ACRISS/vehicle classes.",
+									],
+								]}
+							/>
+						</div>
+						<div>
+							<h3>Response fields</h3>
+							<FieldTable
+								rows={[
+									[
+										"supplier_offer_ref",
+										"Strongly recommended",
+										"Stable offer reference used for booking. Gloria generates GEN-* if missing.",
+									],
+									[
+										"vehicle_class",
+										"Recommended",
+										"Class/code such as ECMN, CCAR, CDMR.",
+									],
+									[
+										"make_model",
+										"Recommended",
+										"Customer-facing vehicle name.",
+									],
+									[
+										"currency",
+										"Yes",
+										"ISO-4217 currency such as EUR, USD, GBP.",
+									],
+									["total_price", "Yes", "Total rental price."],
+									[
+										"availability_status",
+										"Yes",
+										"AVAILABLE, ON_REQUEST, or SOLD_OUT.",
+									],
+									[
+										"picture_url / ota_vehicle_json",
+										"Optional",
+										"Rich fields for images, terms, charges, extras, and parsed OTA details.",
+									],
+								]}
+							/>
+						</div>
+					</div>
+					<CodeBlock title="GetAvailability request">
+						{`{
+  "agreement_ref": "AGR-2026-00042",
+  "pickup_unlocode": "AEDXB",
+  "dropoff_unlocode": "AEDXB",
+  "pickup_iso": "2026-05-23T09:00:00Z",
+  "dropoff_iso": "2026-05-27T11:00:00Z",
   "driver_age": 30,
-  "residency_country": "GB",
-  "vehicle_classes": ["CDMR", "FDAR"]
+  "residency_country": "FR",
+  "vehicle_classes": ["CCAR", "ECAR"]
 }`}
-            </pre>
-          </div>
-
-          <h3 style={{ marginTop: '1.5rem' }}>Example Response</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`{
+					</CodeBlock>
+					<CodeBlock title="GetAvailability response with rich fields">
+						{`{
   "vehicles": [
     {
-      "supplier_offer_ref": "OFFER-123",
-      "vehicle_class": "CDMR",
-      "make_model": "Ford Focus",
-      "currency": "GBP",
-      "total_price": 250.00,
-      "availability_status": "AVAILABLE"
-    },
-    {
-      "supplier_offer_ref": "OFFER-124",
-      "vehicle_class": "FDAR",
-      "make_model": "BMW 3 Series",
-      "currency": "GBP",
-      "total_price": 450.00,
-      "availability_status": "AVAILABLE"
+      "supplier_offer_ref": "CCAR12345629-04-26",
+      "vehicle_class": "CCAR",
+      "make_model": "Skoda Fabia or similar",
+      "currency": "EUR",
+      "total_price": 150,
+      "availability_status": "AVAILABLE",
+      "picture_url": "https://supplier.example/images/skoda-fabia.png",
+      "door_count": "4",
+      "baggage": "2",
+      "vehicle_category": "CCAR",
+      "veh_id": "CCAR12345629-04-26",
+      "ota_vehicle_json": "{\"veh_terms_included\":[{\"Code\":\"CDW\",\"ItemDescription\":\"Collision damage waiver\"}],\"priced_equips\":[{\"Code\":\"GPS\",\"Price\":\"25.00\"}]}"
     }
   ]
 }`}
-            </pre>
-          </div>
+					</CodeBlock>
+				</section>
 
-          <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '0.5rem' }}>
-            <strong>⚠️ Critical:</strong> The <code>agreement_ref</code> is REQUIRED and must be included in every request.
-            Use it to determine pricing, availability, and location coverage for that specific agreement.
-          </div>
+				<section id="http-location" className="source-doc-section">
+					<div className="source-doc-section-heading">
+						<span>Endpoint import</span>
+						<h2>HTTP/XML location list endpoint</h2>
+						<p>
+							Use this when your supplier system can return detailed branch
+							rows. Gloria fetches the configured URL, parses the XML/JSON/PHP
+							structure, normalizes it to the manual branch schema, and creates
+							or updates branch records plus location coverage.
+						</p>
+					</div>
+					<div className="source-doc-three-col">
+						<ApiCard eyebrow="Best for" title="Full import">
+							<p>Creates/updates branches, not only coverage.</p>
+						</ApiCard>
+						<ApiCard eyebrow="Payload" title="GLORIA_locationlistrs">
+							<p>
+								Use CountryList, CountryCode, VehMatchedLocs, and LocationDetail
+								rows.
+							</p>
+						</ApiCard>
+						<ApiCard eyebrow="Mapping" title="Manual schema">
+							<p>
+								BranchCode, name, address, city, countryCode, natoLocode,
+								contact, coordinates, hours.
+							</p>
+						</ApiCard>
+					</div>
+					<CodeBlock title="GLORIA_locationlistrs response">
+						{`<GLORIA_locationlistrs TimeStamp="2026-06-01T10:00:00" Target="Production" Version="1.00">
+  <Success />
+  <CountryList>
+    <Country>United Arab Emirates</Country>
+    <CountryCode>AE</CountryCode>
+    <VehMatchedLocs>
+      <VehMatchedLoc>
+        <LocationDetail Code="DXB01" Name="Dubai Desk" LocationCode="AEDXB"
+          Latitude="25.2532" Longitude="55.3657" AtAirport="true" LocationType="Airport">
+          <Address>
+            <AddressLine>Dubai International Airport Terminal 1</AddressLine>
+            <CityName>Dubai</CityName>
+            <PostalCode>00000</PostalCode>
+            <CountryName Code="AE">United Arab Emirates</CountryName>
+          </Address>
+          <Telephone PhoneNumber="+971 4 123 4567" />
+          <Email>dubai@example-supplier.com</Email>
+          <PickupInstructions>Meet at arrivals desk.</PickupInstructions>
+        </LocationDetail>
+      </VehMatchedLoc>
+    </VehMatchedLocs>
+  </CountryList>
+</GLORIA_locationlistrs>`}
+					</CodeBlock>
+				</section>
 
-          <h3 style={{ marginTop: '1.5rem' }}>HTTP availability: OTA VehAvailRSCore format</h3>
-          <p style={{ marginTop: '0.5rem' }}>
-            If you use an <strong>HTTP endpoint</strong> for availability (e.g. <code>your-endpoint/availability</code> or pricetest2.php-style APIs), the middleware expects your response as <strong>JSON</strong> in the <strong>OTA VehAvailRSCore</strong> structure. Return <code>Content-Type: application/json</code> and a root object with <code>VehAvailRSCore</code> so the middleware can parse and store offers.
-          </p>
-          <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#64748b' }}>
-            Return <strong>JSON</strong> (e.g. <code>json_encode($array)</code> in PHP) or <strong>PHP <code>var_dump()</code></strong> of the same OTA structure—the middleware parses both automatically.
-          </p>
-          <div style={{ marginTop: '0.75rem', padding: '1rem', backgroundColor: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '0.5rem' }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', marginBottom: '0.5rem' }}>Expected root structure (JSON)</p>
-            <pre style={{ fontSize: '0.8rem', margin: 0, overflow: 'auto' }}>{`{
-  "@attributes": { "TimeStamp", "Target", "Version", "CDCode" },
-  "Success": [],
-  "VehAvailRSCore": {
-    "VehRentalCore": {
-      "@attributes": { "PickUpDateTime", "ReturnDateTime" },
-      "PickUpLocation": { "@attributes": { "LocationCode", "Locationname", "Locationaddress", "Locationcity", "Locationtele", "emailaddress", "Locationlat", "Locationlong" } },
-      "ReturnLocation": { "@attributes": { ... } }
-    },
-    "VehVendorAvails": {
-      "VehVendorAvail": {
-        "VehAvails": {
-          "VehAvail": [
-            {
-              "VehAvailCore": {
-                "@attributes": { "Status", "RStatus", "VehID" },
-                "Vehicle": { "VehMakeModel", "VehType", "VehClass", "VehTerms" },
-                "RentalRate": { "RateDistance", "RateQualifier" },
-                "VehicleCharges": { "VehicleCharge", "TotalCharge" },
-                "PricedEquips": [ ... ]
-              }
-            }
-          ]
-        }
-      }
+				<section id="http-pricing" className="source-doc-section">
+					<div className="source-doc-section-heading">
+						<span>Pricing endpoint</span>
+						<h2>HTTP availability: Gloria XML and Gloria JSON</h2>
+						<p>
+							The Pricing tab can test HTTP endpoints without gRPC. XML mode
+							sends a <code>GLORIA_availabilityrq</code> body. Your endpoint may
+							respond as <code>OTA_VehAvailRateRS</code>,{" "}
+							<code>GLORIA_availabilityrs</code>, equivalent JSON, or PHP
+							var_dump text containing those trees.
+						</p>
+					</div>
+					<div className="source-doc-two-col">
+						<ApiCard eyebrow="XML request" title="Gloria sends">
+							<ul>
+								<li>
+									<code>Content-Type: text/xml</code>
+								</li>
+								<li>
+									<code>ACC.Source.AccountID</code> from requestor/account ID
+								</li>
+								<li>
+									<code>VehAvailbody.Vehmain</code> with branch codes and dates
+								</li>
+							</ul>
+						</ApiCard>
+						<ApiCard eyebrow="JSON request" title="Gloria sends">
+							<ul>
+								<li>
+									<code>Content-Type: application/json</code>
+								</li>
+								<li>
+									Fields match gRPC <code>AvailabilityRequest</code>
+								</li>
+								<li>
+									Response expects <code>vehicles</code> or <code>offers</code>
+								</li>
+							</ul>
+						</ApiCard>
+					</div>
+					<CodeBlock title="GLORIA_availabilityrq request">
+						{`<GLORIA_availabilityrq TimeStamp="2026-05-15T10:30:45" Target="Production" Version="1.00">
+  <ACC>
+    <Source><AccountID ID="Gloria002" /></Source>
+  </ACC>
+  <VehAvailbody>
+    <Vehmain PickUpDateTime="2026-05-23T09:00:00Z" ReturnDateTime="2026-05-27T11:00:00Z">
+      <collectionbranch LocationCode="TIAA02" />
+      <returnbranch LocationCode="TIAA02" />
+    </Vehmain>
+    <DriverAge Age="30" />
+    <DriverCitizenCountry Code="FR" />
+  </VehAvailbody>
+</GLORIA_availabilityrq>`}
+					</CodeBlock>
+					<CodeBlock title="Accepted GLORIA_availabilityrs response">
+						{`<GLORIA_availabilityrs TimeStamp="2026-05-15T10:30:46" Target="Production" Version="1.00">
+  <Success />
+  <VehAvairsdetails>
+    <availcars ACRISS="CCAR">
+      <vehdetails Make="SKODA" Model="FABIA" Transmission="Automatic" Doors="4" Seats="5" ImageURL="https://supplier.example/fabia.png" />
+      <pricing CarOrderID="CCAR12345629-04-26" Currency="EUR" DailyGross="30.00" TotalGross="150.00" />
+      <includedinprice>
+        <Item Code="CDW" ItemDescription="Collision damage waiver" Excess="1200.00" Deposit="1200.00" />
+      </includedinprice>
+      <notincludedinprice>
+        <Item Code="FP" ItemDescription="Fuel policy upgrade" Price="35.00" />
+      </notincludedinprice>
+      <OptionalExtras>
+        <Item Code="GPS" ItemDescription="GPS" Price="25.00" />
+      </OptionalExtras>
+    </availcars>
+  </VehAvairsdetails>
+</GLORIA_availabilityrs>`}
+					</CodeBlock>
+					<CodeBlock title="Gloria JSON request/response">
+						{`// Request body posted by Gloria JSON mode
+{
+  "agreement_ref": "Gloria002",
+  "pickup_unlocode": "TIAA02",
+  "dropoff_unlocode": "TIAA02",
+  "pickup_iso": "2026-05-23T09:00:00Z",
+  "dropoff_iso": "2026-05-27T11:00:00Z",
+  "driver_age": 30,
+  "residency_country": "FR"
+}
+
+// Response body expected from supplier
+{
+  "vehicles": [
+    {
+      "supplier_offer_ref": "CCAR12345629-04-26",
+      "vehicle_class": "CCAR",
+      "make_model": "Skoda Fabia",
+      "currency": "EUR",
+      "total_price": 150,
+      "availability_status": "AVAILABLE",
+      "picture_url": "https://supplier.example/fabia.png",
+      "priced_equips": [{ "Code": "GPS", "Price": "25.00" }]
     }
-  }
-}`}</pre>
-            <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem' }}>
-              Key elements: <code>VehRentalCore</code> (pickup/return dates and locations), <code>VehVendorAvails.VehVendorAvail.VehAvails.VehAvail</code> (array of offers). Each <code>VehAvail</code> includes <code>VehAvailCore</code>, <code>Vehicle</code> (VehMakeModel with Name/PictureURL, VehType DoorCount/Baggage, VehClass Size, VehTerms Included/NotIncluded), <code>VehicleCharges</code>, <code>TotalCharge</code>, and optionally <code>PricedEquips</code>. Full spec: Application Flow and Data Spec (Section 3.1.1).
-            </p>
-          </div>
-        </section>
+  ]
+}`}
+					</CodeBlock>
+				</section>
 
-        {/* Booking Endpoints */}
-        <section id="booking-endpoints" style={{ marginBottom: '3rem', scrollMarginTop: '100px' }}>
-          <h2>Booking Endpoints</h2>
-          <p>
-            All booking operations require the <code>agreement_ref</code> to be included in the request.
-          </p>
-
-          <h3>CreateBooking</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`message BookingCreateRequest {
-  string agreement_ref = 1;         // REQUIRED
-  string supplier_offer_ref = 2;    // From availability response
-  string agent_booking_ref = 3;     // Optional: Agent's booking reference
-  string idempotency_key = 4;       // REQUIRED: Prevents duplicate bookings
+				<section id="bookings" className="source-doc-section">
+					<div className="source-doc-section-heading">
+						<span>Reservations / cancellations</span>
+						<h2>Booking methods</h2>
+						<p>
+							Booking operations are gRPC methods in the SourceProviderService.
+							Gloria validates the required identifiers before calling your
+							source.
+						</p>
+					</div>
+					<div className="source-doc-two-col">
+						<div>
+							<h3>CreateBooking request</h3>
+							<FieldTable
+								rows={[
+									[
+										"agreement_ref",
+										"Yes",
+										"Agreement under which the agent is booking.",
+									],
+									[
+										"supplier_offer_ref",
+										"Yes",
+										"Offer reference returned by availability.",
+									],
+									[
+										"agent_booking_ref",
+										"Optional",
+										"Agent-side reference when available.",
+									],
+									[
+										"idempotency_key",
+										"Yes",
+										"Use this to prevent duplicate bookings.",
+									],
+								]}
+							/>
+						</div>
+						<div>
+							<h3>BookingRef request</h3>
+							<FieldTable
+								rows={[
+									[
+										"agreement_ref",
+										"Yes",
+										"Required on ModifyBooking, CancelBooking, and CheckBooking.",
+									],
+									[
+										"supplier_booking_ref",
+										"Yes",
+										"Your booking reference from CreateBooking.",
+									],
+									[
+										"status",
+										"Response",
+										"REQUESTED, CONFIRMED, CANCELLED, FAILED, or your mapped status.",
+									],
+								]}
+							/>
+						</div>
+					</div>
+					<CodeBlock title="CreateBooking request and response">
+						{`{
+  "agreement_ref": "AGR-2026-00042",
+  "supplier_offer_ref": "CCAR12345629-04-26",
+  "agent_booking_ref": "AGT-BOOK-10001",
+  "idempotency_key": "2f72d34a-314a-49cd-9183-8471f6ac1be1"
 }
 
-message BookingResponse {
-  string supplier_booking_ref = 1; // Your booking reference
-  string status = 2;                // "REQUESTED" | "CONFIRMED" | "CANCELLED" | "FAILED"
+{
+  "supplier_booking_ref": "SUP-BKG-987654",
+  "status": "CONFIRMED"
 }`}
-            </pre>
-          </div>
+					</CodeBlock>
+				</section>
 
-          <h3 style={{ marginTop: '1.5rem' }}>ModifyBooking / CancelBooking / CheckBooking</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`message BookingRef {
-  string agreement_ref = 1;         // REQUIRED: Must be sent on every call
-  string supplier_booking_ref = 2;  // Your booking reference
-}
+				<section id="formats" className="source-doc-section">
+					<div className="source-doc-section-heading">
+						<span>Validation rules</span>
+						<h2>Data format requirements</h2>
+					</div>
+					<div className="source-doc-three-col">
+						<ApiCard eyebrow="Location" title="UN/LOCODE">
+							<ul>
+								<li>Format: country + location code.</li>
+								<li>
+									Examples: <code>AEDXB</code>, <code>GBLON</code>,{" "}
+									<code>USNYC</code>.
+								</li>
+								<li>Used for coverage and search routing.</li>
+							</ul>
+						</ApiCard>
+						<ApiCard eyebrow="Time" title="ISO-8601">
+							<ul>
+								<li>
+									Use UTC <code>Z</code> or an explicit offset.
+								</li>
+								<li>
+									Example: <code>2026-05-23T09:00:00Z</code>.
+								</li>
+								<li>Preserve pickup/dropoff local intent.</li>
+							</ul>
+						</ApiCard>
+						<ApiCard eyebrow="Codes" title="Vehicles & money">
+							<ul>
+								<li>Currency: ISO-4217 like EUR, USD, GBP.</li>
+								<li>Vehicle: ACRISS/OTA-style class codes.</li>
+								<li>Country: ISO-3166 alpha-2.</li>
+							</ul>
+						</ApiCard>
+					</div>
+				</section>
 
-message BookingResponse {
-  string supplier_booking_ref = 1;
-  string status = 2;                // Current booking status
-}`}
-            </pre>
-          </div>
+				<section id="errors-performance" className="source-doc-section">
+					<div className="source-doc-section-heading">
+						<span>Operations</span>
+						<h2>Error handling and health impact</h2>
+						<p>
+							Source errors and slow responses are visible in Health and may
+							temporarily exclude a source from live availability traffic.
+						</p>
+					</div>
+					<div className="source-doc-two-col">
+						<ApiCard eyebrow="gRPC status" title="Recommended errors">
+							<ul>
+								<li>
+									<code>INVALID_ARGUMENT</code> for malformed dates, locations,
+									or missing identifiers.
+								</li>
+								<li>
+									<code>NOT_FOUND</code> for missing bookings.
+								</li>
+								<li>
+									<code>UNAVAILABLE</code> for temporary supplier downtime.
+								</li>
+								<li>
+									<code>INTERNAL</code> for unexpected failures.
+								</li>
+							</ul>
+						</ApiCard>
+						<ApiCard eyebrow="Monitoring" title="Health rules">
+							<ul>
+								<li>Target response time: under 3 seconds.</li>
+								<li>Failed and slow calls count as unhealthy samples.</li>
+								<li>Three active strikes can trigger backoff.</li>
+								<li>Backoff schedule: 15m, 30m, 60m, 2h, 4h.</li>
+							</ul>
+						</ApiCard>
+					</div>
+				</section>
 
-          <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '0.5rem' }}>
-            <strong>⚠️ Critical:</strong> The <code>agreement_ref</code> is REQUIRED in ALL booking operations.
-            The middleware will reject requests without it.
-          </div>
-        </section>
+				<section id="implementation" className="source-doc-section">
+					<div className="source-doc-section-heading">
+						<span>Starter implementation</span>
+						<h2>Node.js gRPC supplier skeleton</h2>
+						<p>
+							Use this as a shape reference only. Production suppliers should
+							add authentication, observability, retries, and their own
+							inventory/booking integrations.
+						</p>
+					</div>
+					<CodeBlock title="Node.js / TypeScript gRPC server">
+						{`import * as grpc from '@grpc/grpc-js'
+import * as protoLoader from '@grpc/proto-loader'
 
-        {/* Data Formats */}
-        <section id="data-formats" style={{ marginBottom: '3rem', scrollMarginTop: '100px' }}>
-          <h2>Data Format Requirements</h2>
-
-          <h3>Branch / location import formats</h3>
-          <p>
-            Branch data (for <code>POST /sources/import-branches</code> or <code>POST /sources/upload-branches</code>) must match one of these standard formats. The system validates structure on import/upload.
-          </p>
-          <ul style={{ lineHeight: '1.8' }}>
-            <li><strong>JSON</strong> — <code>CompanyCode</code> + <code>Branches</code> array, or OTA <code>OTA_VehLocSearchRS</code> / <code>gloria</code>. Each branch: <code>Branchcode</code>, <code>Name</code>, <code>AtAirport</code>, <code>Address</code> (AddressLine, CityName, PostalCode, CountryName with <code>attr.Code</code>), <code>Telephone.attr.PhoneNumber</code>, <code>Latitude</code>, <code>Longitude</code>, etc.</li>
-            <li><strong>OTA XML</strong> — <code>OTA_VehLocSearchRS</code> with <code>VehMatchedLocs</code> / <code>VehMatchedLoc</code> / <code>LocationDetail</code> (attributes: Code, Name, AtAirport, Latitude, Longitude, LocationType), plus <code>Address</code>, <code>Telephone</code>.</li>
-            <li><strong>PHP var_dump</strong> — Same OTA structure as output by PHP <code>var_dump()</code> (root key <code>OTA_VehLocSearchRS</code> or <code>gloria</code>).</li>
-            <li><strong>CSV</strong> — First row = headers. Required column: <code>Branchcode</code> or <code>Code</code>. Optional: Name, CountryCode, Country, City, AddressLine, PostalCode, Latitude, Longitude, AtAirport, LocationType, Phone, Email. Column names case-insensitive; aliases supported (e.g. CityName/City, Telephone/Phone). Set default country in config when column is missing.</li>
-            <li><strong>Excel</strong> — .xlsx/.xls with same column layout as CSV (first row = headers, one branch per row).</li>
-          </ul>
-          <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-            For full sample payloads and validation rules, see <strong>Getting Started → Branch data format</strong> and the <strong>Branches → Upload / Configure Endpoint</strong> format samples in the app.
-          </p>
-
-          <h3 style={{ marginTop: '1.5rem' }}>UN/LOCODE Format</h3>
-          <ul style={{ lineHeight: '1.8' }}>
-            <li><strong>Format:</strong> 2-letter country code + 3-character location code</li>
-            <li><strong>Examples:</strong> <code>GBMAN</code> (Manchester, UK), <code>USNYC</code> (New York, USA), <code>FRPAR</code> (Paris, France)</li>
-            <li><strong>Validation:</strong> Must match UN/LOCODE database</li>
-          </ul>
-
-          <h3 style={{ marginTop: '1.5rem' }}>ISO 8601 Date/Time Format</h3>
-          <ul style={{ lineHeight: '1.8' }}>
-            <li><strong>Format:</strong> <code>YYYY-MM-DDTHH:mm:ssZ</code></li>
-            <li><strong>Example:</strong> <code>2024-06-15T10:00:00Z</code></li>
-            <li><strong>Timezone:</strong> UTC (Z suffix) or with timezone offset</li>
-          </ul>
-
-          <h3 style={{ marginTop: '1.5rem' }}>Vehicle Class Codes (OTA Standard)</h3>
-          <ul style={{ lineHeight: '1.8' }}>
-            <li><code>ECMN</code> - Economy</li>
-            <li><code>CDMR</code> - Compact</li>
-            <li><code>FDAR</code> - Full Size</li>
-            <li><code>SDAR</code> - Standard</li>
-            <li><code>FFAR</code> - Full Size Premium</li>
-            <li><code>PDAR</code> - Premium</li>
-            <li><code>LVAN</code> - Large Van</li>
-            <li><code>MVAR</code> - Mini Van</li>
-            <li><code>SPAR</code> - Special</li>
-            <li><code>STAR</code> - Standard SUV</li>
-            <li><code>XCAR</code> - Luxury</li>
-          </ul>
-
-          <h3 style={{ marginTop: '1.5rem' }}>Currency Codes (ISO 4217)</h3>
-          <ul style={{ lineHeight: '1.8' }}>
-            <li><strong>Format:</strong> 3-letter uppercase code</li>
-            <li><strong>Examples:</strong> <code>GBP</code>, <code>USD</code>, <code>EUR</code></li>
-          </ul>
-
-          <h3 style={{ marginTop: '1.5rem' }}>Country Codes (ISO 3166-1 alpha-2)</h3>
-          <ul style={{ lineHeight: '1.8' }}>
-            <li><strong>Format:</strong> 2-letter uppercase code</li>
-            <li><strong>Examples:</strong> <code>GB</code>, <code>US</code>, <code>FR</code></li>
-          </ul>
-        </section>
-
-        {/* Error Handling */}
-        <section id="error-handling" style={{ marginBottom: '3rem', scrollMarginTop: '100px' }}>
-          <h2>Error Handling</h2>
-          <p>
-            When your gRPC service encounters an error, return an appropriate gRPC error status code.
-          </p>
-
-          <h3>gRPC Status Codes</h3>
-          <ul style={{ lineHeight: '1.8' }}>
-            <li><code>OK (0)</code> - Success</li>
-            <li><code>INVALID_ARGUMENT (3)</code> - Invalid request parameters</li>
-            <li><code>NOT_FOUND (5)</code> - Resource not found (e.g., booking doesn't exist)</li>
-            <li><code>PERMISSION_DENIED (7)</code> - Permission denied</li>
-            <li><code>UNAVAILABLE (14)</code> - Service temporarily unavailable</li>
-            <li><code>INTERNAL (13)</code> - Internal server error</li>
-          </ul>
-
-          <h3 style={{ marginTop: '1.5rem' }}>Response Time Requirements</h3>
-          <ul style={{ lineHeight: '1.8' }}>
-            <li><strong>Target:</strong> Under 3 seconds for most requests</li>
-            <li><strong>Timeout:</strong> 120 seconds maximum</li>
-            <li><strong>Slow Requests:</strong> Requests over 3 seconds are tracked and may trigger health monitoring</li>
-            <li><strong>Strikes:</strong> 3 slow requests = automatic backoff (15 min, 30 min, 1 hour, 2 hours, 4 hours)</li>
-          </ul>
-
-          <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '0.5rem' }}>
-            <strong>⚠️ Performance Warning:</strong> Slow responses will result in your source being temporarily excluded from availability requests.
-            Optimize your API performance to avoid backoff.
-          </div>
-        </section>
-
-        {/* Implementation Examples */}
-        <section id="implementation-examples" style={{ marginBottom: '3rem', scrollMarginTop: '100px' }}>
-          <h2>Implementation Examples</h2>
-          <p>
-            Here are example implementations in different languages. See the SDK Guide for complete SDK examples.
-          </p>
-
-          <h3>Node.js / TypeScript Example</h3>
-          <div style={{ marginTop: '0.5rem', padding: '1rem', backgroundColor: '#1e293b', borderRadius: '0.5rem', overflow: 'auto' }}>
-            <pre style={{ color: '#e2e8f0', fontSize: '0.875rem', margin: 0 }}>
-{`import * as grpc from '@grpc/grpc-js';
-import * as protoLoader from '@grpc/proto-loader';
-
-const packageDefinition = protoLoader.loadSync('source_provider.proto');
-const proto = grpc.loadPackageDefinition(packageDefinition);
-
-const server = new grpc.Server();
+const packageDefinition = protoLoader.loadSync('source_provider.proto', {
+  keepCase: true,
+  longs: String,
+  enums: String,
+  defaults: true,
+  oneofs: true,
+})
+const proto = grpc.loadPackageDefinition(packageDefinition) as any
+const server = new grpc.Server()
 
 server.addService(proto.source_provider.SourceProviderService.service, {
-  GetHealth: (call: any, callback: any) => {
-    callback(null, { ok: true, note: 'Service is healthy' });
+  GetHealth: (_call: any, callback: any) => {
+    callback(null, { ok: true, note: 'healthy' })
   },
 
-  GetLocations: (call: any, callback: any) => {
+  GetLocations: (_call: any, callback: any) => {
     callback(null, {
       locations: [
-        { unlocode: 'GBMAN', name: 'Manchester' },
-        { unlocode: 'GBLON', name: 'London' }
-      ]
-    });
+        { unlocode: 'AEDXB', name: 'Dubai' },
+        { unlocode: 'GBLON', name: 'London' },
+      ],
+    })
   },
 
   GetAvailability: (call: any, callback: any) => {
-    const { agreement_ref, pickup_unlocode, dropoff_unlocode, 
-            pickup_iso, dropoff_iso, driver_age, 
-            residency_country, vehicle_classes } = call.request;
-
-    // Use agreement_ref to determine pricing/availability
-    // Query your inventory system
-    // Return offers
+    const request = call.request
+    if (!request.agreement_ref) {
+      return callback({ code: grpc.status.INVALID_ARGUMENT, message: 'agreement_ref is required' })
+    }
 
     callback(null, {
-      vehicles: [
-        {
-          supplier_offer_ref: 'OFFER-123',
-          vehicle_class: 'CDMR',
-          make_model: 'Ford Focus',
-          currency: 'GBP',
-          total_price: 250.00,
-          availability_status: 'AVAILABLE'
-        }
-      ]
-    });
+      vehicles: [{
+        supplier_offer_ref: 'CCAR12345629-04-26',
+        vehicle_class: 'CCAR',
+        make_model: 'Skoda Fabia or similar',
+        currency: 'EUR',
+        total_price: 150,
+        availability_status: 'AVAILABLE',
+        picture_url: 'https://supplier.example/fabia.png',
+      }],
+    })
   },
 
   CreateBooking: (call: any, callback: any) => {
-    const { agreement_ref, supplier_offer_ref, 
-            agent_booking_ref, idempotency_key } = call.request;
-
-    // Check idempotency_key to prevent duplicates
-    // Create booking in your system
-    // Return booking reference
-
-    callback(null, {
-      supplier_booking_ref: 'BOOKING-789',
-      status: 'CONFIRMED'
-    });
+    const request = call.request
+    if (!request.agreement_ref || !request.supplier_offer_ref || !request.idempotency_key) {
+      return callback({ code: grpc.status.INVALID_ARGUMENT, message: 'missing booking identifier' })
+    }
+    callback(null, { supplier_booking_ref: 'SUP-BKG-987654', status: 'CONFIRMED' })
   },
 
-  // Implement ModifyBooking, CancelBooking, CheckBooking similarly
-});
+  ModifyBooking: (call: any, callback: any) => callback(null, { supplier_booking_ref: call.request.supplier_booking_ref, status: 'CONFIRMED' }),
+  CancelBooking: (call: any, callback: any) => callback(null, { supplier_booking_ref: call.request.supplier_booking_ref, status: 'CANCELLED' }),
+  CheckBooking: (call: any, callback: any) => callback(null, { supplier_booking_ref: call.request.supplier_booking_ref, status: 'CONFIRMED' }),
+})
 
-server.bindAsync('0.0.0.0:51061', grpc.ServerCredentials.createInsecure(), 
-  (err, port) => {
-    if (err) {
-      console.error('Failed to start server:', err);
-      return;
-    }
-    server.start();
-    console.log('gRPC server listening on port', port);
-  }
-);`}
-            </pre>
-          </div>
-
-          <h3 style={{ marginTop: '1.5rem' }}>Key Implementation Points</h3>
-          <ul style={{ lineHeight: '1.8' }}>
-            <li>Load the proto file: <code>source_provider.proto</code></li>
-            <li>Implement all 7 required methods</li>
-            <li>Always include <code>agreement_ref</code> in your logic</li>
-            <li>Handle idempotency in CreateBooking</li>
-            <li>Return proper error codes on failures</li>
-            <li>Keep response times under 3 seconds</li>
-          </ul>
-        </section>
-
-        <div style={{ marginTop: '3rem', padding: '1.5rem', backgroundColor: '#dbeafe', border: '1px solid #3b82f6', borderRadius: '0.5rem' }}>
-          <h3 style={{ marginTop: 0 }}>Next Steps</h3>
-          <ol style={{ lineHeight: '1.8' }}>
-            <li>Download the proto file using the link above or API endpoint: <code>GET /docs/proto/source_provider.proto</code></li>
-            <li>Implement the gRPC service in your preferred language</li>
-            <li>Test your implementation using the gRPC connection test in the Source UI</li>
-            <li>Run verification to ensure all endpoints work correctly</li>
-            <li>Go live with your first agreement</li>
-          </ol>
-        </div>
-      </div>
-    </div>
-  );
+server.bindAsync('0.0.0.0:51061', grpc.ServerCredentials.createInsecure(), (error) => {
+  if (error) throw error
+  server.start()
+})`}
+					</CodeBlock>
+					<div className="source-doc-checklist source-api-next-steps">
+						{[
+							"Download and implement source_provider.proto.",
+							"Set the gRPC or HTTP endpoint in Source → Pricing / Verification.",
+							"Import branch details through Location & Branches.",
+							"Run Verification and confirm Health remains healthy.",
+						].map((step) => (
+							<div key={step}>
+								<span>✓</span>
+								{step}
+							</div>
+						))}
+					</div>
+				</section>
+			</article>
+		</div>
+	);
 };
 
 export default SourceApiReference;
-
