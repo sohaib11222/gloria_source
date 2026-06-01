@@ -10,7 +10,7 @@ import {
 } from "../components/ui/Card";
 import { Mail, ArrowLeft, CheckCircle, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
-import logoImage from "../assets/logo.jpg";
+import { CAR_RENTAL_PORTAL, PORTAL_LOGO_SRC } from "../lib/portalBranding";
 
 export default function VerifyEmailPage() {
 	const navigate = useNavigate();
@@ -190,8 +190,8 @@ export default function VerifyEmailPage() {
 				<div className="text-center">
 					<div className="flex items-center justify-center mb-4">
 						<img
-							src={logoImage}
-							alt="Gloria Connect"
+							src={PORTAL_LOGO_SRC}
+							alt={CAR_RENTAL_PORTAL.logoAlt}
 							className="h-16 w-auto object-contain"
 						/>
 					</div>
@@ -302,7 +302,7 @@ export default function VerifyEmailPage() {
 				</Card>
 
 				<div className="text-center">
-					<p className="text-xs text-gray-500">Gloria Connect</p>
+					<p className="text-xs text-gray-500">{CAR_RENTAL_PORTAL.footer}</p>
 				</div>
 			</div>
 		</div>

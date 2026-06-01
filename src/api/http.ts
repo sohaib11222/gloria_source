@@ -34,7 +34,8 @@ function getCurrentApiBaseUrl(): string {
   }
   
   // Production: use production API with protocol matching
-  return `${protocol}//api.gloriaconnect.com/api`
+  // return `${protocol}//api.gloriaconnect.com/api`
+  return `${protocol}//93.94.74.210/api`
 }
 
 const DEFAULT_BASE_URL = getCurrentApiBaseUrl()

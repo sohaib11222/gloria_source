@@ -265,7 +265,7 @@ export default function ForgotPasswordPage() {
 
         <div className="text-center">
           <p className="text-xs text-gray-500">
-            Gloria Connect
+            Gloria - Rental company
           </p>
         </div>
       </div>

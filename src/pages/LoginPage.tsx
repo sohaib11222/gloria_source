@@ -13,7 +13,7 @@ import {
 	CardTitle,
 } from "../components/ui/Card";
 import toast from "react-hot-toast";
-import logoImage from "../assets/logo.jpg";
+import { CAR_RENTAL_PORTAL, PORTAL_LOGO_SRC } from "../lib/portalBranding";
 import {
 	clearSourceAuth,
 	consumeAuthSessionMessage,
@@ -297,108 +297,141 @@ export default function LoginPage() {
 	};
 
 	return (
-		<div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-			<div className="max-w-md w-full space-y-8">
-				<div className="text-center">
-					<div className="flex items-center justify-center mb-4">
-						<img
-							src={logoImage}
-							alt="Gloria Connect"
-							className="h-16 w-auto object-contain"
-						/>
-					</div>
-					<h2 className="text-2xl font-semibold text-gray-900 mb-2">
-						Gloria Connect
-					</h2>
-					<p className="text-sm text-gray-600">
-						Sign in to access your dashboard
-					</p>
-				</div>
-
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-xl font-semibold text-gray-900">
-							Welcome back
-						</CardTitle>
-						<p className="text-sm text-gray-600 mt-1">
-							Enter your credentials to continue
-						</p>
-					</CardHeader>
-					<CardContent className="pt-6 pb-6">
-						<form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-							<div>
-								<Input
-									label="Email Address"
-									type="email"
-									autoComplete="email"
-									placeholder="source@example.com"
-									error={errors.email?.message}
-									{...register("email")}
+		<div className="min-h-screen bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#f8fafc_34%,#eef2ff_100%)] px-4 py-8 sm:px-6 lg:px-8">
+			<div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center">
+				<div className="grid w-full overflow-hidden rounded-[2rem] border border-white/70 bg-white/85 shadow-[0_24px_80px_rgba(15,23,42,0.14)] backdrop-blur lg:grid-cols-[0.95fr_1.05fr]">
+					<div className="relative hidden overflow-hidden bg-slate-950 p-10 text-white lg:flex lg:flex-col lg:justify-between">
+						<div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.30),transparent_32%),radial-gradient(circle_at_80%_0%,rgba(129,140,248,0.28),transparent_30%)]" />
+						<div className="relative">
+							<div className="inline-flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 shadow-lg shadow-black/10 backdrop-blur">
+								<img
+									src={PORTAL_LOGO_SRC}
+									alt={CAR_RENTAL_PORTAL.logoAlt}
+									className="h-11 w-11 rounded-xl object-contain bg-white/10 p-1 ring-1 ring-white/20"
 								/>
-							</div>
-
-							<div>
-								<div className="flex items-center justify-between mb-2">
-									<label className="block text-sm font-medium text-gray-700">
-										Password
-									</label>
-									<button
-										type="button"
-										onClick={() => navigate("/forgot-password")}
-										className="text-xs text-slate-700 hover:text-slate-900 transition-colors underline"
-									>
-										Forgot password?
-									</button>
+								<div>
+									<p className="text-sm font-semibold">
+										{CAR_RENTAL_PORTAL.productName}
+									</p>
+									<p className="text-xs text-slate-300">
+										{CAR_RENTAL_PORTAL.shortName}
+									</p>
 								</div>
-								<Input
-									type="password"
-									autoComplete="current-password"
-									placeholder="Enter your password"
-									error={errors.password?.message}
-									{...register("password")}
-								/>
+							</div>
+						</div>
+						<div className="relative space-y-5">
+							<p className="text-sm font-medium uppercase tracking-[0.28em] text-cyan-200">
+								Welcome back
+							</p>
+							<h1 className="max-w-sm text-4xl font-bold tracking-tight text-white">
+								Manage bookings, pricing, branches, and agreements from one place.
+							</h1>
+							<div className="grid gap-3 pt-2 text-sm text-slate-200">
+								<div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
+									Real-time reservation and cancellation visibility.
+								</div>
+								<div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
+									Fast access to integrations and health checks.
+								</div>
+							</div>
+						</div>
+						<p className="relative text-xs text-slate-400">
+							Secure access for approved car rental company accounts only.
+						</p>
+					</div>
+
+					<div className="flex items-center justify-center p-6 sm:p-10">
+						<div className="w-full max-w-md space-y-7">
+							<div className="text-center lg:text-left">
+								<div className="mb-5 flex items-center justify-center lg:hidden">
+									<img
+										src={PORTAL_LOGO_SRC}
+										alt={CAR_RENTAL_PORTAL.logoAlt}
+										className="h-16 w-auto max-w-[200px] rounded-2xl object-contain shadow-sm"
+									/>
+								</div>
+								<h2 className="text-3xl font-bold tracking-tight text-slate-950">
+									Sign in to your dashboard
+								</h2>
+								<p className="mt-2 text-sm text-slate-600">
+									Use your approved car rental company account to continue.
+								</p>
 							</div>
 
-							<Button type="submit" loading={isLoading} className="w-full mt-4">
-								{isLoading ? "Signing in..." : "Sign In"}
-							</Button>
-						</form>
+							<Card className="rounded-3xl border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
+								<CardHeader className="border-b-0 bg-transparent px-7 pb-0 pt-7">
+									<CardTitle className="text-xl font-bold text-slate-950">
+										Welcome back
+									</CardTitle>
+									<p className="mt-1 text-sm text-slate-500">
+										Enter your credentials to continue
+									</p>
+								</CardHeader>
+								<CardContent className="px-7 pb-7 pt-6">
+									<form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+										<div>
+											<Input
+												label="Email Address"
+												type="email"
+												autoComplete="email"
+												placeholder="source@example.com"
+												error={errors.email?.message}
+												className="h-11 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white"
+												{...register("email")}
+											/>
+										</div>
 
-						<div className="mt-6 text-center">
-							<p className="text-sm text-gray-600">
-								Don't have an account?{" "}
-								<button
-									onClick={() => navigate("/register")}
-									className="font-medium text-slate-700 hover:text-slate-900 transition-colors underline"
-								>
-									Register
-								</button>
+										<div>
+											<div className="mb-2 flex items-center justify-between">
+												<label className="block text-sm font-medium text-slate-700">
+													Password
+												</label>
+												<button
+													type="button"
+													onClick={() => navigate("/forgot-password")}
+													className="rounded-full px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+												>
+													Forgot password?
+												</button>
+											</div>
+											<Input
+												type="password"
+												autoComplete="current-password"
+												placeholder="Enter your password"
+												error={errors.password?.message}
+												className="h-11 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white"
+												{...register("password")}
+											/>
+										</div>
+
+										<Button
+											type="submit"
+											loading={isLoading}
+											className="h-12 w-full rounded-xl bg-slate-950 text-base font-semibold shadow-lg shadow-slate-900/20 hover:bg-slate-800"
+										>
+											{isLoading ? "Signing in..." : "Sign In"}
+										</Button>
+									</form>
+
+									<div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-center">
+										<p className="text-sm text-slate-600">
+											Don't have an account?{" "}
+											<button
+												onClick={() => navigate("/register")}
+												className="font-bold text-slate-950 underline decoration-slate-300 underline-offset-4 hover:decoration-slate-950"
+											>
+												Register your company
+											</button>
+										</p>
+									</div>
+								</CardContent>
+							</Card>
+
+							<p className="text-center text-xs text-slate-500">
+								{CAR_RENTAL_PORTAL.footer}
 							</p>
 						</div>
-
-						<div className="mt-6 pt-6 border-t border-gray-200">
-							<div className="flex items-center justify-center space-x-2 text-gray-500">
-								<svg
-									className="w-4 h-4"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-									/>
-								</svg>
-								<p className="text-xs">Manage your inventory and bookings</p>
-							</div>
-						</div>
-					</CardContent>
-				</Card>
-
-				<div className="text-center">
-					<p className="text-xs text-gray-500">Gloria Connect</p>
+					</div>
 				</div>
 			</div>
 		</div>

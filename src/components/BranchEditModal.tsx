@@ -11,6 +11,15 @@ import {
   MapPin, Mail, Globe, Clock, Plane, Navigation, Tag,
   ChevronDown, ChevronUp, Info, Car
 } from 'lucide-react'
+import { BranchOpeningHoursEditor } from './BranchOpeningHoursEditor'
+import {
+  type BranchDay,
+  type DayOpeningHours,
+  buildOpeningPayload,
+  emptyWeekOpeningHours,
+  extractWeekOpeningHours,
+  weekHasOpeningHours,
+} from '../lib/branchOpeningHours'
 
 interface BranchEditModalProps {
   branch: Branch | null
@@ -18,23 +27,8 @@ interface BranchEditModalProps {
   onClose: () => void
 }
 
-const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
-const DAY_LABELS: Record<string, string> = {
-  monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu',
-  friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
-}
-const DAY_CAPITALIZED: Record<string, string> = {
-  monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday',
-  friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday',
-}
-
-/**
- * Robustly get a nested value from an object trying multiple key patterns.
- * e.g. for a day entry: { attr: { Open: "08:00" } } or { "@_Open": "08:00" } or { "@attributes": { Open: "08:00" } }
- */
 function getAttr(obj: any, key: string): string {
   if (!obj || typeof obj !== 'object') return ''
-  // Try: obj.attr.Key, obj["@attributes"].Key, obj["@_Key"], obj.Key, obj[key.toLowerCase()]
   const val =
     obj?.attr?.[key] ??
     obj?.['@attributes']?.[key] ??
@@ -43,41 +37,6 @@ function getAttr(obj: any, key: string): string {
     obj?.[key.toLowerCase()] ??
     ''
   return typeof val === 'object' ? '' : String(val ?? '')
-}
-
-function extractOpeningHours(branch: Branch | null): Record<string, string> {
-  const hours: Record<string, string> = {}
-  DAYS.forEach(d => { hours[d] = '' })
-  if (!branch?.rawJson) return hours
-
-  const raw = branch.rawJson
-  const opening = raw.Opening || raw.opening
-  if (!opening || typeof opening !== 'object') return hours
-
-  for (const day of DAYS) {
-    const cap = DAY_CAPITALIZED[day]
-    const entry = opening[day] || opening[cap]
-    if (!entry) continue
-
-    if (typeof entry === 'string') {
-      hours[day] = entry
-      continue
-    }
-
-    // Handle { attr: { Open: "08:00", Closed: "16:00" } } format
-    const openTime = getAttr(entry, 'Open')
-    const closedTime = getAttr(entry, 'Closed') || getAttr(entry, 'Close')
-
-    if (openTime && closedTime) {
-      hours[day] = `${openTime} - ${closedTime}`
-    } else if (openTime) {
-      // Could be "HH:mm - HH:mm" already or just an open time
-      hours[day] = openTime
-    } else {
-      hours[day] = 'Closed'
-    }
-  }
-  return hours
 }
 
 function extractPickupInstructions(branch: Branch | null): string {
@@ -138,11 +97,9 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
     natoLocode: '',
   })
 
-  const [openingHours, setOpeningHours] = useState<Record<string, string>>(() => {
-    const h: Record<string, string> = {}
-    DAYS.forEach(d => { h[d] = '' })
-    return h
-  })
+  const [openingHours, setOpeningHours] = useState<Record<BranchDay, DayOpeningHours>>(
+    emptyWeekOpeningHours,
+  )
   const [pickupInstructions, setPickupInstructions] = useState('')
   const [atAirport, setAtAirport] = useState(false)
   const [brand, setBrand] = useState('')
@@ -207,7 +164,11 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
       setLocodeSearchQuery(branch.natoLocode || '')
       setSelectedLocode(null)
       setShowLocodeDropdown(false)
-      setOpeningHours(extractOpeningHours(branch))
+      setOpeningHours(
+        extractWeekOpeningHours(
+          branch.rawJson as Record<string, unknown> | null | undefined,
+        ),
+      )
       setPickupInstructions(extractPickupInstructions(branch))
       setAtAirport(extractAtAirport(branch))
       setBrand(extractBrand(branch))
@@ -245,22 +206,9 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
       // Build rawJson updates using the same format as imported data
       const rawJsonUpdates: any = {}
 
-      // Opening hours - save in the same { Monday: { attr: { Open: "08:00", Closed: "16:00" } } } format
-      const hasOpeningChanges = DAYS.some(d => openingHours[d] !== '')
-      if (hasOpeningChanges) {
-        const opening: any = {}
-        DAYS.forEach(d => {
-          const val = openingHours[d].trim()
-          if (!val) return
-          const cap = DAY_CAPITALIZED[d]
-          const parts = val.split(/\s*-\s*/)
-          if (parts.length === 2) {
-            opening[cap] = { attr: { Open: parts[0].trim(), Closed: parts[1].trim() } }
-          } else {
-            opening[cap] = { attr: { Open: val } }
-          }
-        })
-        rawJsonUpdates.Opening = opening
+      if (weekHasOpeningHours(openingHours)) {
+        const opening = buildOpeningPayload(openingHours)
+        if (opening) rawJsonUpdates.Opening = opening
       }
 
       if (pickupInstructions) {
@@ -344,7 +292,7 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
   )
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Edit Branch" size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title="Edit Branch" size="xl">
       <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
 
         {/* Branch Code (read-only info bar) */}
@@ -586,28 +534,11 @@ export const BranchEditModal: React.FC<BranchEditModalProps> = ({ branch, isOpen
         {/* ─── Opening Hours ─── */}
         <SectionHeader id="hours" icon={Clock} title="Opening Hours" />
         {expandedSections.hours && (
-          <div className="space-y-2 pl-1">
-            <p className="text-xs text-gray-500 mb-2">Format: HH:mm - HH:mm (open - close)</p>
-            <div className="grid grid-cols-1 gap-1.5">
-              {DAYS.map(day => {
-                const val = openingHours[day]
-                const hasValue = val && val.trim() !== ''
-                return (
-                  <div key={day} className="flex items-center gap-2">
-                    <span className="w-10 text-xs font-semibold text-gray-500 text-right shrink-0">{DAY_LABELS[day]}</span>
-                    <Input
-                      value={val}
-                      onChange={(e) => setOpeningHours({ ...openingHours, [day]: e.target.value })}
-                      placeholder="e.g. 08:00 - 18:00"
-                      className={`flex-1 text-sm ${hasValue ? 'border-green-300 bg-green-50/30' : ''}`}
-                    />
-                    {hasValue && (
-                      <span className="text-xs text-green-600 shrink-0 w-6 text-center">&#10003;</span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+          <div className="pl-1">
+            <BranchOpeningHoursEditor
+              value={openingHours}
+              onChange={setOpeningHours}
+            />
           </div>
         )}
 

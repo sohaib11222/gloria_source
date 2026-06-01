@@ -22,7 +22,9 @@ export function getApiBaseUrl(): string {
   if (import.meta.env.PROD) {
     // Default to production API URL with HTTPS (required for HTTPS frontend)
     // This should be overridden with VITE_API_BASE_URL=https://api.gloriaconnect.com/api
-    return 'https://api.gloriaconnect.com/api'
+    // return 'https://api.gloriaconnect.com/api'
+    // return 'http://93.94.74.210/api'
+    return 'https://source.gloriaconnect.com/api'
   }
 
   // Development: use /api with Vite proxy (proxy forwards to http://localhost:8080)

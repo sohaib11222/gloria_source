@@ -141,7 +141,7 @@ const SdkGuide: React.FC<Props> = ({ role = "source" }) => {
 			return "Agent/broker apps use php-agent / CarHireClient. This Source page focuses on the supplier bundle.";
 		if (role === "admin")
 			return "Admins can use this page to understand what suppliers must deploy and test before approval.";
-		return "Source suppliers use this page to connect their fleet/OTA systems to Gloria and operate through the Source Portal.";
+		return "Rental companies use this page to connect their fleet/OTA systems to Gloria and operate through the Gloria - Rental company portal.";
 	}, [role]);
 
 	const navigateTo = (id: SectionId) => {
@@ -214,8 +214,8 @@ const SdkGuide: React.FC<Props> = ({ role = "source" }) => {
 					<div className="source-doc-eyebrow">Source SDK</div>
 					<h1>Supplier integration bundle</h1>
 					<p>
-						The Source SDK page explains how your rental supplier stack connects
-						to Gloria: the Source Portal REST flow, the downloadable PHP
+						The Gloria - Rental company SDK page explains how your rental supplier stack connects
+						to Gloria: the Gloria - Rental company portal REST flow, the downloadable PHP
 						supplier bundle, the Laravel HTTP adapter, the optional Node gRPC
 						wrapper, and the payloads used by Verification, Health, Locations,
 						Pricing, Reservations, and Cancellations.
@@ -386,7 +386,7 @@ npm start`}</CodeBlock>
 
 				<section id="portal-rest" className="source-doc-section">
 					<div className="source-doc-section-heading">
-						<span>Source Portal automation</span>
+						<span>Gloria - Rental company portal automation</span>
 						<h2>REST flow used by the Portal</h2>
 						<p>
 							Use this flow if your internal tools need to automate Source
@@ -568,7 +568,7 @@ $env:LARAVEL_HTTP_BASE="http://127.0.0.1:8000"
 $env:GLORA_CLIENT_GRPC_PORT="50061"
 npm start
 
-# Configure Source Portal gRPC endpoint as:
+# Configure Gloria - Rental company portal gRPC endpoint as:
 # your-host.example:50061`}
 					</CodeBlock>
 					<FieldTable
@@ -667,7 +667,7 @@ npm start
 						<span>Verification</span>
 						<h2>Recommended testing workflow</h2>
 						<p>
-							Use the same sequence the Source Portal uses so problems appear in
+							Use the same sequence the Gloria - Rental company portal uses so problems appear in
 							the correct tab.
 						</p>
 					</div>

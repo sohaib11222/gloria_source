@@ -64,7 +64,7 @@ const DEFAULT_STEPS: PanelTourStep[] = [
 	{
 		target: "_welcome",
 		eyebrow: "Welcome tour",
-		title: "Let’s set up your Source Portal confidently",
+		title: "Let’s set up your Gloria - Rental company portal confidently",
 		description:
 			"This guided tour highlights the panels you use to publish coverage, import branches, test prices, monitor bookings, and keep your integration healthy.",
 		bullets: [
@@ -93,65 +93,22 @@ const DEFAULT_STEPS: PanelTourStep[] = [
 		eyebrow: "Commercial access",
 		title: "Agreements",
 		description:
-			"Agreements define which agents may search and book your supply. An active agreement reference is passed through availability and booking requests.",
+			"Agreements are handled offline; Gloria stores only the operational supplier access record used for availability and pricing.",
 		bullets: [
-			"Create or offer agreements to agents.",
-			"Track whether offers are pending, accepted, or active.",
-			"Use agreement references to align supplier pricing rules.",
+			"Select the agent that can access your supply.",
+			"Save the supplier account/requester ID and margin.",
+			"Keep legal documents by email or your local process.",
 		],
 		targetLabel: "Agreements tab",
 	},
 	{
-		target: "nav-locations",
-		eyebrow: "Coverage",
-		title: "Locations",
-		description:
-			"Locations are your UN/LOCODE coverage. Gloria uses them to decide where an agent can pick up or return a vehicle before asking your pricing endpoint.",
-		tab: "locations",
-		bullets: [
-			"Sync or import coverage from supplier systems.",
-			"Request missing locations for admin review when the master list is incomplete.",
-			"Filter coverage by agreement to review overrides.",
-		],
-		targetLabel: "Locations tab",
-	},
-	{
-		target: "locations-sync-status",
-		eyebrow: "Locations panel",
-		title: "Location Sync Status",
-		description:
-			"This panel shows when coverage was last synced, how many locations are loaded, and the available actions for syncing coverage or importing location/branch data.",
-		tab: "locations",
-		bullets: [
-			"Sync Locations pulls coverage from your configured source adapter.",
-			"Import Branches imports detailed branch records from the saved branch endpoint.",
-			"Configure Endpoint and Import Locations handle location-list endpoint imports.",
-		],
-		targetLabel: "Sync status card",
-	},
-	{
-		target: "locations-sync-actions",
-		eyebrow: "Locations panel",
-		title: "Coverage action buttons",
-		description:
-			"These buttons are the operational controls for the Locations panel. Explore them freely; write actions such as sync/import will ask for an active plan before saving data.",
-		tab: "locations",
-		bullets: [
-			"Use Sync Locations for adapter/gRPC coverage refreshes.",
-			"Use Import Locations after configuring a location-list endpoint.",
-			"Use Import Branches when your branch endpoint is the source of detailed branch data.",
-		],
-		outcome:
-			"If you need detailed desk/address rows, prefer Location & Branches or branch imports rather than coverage-only syncs.",
-		targetLabel: "Location action buttons",
-	},
-	{
 		target: "locations-request-card",
-		eyebrow: "Locations panel",
+		eyebrow: "Location & Branches",
 		title: "Request a missing location",
 		description:
 			"Use this card when the place you need is not available in Gloria’s location master. The request goes to the admin team instead of trying to add incomplete coverage directly.",
-		tab: "locations",
+		tab: "location-branches",
+		branchImport: "endpoint",
 		bullets: [
 			"Submit the location name, country, city/IATA code, address, and business reason.",
 			"Admins review, normalize codes, and approve or reject with notes.",
@@ -161,45 +118,18 @@ const DEFAULT_STEPS: PanelTourStep[] = [
 	},
 	{
 		target: "locations-requests-list",
-		eyebrow: "Locations panel",
+		eyebrow: "Location & Branches",
 		title: "Track submitted location requests",
 		description:
 			"This section shows every missing-location request you already sent, including pending, approved, rejected, review date, reason, and admin notes.",
-		tab: "locations",
+		tab: "location-branches",
+		branchImport: "endpoint",
 		bullets: [
 			"Filter by status when you have many requests.",
 			"Open a request to view full details and admin notes.",
 			"Use this instead of the old separate Location Requests page.",
 		],
 		targetLabel: "Request history",
-	},
-	{
-		target: "locations-filter-card",
-		eyebrow: "Locations panel",
-		title: "Filter and load locations",
-		description:
-			"Use this card to view all source coverage or restrict the list to an agreement. Agreement filtering helps you confirm overrides before agents test supply.",
-		tab: "locations",
-		bullets: [
-			"All locations shows source-level coverage.",
-			"Agreement filtering shows allowed locations for that agreement.",
-			"Load Locations refreshes the table with the selected scope.",
-		],
-		targetLabel: "Filter card",
-	},
-	{
-		target: "locations-table",
-		eyebrow: "Locations panel",
-		title: "Available Locations table",
-		description:
-			"This table is the coverage truth used by search routing. It shows each UN/LOCODE, the display name/country/IATA data, master source, mock/live state, and removal controls when allowed.",
-		tab: "locations",
-		bullets: [
-			"Gloria means the row was enriched from the master UN/LOCODE record.",
-			"Branch means display details came from an imported branch.",
-			"Pending means a valid master/branch detail is not yet linked.",
-		],
-		targetLabel: "Coverage table",
 	},
 	{
 		target: "nav-location-branches",
@@ -293,17 +223,17 @@ const DEFAULT_STEPS: PanelTourStep[] = [
 	},
 	{
 		target: "nav-pricing",
-		eyebrow: "Availability & pricing",
-		title: "Pricing",
+		eyebrow: "Vehicle & pricing",
+		title: "Vehicle & Pricing",
 		description:
-			"Configure how Gloria tests availability and stores sample offers. This is where suppliers prove their pricing endpoint returns parseable vehicles and terms.",
+			"Configure how Gloria tests availability, stores sample vehicle offers, and manages daily prices in one Vehicle & Pricing workspace.",
 		tab: "pricing",
 		bullets: [
 			"Choose XML, JSON, or gRPC.",
 			"Save endpoint settings.",
-			"Fetch & Store a sample so agents can see offer details.",
+			"Fetch & Store a sample, then manage daily prices from the same tab.",
 		],
-		targetLabel: "Pricing tab",
+		targetLabel: "Vehicle & Pricing tab",
 	},
 	{
 		target: "pricing-format-xml",
@@ -343,13 +273,13 @@ const DEFAULT_STEPS: PanelTourStep[] = [
 		targetLabel: "Fetch & Store button",
 	},
 	{
-		target: "nav-daily-pricing",
+		target: "pricing-daily-prices",
 		eyebrow: "Rates",
-		title: "Daily Prices",
+		title: "Daily price management",
 		description:
-			"Use this calendar-style panel to review or manage daily-rate visibility tied to your pricing samples.",
-		tab: "daily-pricing",
-		targetLabel: "Daily Prices tab",
+			"Use this calendar-style section inside Vehicle & Pricing to review or manage daily-rate visibility tied to stored pricing samples.",
+		tab: "pricing",
+		targetLabel: "Daily prices section",
 	},
 	{
 		target: "nav-transactions",
@@ -442,10 +372,10 @@ const DEFAULT_STEPS: PanelTourStep[] = [
 		eyebrow: "Recap",
 		title: "You are ready to operate the portal",
 		description:
-			"A strong go-live path is: finish Settings and plan, confirm Overview, create Agreements, build Locations and Branches, test Pricing, run Verification, then monitor Health and Reservations.",
+			"A strong go-live path is: finish Settings and plan, confirm Overview, create Agreements, build Locations and Branches, test Vehicle & Pricing, run Verification, then monitor Health and Reservations.",
 		bullets: [
 			"Use Locations for coverage and Location & Branches for detailed branch rows.",
-			"Use Pricing and Verification before agents search live supply.",
+			"Use Vehicle & Pricing and Verification before agents search live supply.",
 			"Use Health, Reservations, Cancellations, and Transactions for daily operations.",
 		],
 		outcome: "Tour complete. You can restart it anytime from Panel tour.",
@@ -457,8 +387,7 @@ const TOUR_TAB_LABELS: Partial<Record<SourcePanelTab, string>> = {
 	agreements: "Agreements",
 	locations: "Locations",
 	"location-branches": "Location & Branches",
-	pricing: "Pricing",
-	"daily-pricing": "Daily Prices",
+	pricing: "Vehicle & Pricing",
 	transactions: "Transactions",
 	reservations: "Reservations",
 	cancellations: "Cancellations",
@@ -828,7 +757,7 @@ export const SourcePanelTour: React.FC<SourcePanelTourProps> = ({
 						)}
 					</div>
 					<div className="source-tour-heading">
-						<p>{step.eyebrow || "Source Portal tour"}</p>
+						<p>{step.eyebrow || "Gloria - Rental company tour"}</p>
 						<h2 id="panel-tour-title">{step.title}</h2>
 					</div>
 					<button

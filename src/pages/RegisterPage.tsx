@@ -13,7 +13,7 @@ import {
 	CardTitle,
 } from "../components/ui/Card";
 import toast from "react-hot-toast";
-import logoImage from "../assets/logo.jpg";
+import { CAR_RENTAL_PORTAL, PORTAL_LOGO_SRC } from "../lib/portalBranding";
 import api from "../lib/api";
 
 export default function RegisterPage() {
@@ -197,32 +197,45 @@ export default function RegisterPage() {
 	};
 
 	return (
-		<div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-			<div className="max-w-md w-full space-y-8">
-				<div className="text-center">
-					<div className="flex items-center justify-center mb-4">
-						<img
-							src={logoImage}
-							alt="Gloria Connect"
-							className="h-16 w-auto object-contain"
-						/>
+		<div className="min-h-screen bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#f8fafc_34%,#eef2ff_100%)] px-4 py-8 sm:px-6 lg:px-8">
+			<div className="mx-auto w-full max-w-2xl space-y-6">
+				<div className="rounded-3xl border border-white/70 bg-white/85 p-5 shadow-lg shadow-slate-200/70 backdrop-blur">
+					<div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex items-center gap-4">
+							<img
+								src={PORTAL_LOGO_SRC}
+								alt={CAR_RENTAL_PORTAL.logoAlt}
+								className="h-14 w-14 shrink-0 rounded-2xl object-contain bg-white p-1 shadow-sm ring-1 ring-slate-200/80"
+							/>
+							<div>
+								<h2 className="text-2xl font-bold tracking-tight text-slate-950">
+									Create your company account
+								</h2>
+								<p className="text-sm text-slate-600">
+									Register as a car rental company on Gloria Connect
+								</p>
+							</div>
+						</div>
+						<button
+							type="button"
+							onClick={() => navigate("/login")}
+							className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 sm:w-auto"
+						>
+							Already have an account? Sign in
+						</button>
 					</div>
-					<h2 className="text-2xl font-semibold text-gray-900 mb-2">
-						Create Source Account
-					</h2>
-					<p className="text-sm text-gray-600">Join as a car rental supplier</p>
 				</div>
 
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-xl font-semibold text-gray-900">
-							Get started
+				<Card className="overflow-hidden rounded-3xl border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
+					<CardHeader className="border-b border-slate-100 bg-slate-50/70 px-7 py-5">
+						<CardTitle className="text-xl font-bold text-slate-950">
+							Company details
 						</CardTitle>
-						<p className="text-sm text-gray-600 mt-1">
+						<p className="mt-1 text-sm text-slate-500">
 							Enter your details to create an account
 						</p>
 					</CardHeader>
-					<CardContent className="pt-6 pb-6">
+					<CardContent className="px-7 pb-7 pt-6">
 						{referralSlug && (
 							<div className="mb-5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
 								Referral code{" "}
@@ -236,6 +249,7 @@ export default function RegisterPage() {
 								<Input
 									label="Company Name"
 									placeholder="Your company name"
+									className="h-11 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white"
 									{...register("companyName")}
 									error={errors.companyName?.message}
 								/>
@@ -243,16 +257,16 @@ export default function RegisterPage() {
 
 							<input type="hidden" {...register("type")} value="SOURCE" />
 
-							<div>
-								<label className="block text-sm font-medium text-gray-700 mb-1.5">
+							<div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+								<label className="mb-1.5 block text-sm font-semibold text-slate-700">
 									Registration photo{" "}
-									<span className="text-gray-500 font-normal">(optional)</span>
+									<span className="font-normal text-slate-500">(optional)</span>
 								</label>
 								<input
 									ref={registrationPhotoInputRef}
 									type="file"
 									accept="image/jpeg,image/png,image/webp"
-									className="block w-full text-sm text-gray-600 file:mr-3 file:rounded file:border file:border-gray-200 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-50"
+									className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-white file:px-3 file:py-2 file:text-sm file:font-bold file:text-slate-700 hover:file:bg-slate-100"
 									onChange={(e) => {
 										const file = e.target.files?.[0];
 										if (!file) {
@@ -287,15 +301,15 @@ export default function RegisterPage() {
 										reader.readAsDataURL(file);
 									}}
 								/>
-								<p className="text-xs text-gray-500 mt-1">
+								<p className="mt-2 text-xs text-slate-500">
 									JPEG, PNG, or WebP. Shown to admins when reviewing your
 									application.
 								</p>
 								{registrationPhotoDataUrl && (
-									<div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+									<div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
 										<div className="flex items-start justify-between gap-3">
 											<p
-												className="text-xs text-gray-700 min-w-0 flex-1 truncate"
+												className="min-w-0 flex-1 truncate text-xs text-slate-700"
 												title={registrationPhotoName ?? undefined}
 											>
 												{registrationPhotoName
@@ -311,12 +325,12 @@ export default function RegisterPage() {
 														registrationPhotoInputRef.current.value = "";
 													}
 												}}
-												className="shrink-0 text-xs font-medium text-slate-700 hover:text-slate-900 underline"
+												className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 hover:text-slate-950"
 											>
 												Remove
 											</button>
 										</div>
-										<div className="mt-3 flex justify-center rounded-md border border-gray-200 bg-white p-2">
+										<div className="mt-3 flex justify-center rounded-xl border border-slate-200 bg-white p-2">
 											<img
 												src={registrationPhotoDataUrl}
 												alt={
@@ -324,7 +338,7 @@ export default function RegisterPage() {
 														? `Preview of ${registrationPhotoName}`
 														: "Registration photo preview"
 												}
-												className="max-h-56 max-w-full object-contain"
+												className="max-h-56 max-w-full rounded-lg object-contain"
 											/>
 										</div>
 									</div>
@@ -335,6 +349,7 @@ export default function RegisterPage() {
 								<Input
 									label="Primary branch name"
 									placeholder="e.g. Main depot — City Centre"
+									className="h-11 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white"
 									{...register("registrationBranchName")}
 									error={errors.registrationBranchName?.message}
 									helperText="The main branch or office name you operate from (shown to admins during review)."
@@ -345,6 +360,7 @@ export default function RegisterPage() {
 								<Input
 									label="Company address"
 									placeholder="Street, city, postal code, country"
+									className="h-11 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white"
 									{...register("companyAddress")}
 									error={errors.companyAddress?.message}
 								/>
@@ -355,6 +371,7 @@ export default function RegisterPage() {
 									label="Company website"
 									type="url"
 									placeholder="https://www.example.com"
+									className="h-11 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white"
 									{...register("companyWebsiteUrl")}
 									error={errors.companyWebsiteUrl?.message}
 									helperText="Public URL of your rental company (include https://)."
@@ -366,6 +383,7 @@ export default function RegisterPage() {
 									label="Email"
 									type="email"
 									placeholder="company@example.com"
+									className="h-11 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white"
 									{...register("email")}
 									error={errors.email?.message}
 								/>
@@ -376,22 +394,27 @@ export default function RegisterPage() {
 									label="Password"
 									type="password"
 									placeholder="Create a secure password"
+									className="h-11 rounded-xl border-slate-200 bg-slate-50/70 focus:bg-white"
 									{...register("password")}
 									error={errors.password?.message}
 								/>
 							</div>
 
-							<Button type="submit" loading={isLoading} className="w-full mt-4">
+							<Button
+								type="submit"
+								loading={isLoading}
+								className="mt-4 h-12 w-full rounded-xl bg-slate-950 text-base font-semibold shadow-lg shadow-slate-900/20 hover:bg-slate-800"
+							>
 								{isLoading ? "Creating account..." : "Create Account"}
 							</Button>
 						</form>
 
-						<div className="mt-6 text-center">
-							<p className="text-sm text-gray-600">
+						<div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-center">
+							<p className="text-sm text-slate-600">
 								Already have an account?{" "}
 								<button
 									onClick={() => navigate("/login")}
-									className="font-medium text-slate-700 hover:text-slate-900 transition-colors underline"
+									className="font-bold text-slate-950 underline decoration-slate-300 underline-offset-4 hover:decoration-slate-950"
 								>
 									Sign in
 								</button>
@@ -401,7 +424,7 @@ export default function RegisterPage() {
 				</Card>
 
 				<div className="text-center">
-					<p className="text-xs text-gray-500">Gloria Connect</p>
+					<p className="text-xs text-slate-500">{CAR_RENTAL_PORTAL.footer}</p>
 				</div>
 			</div>
 		</div>

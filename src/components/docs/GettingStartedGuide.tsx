@@ -149,22 +149,22 @@ const GettingStartedGuide: React.FC = () => {
 
       {/* Main Content */}
       <div className="docs-main" style={{ flex: 1, maxWidth: '900px', padding: '2rem' }}>
-        <h1 id="overview" style={{ scrollMarginTop: '100px' }}>Getting Started Guide for Sources</h1>
+        <h1 id="overview" style={{ scrollMarginTop: '100px' }}>Getting Started Guide for rental companies</h1>
         <p style={{ fontSize: '1.125rem', color: '#6b7280', marginBottom: '2rem' }}>
-          Welcome! This guide will walk you through everything you need to know to start using Gloria Connect as a Source (Car Rental Supplier).
+          Welcome! This guide will walk you through everything you need to know to start using Gloria - Rental company as a rental company.
         </p>
 
         {/* Overview */}
         <section id="overview" style={{ marginBottom: '3rem', padding: '1.5rem', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '0.5rem', scrollMarginTop: '100px' }}>
           <h2 style={{ marginTop: 0 }}>What is a Source?</h2>
           <p>
-            As a <strong>Source</strong> (Car Rental Supplier), you provide vehicle availability and booking services 
-            to Agents (OTAs) through the Gloria Connect middleware. You receive availability requests, return offers, and handle bookings.
+            As a <strong>rental company</strong>, you provide vehicle availability and booking services 
+            to Agents (OTAs) through the Gloria - Rental company middleware. You receive availability requests, return offers, and handle bookings.
           </p>
           
           <h3 style={{ marginTop: '1.5rem' }}>System Architecture</h3>
           <p>
-            Gloria Connect is a <strong>middleware platform</strong> that connects Agents (Online Travel Agencies) with Sources (Car Rental Suppliers). 
+            Gloria - Rental company is a <strong>middleware platform</strong> that connects Agents (Online Travel Agencies) with Sources (Car Rental Suppliers). 
             The system acts as a bridge, standardizing communication and handling complex operations like:
           </p>
           <ul style={{ lineHeight: '1.8' }}>

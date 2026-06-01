@@ -36,6 +36,18 @@ import { LocationRequestList } from "../components/LocationRequestList";
 import { AgreementDetailModal } from "../components/AgreementDetailModal";
 import { MyAgreements } from "../components/MyAgreements";
 import { DailyPricingCalendar } from "../components/DailyPricingCalendar";
+import { GloriaXmlResponseBuilderModal } from "../components/GloriaXmlResponseBuilderModal";
+import { ManualAvailabilityImportModal } from "../components/manualImport/ManualAvailabilityImportModal";
+import {
+	buildDefaultIncludedRows,
+	missingRequiredIncludedCodes,
+} from "../components/manualImport/manualImportGloriaTemplates";
+import {
+	buildGloriaTermsFromRows,
+	createEmptyTermRow,
+	type ManualImportTermRow,
+} from "../components/manualImport/manualImportTerms";
+import type { SourceFleet } from "../api/fleets";
 import { SettingsPage, PROFILE_UPDATED_EVENT } from "./SettingsPage";
 import { ErrorModal } from "../components/ErrorModal";
 import { Sidebar } from "../components/layout/Sidebar";
@@ -83,6 +95,9 @@ import {
 	Sparkles,
 	Plus,
 	Settings,
+	MapPin,
+	Layers,
+	FileCode2,
 } from "lucide-react";
 
 // Location Import Result Display Component
@@ -637,6 +652,13 @@ function newManualImportRowId(): string {
 	return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
+function newManualCarOrderId(): string {
+	if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+		return crypto.randomUUID();
+	}
+	return `${Date.now()}-${Math.random().toString(36).slice(2, 15)}`;
+}
+
 const GLORIA_VEHDETAIL_ATTR_ORDER = [
 	"ACRISS",
 	"Make",
@@ -671,6 +693,119 @@ function isAvailStatusSuccess(status?: string | null): boolean {
 			.replace(/\s+/g, "") === "available"
 	);
 }
+
+const compactText = (value: unknown, fallback = "—") => {
+	const text = String(value ?? "")
+		.replace(/\s+/g, " ")
+		.trim();
+	return text || fallback;
+};
+
+const formatStoredMoney = (
+	amount?: string | number | null,
+	currency?: string | null,
+) => {
+	const raw = amount == null ? "" : String(amount).trim();
+	if (!raw) return "—";
+	const n = Number(raw);
+	const formatted = Number.isFinite(n) ? n.toFixed(2) : raw;
+	return `${currency ? `${currency} ` : ""}${formatted}`;
+};
+
+const termIdentity = (term: any) =>
+	[
+		term?.code,
+		term?.header,
+		term?.details,
+		term?.price,
+		term?.excess,
+		term?.deposit,
+	]
+		.map((v) => compactText(v, ""))
+		.join("|");
+
+const normalizeTerms = (terms: any[] | undefined) => {
+	const seen = new Set<string>();
+	return (terms ?? [])
+		.filter((term) => !!(term?.header || term?.code || term?.details))
+		.filter((term) => {
+			const key = termIdentity(term);
+			if (seen.has(key)) return false;
+			seen.add(key);
+			return true;
+		});
+};
+
+const TermSummaryList: React.FC<{
+	terms: any[];
+	accent: "emerald" | "blue";
+	currency?: string;
+}> = ({ terms, accent, currency }) => {
+	if (terms.length === 0) return null;
+	const isIncluded = accent === "emerald";
+	const borderClass = isIncluded ? "border-emerald-200" : "border-blue-200";
+	const bgClass = isIncluded ? "bg-emerald-50" : "bg-blue-50";
+	const textClass = isIncluded ? "text-emerald-800" : "text-blue-800";
+	const marker = isIncluded ? "✓" : "+";
+
+	return (
+		<div className="space-y-2">
+			{terms.map((term, index) => {
+				const code = compactText(term.code, "Item");
+				const title = compactText(term.header || term.details, code);
+				const details = compactText(term.details || term.header, "");
+				const meta = [
+					term.price != null && compactText(term.price, "")
+						? `Price ${formatStoredMoney(term.price, term.currency || currency)}`
+						: null,
+					term.cover_amount != null && compactText(term.cover_amount, "")
+						? `Cover ${term.cover_amount}`
+						: null,
+					term.excess != null && compactText(term.excess, "")
+						? `Excess ${term.excess}`
+						: null,
+					term.deposit != null && compactText(term.deposit, "")
+						? `Deposit ${term.deposit}`
+						: null,
+				].filter(Boolean);
+
+				return (
+					<details
+						key={`${code}-${index}`}
+						className={`group rounded-lg border ${borderClass} bg-white`}
+					>
+						<summary className="flex cursor-pointer list-none items-start gap-3 px-3 py-2.5 text-sm marker:hidden">
+							<span className={`mt-0.5 inline-flex h-5 w-5 flex-none items-center justify-center rounded-full ${bgClass} ${textClass} text-xs font-bold`}>
+								{marker}
+							</span>
+							<span className="min-w-0 flex-1">
+								<span className="flex flex-wrap items-center gap-2">
+									<code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-slate-800">
+										{code}
+									</code>
+									<span className="font-medium text-slate-900">{title}</span>
+								</span>
+								{meta.length > 0 ? (
+									<span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+										{meta.map((item) => (
+											<span key={item}>{item}</span>
+										))}
+									</span>
+								) : null}
+							</span>
+							<ChevronDown className="mt-1 h-4 w-4 flex-none text-slate-400 transition-transform group-open:rotate-180" />
+						</summary>
+						{details && details !== title ? (
+							<div className="border-t border-slate-100 px-3 pb-3 pt-2 text-sm leading-6 text-slate-700">
+								{details}
+							</div>
+						) : null}
+					</details>
+				);
+			})}
+		</div>
+	);
+};
 
 // Card for a single stored availability sample (in the "Stored samples" list)
 const StoredSampleCard: React.FC<{
@@ -713,616 +848,275 @@ const StoredSampleCard: React.FC<{
 		setExpandedCard(null);
 	};
 
-	const termFilter = (t: any) => !!(t?.header || t?.code);
-
 	return (
-		<div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-gray-100/80">
-			{/* Sample header */}
+		<div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100">
 			<button
 				type="button"
 				aria-expanded={expanded}
 				onClick={() => {
-					setExpanded((e) => !e);
+					setExpanded((value) => !value);
 					setPage(0);
 					setExpandedCard(null);
 				}}
-				className="w-full flex items-start gap-3 px-4 py-4 sm:px-5 text-left hover:bg-gray-50/90 transition-colors"
+				className="w-full bg-white px-5 py-5 text-left transition hover:bg-slate-50"
 			>
-				<div className="flex-1 min-w-0 space-y-3">
-					<div className="flex flex-wrap items-center gap-2">
-						<span className="text-base font-semibold text-gray-900 tracking-tight break-words">
-							{sample.pickupLoc || "—"} → {sample.returnLoc || "—"}
-						</span>
-						<Badge variant="secondary" className="text-xs shrink-0">
-							{sample.offersCount} vehicle{sample.offersCount !== 1 ? "s" : ""}
-						</Badge>
-						<span
-							className={`text-xs px-2 py-0.5 rounded-md font-medium border shrink-0 ${adapterChipClass[adapterFmt] || adapterChipClass.xml}`}
-						>
-							{adapterLabel[adapterFmt] || adapterFmt.toUpperCase()}
-						</span>
-						{sample.criteria?.requestorId && (
-							<span className="text-xs text-gray-700 bg-gray-100 border border-gray-200 rounded-md px-2 py-0.5 font-mono shrink-0">
-								Account: {sample.criteria.requestorId}
+				<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+					<div className="min-w-0 flex-1">
+						<div className="flex flex-wrap items-center gap-2">
+							<h3 className="text-lg font-semibold tracking-tight text-slate-950">
+								{sample.pickupLoc || "—"} → {sample.returnLoc || "—"}
+							</h3>
+							<Badge variant="info" size="sm" className="rounded-full">
+								{sample.offersCount} vehicle{sample.offersCount !== 1 ? "s" : ""}
+							</Badge>
+							<span
+								className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${adapterChipClass[adapterFmt] || adapterChipClass.xml}`}
+							>
+								{adapterLabel[adapterFmt] || adapterFmt.toUpperCase()}
 							</span>
-						)}
+							{sample.criteria?.requestorId ? (
+								<span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-xs font-semibold text-slate-700">
+									Account: {sample.criteria.requestorId}
+								</span>
+							) : null}
+						</div>
+						<div className="mt-4 grid gap-3 sm:grid-cols-3">
+							<div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+								<p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Pick-up</p>
+								<p className="mt-1 font-mono text-sm font-semibold text-slate-900">{pickupDate}</p>
+							</div>
+							<div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+								<p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Return</p>
+								<p className="mt-1 font-mono text-sm font-semibold text-slate-900">{returnDate}</p>
+							</div>
+							<div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+								<p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fetched</p>
+								<p className="mt-1 text-sm font-semibold text-slate-900">{fetchedDate}</p>
+							</div>
+						</div>
 					</div>
-					<div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs sm:text-sm">
-						<div className="min-w-0 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
-							<p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-								Pick-up
-							</p>
-							<p className="text-gray-900 font-medium mt-0.5 tabular-nums break-all">
-								{pickupDate}
-							</p>
-						</div>
-						<div className="min-w-0 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
-							<p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-								Return
-							</p>
-							<p className="text-gray-900 font-medium mt-0.5 tabular-nums break-all">
-								{returnDate}
-							</p>
-						</div>
-						<div className="min-w-0 col-span-2 lg:col-span-2 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
-							<p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-								Fetched
-							</p>
-							<p className="text-gray-800 mt-0.5 tabular-nums break-words">
-								{fetchedDate}
-							</p>
-						</div>
+					<div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 lg:min-w-40">
+						<span className="text-xs font-semibold text-slate-600">
+							{expanded ? "Hide vehicles" : "View vehicles"}
+						</span>
+						<ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expanded ? "rotate-180" : ""}`} />
 					</div>
 				</div>
-				<ChevronDown
-					className={`w-5 h-5 text-gray-500 shrink-0 mt-0.5 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
-					aria-hidden
-				/>
 			</button>
 
-			{/* Expanded vehicle list */}
 			{expanded && (
-				<div className="border-t border-gray-200 bg-gray-50/60 px-3 py-4 sm:px-5 sm:py-5 space-y-4">
+				<div className="border-t border-slate-200 bg-slate-50 px-4 py-5 sm:px-5">
 					{offers.length === 0 ? (
-						<p className="text-sm text-gray-600 italic leading-relaxed">
-							No vehicle data stored for this sample (fetched before full data
-							storage was enabled — re-fetch to update).
-						</p>
+						<div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+							No vehicle data is stored for this sample. Re-fetch availability to refresh the stored data.
+						</div>
 					) : (
 						<>
-							{totalPages > 1 ? (
-								<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-gray-200">
-									<p className="text-xs sm:text-sm text-gray-600">
-										<span className="font-semibold text-gray-900">
-											{offers.length}
-										</span>{" "}
-										vehicles
-										<span className="text-gray-500"> · page </span>
-										<span className="font-semibold tabular-nums">
-											{page + 1}
-										</span>
-										<span className="text-gray-500"> of </span>
-										<span className="font-semibold tabular-nums">
-											{totalPages}
-										</span>
-									</p>
-									<div className="flex items-center justify-center gap-2">
-										<button
-											type="button"
-											aria-label="Previous page"
-											onClick={() => goPage(page - 1)}
-											disabled={page === 0}
-											className="min-h-9 min-w-9 px-3 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
-										>
-											‹
-										</button>
-										<span className="text-xs text-gray-500 tabular-nums min-w-[3rem] text-center">
-											{page + 1} / {totalPages}
-										</span>
-										<button
-											type="button"
-											aria-label="Next page"
-											onClick={() => goPage(page + 1)}
-											disabled={page >= totalPages - 1}
-											className="min-h-9 min-w-9 px-3 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
-										>
-											›
-										</button>
-									</div>
-								</div>
-							) : (
-								<p className="text-xs sm:text-sm text-gray-600 pb-2 border-b border-gray-200">
-									<span className="font-semibold text-gray-900">
-										{offers.length}
-									</span>{" "}
-									vehicle{offers.length !== 1 ? "s" : ""} in this sample
+							<div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+								<p className="text-sm text-slate-600">
+									Showing <span className="font-semibold text-slate-950">{page * PAGE_SIZE + 1}</span>–<span className="font-semibold text-slate-950">{Math.min((page + 1) * PAGE_SIZE, offers.length)}</span> of <span className="font-semibold text-slate-950">{offers.length}</span> vehicles
 								</p>
-							)}
+								<div className="flex items-center gap-2">
+									<button
+										type="button"
+										onClick={() => goPage(page - 1)}
+										disabled={page === 0}
+										className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40 hover:bg-slate-50"
+										aria-label="Previous page"
+									>
+										‹
+									</button>
+									<span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-700">
+										{page + 1} / {totalPages}
+									</span>
+									<button
+										type="button"
+										onClick={() => goPage(page + 1)}
+										disabled={page >= totalPages - 1}
+										className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40 hover:bg-slate-50"
+										aria-label="Next page"
+									>
+										›
+									</button>
+								</div>
+							</div>
 
 							<div className="space-y-4">
 								{pageOffers.map((offer: any, idx: number) => {
 									const globalIdx = page * PAGE_SIZE + idx;
-									const includedList = (offer.included ?? []).filter(
-										termFilter,
-									);
-									const notIncludedList = (offer.not_included ?? []).filter(
-										termFilter,
-									);
+									const includedList = normalizeTerms(offer.included);
+									const notIncludedList = normalizeTerms(offer.not_included);
+									const extras = (offer.priced_equips ?? []) as any[];
+									const isOpen = expandedCard === globalIdx;
+									const termPreview = includedList.slice(0, 5);
+
 									return (
-										<article
-											key={globalIdx}
-											className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
-										>
-											<div className="flex flex-col sm:flex-row sm:items-stretch gap-4 p-4 sm:p-5">
-												{offer.picture_url ? (
-													<img
-														src={displayVehicleImageUrl(offer.picture_url)}
-														alt=""
-														className="w-full max-w-[200px] sm:w-36 sm:h-24 h-32 sm:h-auto mx-auto sm:mx-0 object-contain rounded-lg bg-gray-50 border border-gray-100 self-center sm:self-start"
-														onError={(e) => {
-															(e.target as HTMLImageElement).style.display =
-																"none";
-														}}
-													/>
-												) : (
-													<div className="w-full max-w-[200px] sm:w-36 h-28 sm:h-24 mx-auto sm:mx-0 rounded-lg bg-gray-100 border border-gray-100 flex items-center justify-center shrink-0 self-center sm:self-start">
-														<svg
-															className="w-10 h-10 text-gray-300"
-															fill="none"
-															viewBox="0 0 24 24"
-															stroke="currentColor"
-														>
-															<path
-																strokeLinecap="round"
-																strokeLinejoin="round"
-																strokeWidth={1.5}
-																d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"
-															/>
-															<path
-																strokeLinecap="round"
-																strokeLinejoin="round"
-																strokeWidth={1.5}
-																d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 .001M1 16h2m16 0h2M13 8h4l3 5-3 .001M13 8v8"
-															/>
-														</svg>
-													</div>
-												)}
-												<div className="flex-1 min-w-0 flex flex-col gap-3">
-													<div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
+										<article key={globalIdx} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+											<div className="grid gap-4 p-4 lg:grid-cols-[160px_minmax(0,1fr)_180px]">
+												<div className="flex h-32 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-3">
+													{offer.picture_url ? (
+														<img
+															src={displayVehicleImageUrl(offer.picture_url)}
+															alt={offer.vehicle_make_model || "Vehicle"}
+															className="max-h-full max-w-full object-contain"
+															onError={(e) => {
+																(e.target as HTMLImageElement).style.display = "none";
+															}}
+														/>
+													) : (
+														<span className="text-sm font-semibold text-slate-300">No image</span>
+													)}
+												</div>
+
+												<div className="min-w-0">
+													<div className="flex flex-wrap items-start justify-between gap-3">
 														<div className="min-w-0">
-															<h3 className="text-base font-semibold text-gray-900 leading-snug break-words">
-																{offer.vehicle_make_model || "—"}
-															</h3>
-															<div className="flex flex-wrap gap-1.5 mt-2">
-																{offer.vehicle_class && (
-																	<span className="inline-flex items-center text-xs font-mono bg-gray-100 text-gray-800 px-2 py-0.5 rounded-md border border-gray-200">
-																		{offer.vehicle_class}
-																	</span>
-																)}
-																{offer.transmission_type && (
-																	<span className="inline-flex items-center text-xs text-gray-700 bg-white px-2 py-0.5 rounded-md border border-gray-200">
-																		{offer.transmission_type}
-																	</span>
-																)}
-																{offer.door_count && (
-																	<span className="inline-flex items-center text-xs text-gray-700 bg-white px-2 py-0.5 rounded-md border border-gray-200">
-																		{offer.door_count} doors
-																	</span>
-																)}
-																{offer.baggage && (
-																	<span className="inline-flex items-center text-xs text-gray-700 bg-white px-2 py-0.5 rounded-md border border-gray-200">
-																		Bags small/medium: {offer.baggage}
-																	</span>
-																)}
-																{offer.gloria_vehdetails_attributes?.Seats && (
-																	<span className="inline-flex items-center text-xs text-gray-700 bg-white px-2 py-0.5 rounded-md border border-gray-200">
-																		{offer.gloria_vehdetails_attributes.Seats}{" "}
-																		seats
-																	</span>
-																)}
+															<h4 className="text-lg font-bold text-slate-950">{compactText(offer.vehicle_make_model)}</h4>
+															<div className="mt-2 flex flex-wrap gap-1.5">
+																{offer.vehicle_class ? <Badge variant="info" size="sm" className="font-mono">{offer.vehicle_class}</Badge> : null}
+																{offer.transmission_type ? <Badge variant="default" size="sm">{offer.transmission_type}</Badge> : null}
+																{offer.door_count ? <Badge variant="default" size="sm">{offer.door_count} doors</Badge> : null}
+																{offer.gloria_vehdetails_attributes?.Seats ? <Badge variant="default" size="sm">{offer.gloria_vehdetails_attributes.Seats} seats</Badge> : null}
+																{offer.baggage ? <Badge variant="default" size="sm">Bags {offer.baggage}</Badge> : null}
 															</div>
-															{offer.manual_business_rules &&
-																typeof offer.manual_business_rules ===
-																	"object" && (
-																	<p className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-																		{(offer.manual_business_rules as any)
-																			.seats != null &&
-																			String(
-																				(offer.manual_business_rules as any)
-																					.seats,
-																			).trim() !== "" && (
-																				<span>
-																					Seats:{" "}
-																					{
-																						(offer.manual_business_rules as any)
-																							.seats
-																					}
-																				</span>
-																			)}
-																		{(offer.manual_business_rules as any)
-																			.min_lead_hours != null && (
-																			<span>
-																				Min lead:{" "}
-																				{
-																					(offer.manual_business_rules as any)
-																						.min_lead_hours
-																				}{" "}
-																				h
-																			</span>
-																		)}
-																		{(offer.manual_business_rules as any)
-																			.max_lead_days != null && (
-																			<span>
-																				Max lead:{" "}
-																				{
-																					(offer.manual_business_rules as any)
-																						.max_lead_days
-																				}{" "}
-																				d
-																			</span>
-																		)}
-																		{(offer.manual_business_rules as any)
-																			.mileage != null && (
-																			<span>
-																				Mileage:{" "}
-																				{
-																					(offer.manual_business_rules as any)
-																						.mileage
-																				}
-																			</span>
-																		)}
-																	</p>
-																)}
 														</div>
-														<div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 sm:text-right shrink-0 border-t border-gray-100 pt-3 sm:border-0 sm:pt-0 sm:pl-4">
-															<p className="text-lg sm:text-xl font-bold text-emerald-700 tabular-nums">
-																{offer.total_price
-																	? `${offer.currency ? `${offer.currency} ` : ""}${Number(offer.total_price).toFixed(2)}`
-																	: "—"}
-															</p>
-															<Badge
-																variant={
-																	isAvailStatusSuccess(
-																		offer.availability_status,
-																	)
-																		? "success"
-																		: "default"
-																}
-																className="text-xs"
-															>
-																{offer.availability_status || "Available"}
-															</Badge>
-															{buildDailyPricingHref ? (
-																<Link
-																	to={buildDailyPricingHref(globalIdx)}
-																	className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2 shrink-0"
-																	onClick={(e) => e.stopPropagation()}
-																>
-																	Daily prices
-																</Link>
+														<Badge variant={isAvailStatusSuccess(offer.availability_status) ? "success" : "default"} size="sm">
+															{offer.availability_status || "Available"}
+														</Badge>
+													</div>
+
+													<div className="mt-4 grid gap-2 sm:grid-cols-3">
+														<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+															<p className="text-[11px] font-bold uppercase text-emerald-700">Included</p>
+															<p className="text-lg font-bold text-emerald-950">{includedList.length}</p>
+														</div>
+														<div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+															<p className="text-[11px] font-bold uppercase text-blue-700">Optional</p>
+															<p className="text-lg font-bold text-blue-950">{notIncludedList.length}</p>
+														</div>
+														<div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
+															<p className="text-[11px] font-bold uppercase text-violet-700">Extras</p>
+															<p className="text-lg font-bold text-violet-950">{extras.length}</p>
+														</div>
+													</div>
+
+													{termPreview.length > 0 ? (
+														<div className="mt-4 flex flex-wrap gap-1.5">
+															{termPreview.map((term, index) => (
+																<span key={`${termIdentity(term)}-${index}`} className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800" title={compactText(term.details || term.header)}>
+																	✓ {compactText(term.code || term.header, "Item")}
+																</span>
+															))}
+															{includedList.length > termPreview.length ? (
+																<span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">+{includedList.length - termPreview.length} more</span>
+															) : null}
+														</div>
+													) : null}
+												</div>
+
+												<div className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 lg:text-right">
+													<div>
+														<p className="text-xs font-bold uppercase tracking-wide text-slate-500">Total price</p>
+														<p className="mt-1 text-2xl font-bold text-emerald-700">{formatStoredMoney(offer.total_price, offer.currency)}</p>
+														{offer.gloria_pricing_attributes?.DailyGross ? (
+															<p className="mt-1 text-xs text-slate-500">Daily {formatStoredMoney(offer.gloria_pricing_attributes.DailyGross, offer.currency)}</p>
+														) : null}
+													</div>
+													<div className="flex flex-wrap gap-2 lg:justify-end">
+														{buildDailyPricingHref ? (
+															<Link to={buildDailyPricingHref(globalIdx)} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 shadow-sm hover:bg-blue-50" onClick={(e) => e.stopPropagation()}>
+																Manage daily prices
+															</Link>
+														) : null}
+														<button type="button" onClick={() => setExpandedCard(isOpen ? null : globalIdx)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-100">
+															{isOpen ? "Hide details" : "View details"}
+														</button>
+													</div>
+												</div>
+											</div>
+
+											{isOpen && (
+												<div className="border-t border-slate-200 bg-slate-50 p-4">
+													<div className="grid gap-4 xl:grid-cols-3">
+														<div className="space-y-4 xl:col-span-1">
+															{offer.veh_id ? (
+																<div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+																	<p className="text-xs font-bold uppercase tracking-wide text-slate-500">VehID / CarOrderID</p>
+																	<code className="mt-2 block break-all rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-900">{offer.veh_id}</code>
+																</div>
+															) : null}
+															{offer.gloria_pricing_attributes && Object.keys(offer.gloria_pricing_attributes).length > 0 ? (
+																<div className="rounded-xl border border-amber-200 bg-white p-4 shadow-sm">
+																	<p className="text-xs font-bold uppercase tracking-wide text-amber-800">Pricing attributes</p>
+																	<dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+																		{Object.entries(offer.gloria_pricing_attributes).map(([key, value]) => (
+																			<div key={key} className="rounded-lg bg-amber-50 px-2 py-1.5">
+																				<dt className="font-semibold text-amber-800">{key}</dt>
+																				<dd className="mt-0.5 truncate font-mono text-slate-900" title={String(value)}>{String(value)}</dd>
+																			</div>
+																		))}
+																	</dl>
+																</div>
+															) : null}
+															{offer.gloria_vehdetails_attributes && Object.keys(offer.gloria_vehdetails_attributes).length > 0 ? (
+																<div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+																	<p className="text-xs font-bold uppercase tracking-wide text-slate-500">Vehicle attributes</p>
+																	<dl className="mt-3 space-y-2 text-xs">
+																		{sortedGloriaVehdetailEntries(offer.gloria_vehdetails_attributes as Record<string, string>).map(([key, value]) => (
+																			<div key={key} className="grid grid-cols-[96px_minmax(0,1fr)] gap-2">
+																				<dt className="font-semibold text-slate-500">{key}</dt>
+																				<dd className="min-w-0 break-words font-mono text-slate-900">{key === "ImageURL" && String(value).startsWith("http") ? <a href={String(value)} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Image link</a> : value || "—"}</dd>
+																			</div>
+																		))}
+																	</dl>
+																</div>
+															) : null}
+														</div>
+
+														<div className="space-y-4 xl:col-span-2">
+															{includedList.length > 0 ? (
+																<div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
+																	<div className="mb-3 flex items-center justify-between gap-3">
+																		<p className="text-sm font-bold text-emerald-900">Included in price</p>
+																		<Badge variant="success" size="sm">{includedList.length}</Badge>
+																	</div>
+																	<TermSummaryList terms={includedList} accent="emerald" currency={offer.currency} />
+																</div>
+															) : null}
+															{notIncludedList.length > 0 ? (
+																<div className="rounded-xl border border-blue-200 bg-white p-4 shadow-sm">
+																	<div className="mb-3 flex items-center justify-between gap-3">
+																		<p className="text-sm font-bold text-blue-900">Not included / optional cover</p>
+																		<Badge variant="info" size="sm">{notIncludedList.length}</Badge>
+																	</div>
+																	<TermSummaryList terms={notIncludedList} accent="blue" currency={offer.currency} />
+																</div>
+															) : null}
+															{extras.length > 0 ? (
+																<div className="rounded-xl border border-violet-200 bg-white p-4 shadow-sm">
+																	<div className="mb-3 flex items-center justify-between gap-3">
+																		<p className="text-sm font-bold text-violet-900">Equipment add-ons</p>
+																		<Badge variant="default" size="sm">{extras.length}</Badge>
+																	</div>
+																	<div className="grid gap-2 sm:grid-cols-2">
+																		{extras.map((eq, index) => (
+																			<div key={index} className="rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-sm">
+																				<p className="font-semibold text-slate-950">{compactText(eq.description || eq.equip_type)}</p>
+																				{eq.long_description ? <p className="mt-1 text-xs text-slate-600">{compactText(eq.long_description)}</p> : null}
+																				{eq.charge?.Amount ? <p className="mt-1 text-xs font-semibold text-violet-900">{formatStoredMoney(eq.charge.Amount, eq.currency || offer.currency)}</p> : null}
+																			</div>
+																		))}
+																	</div>
+																</div>
 															) : null}
 														</div>
 													</div>
-													{includedList.length > 0 && (
-														<div className="flex flex-wrap gap-1.5">
-															{includedList.map((t: any, i: number) => (
-																<span
-																	key={i}
-																	className="text-xs bg-emerald-50 text-emerald-900 border border-emerald-200/80 rounded-md px-2 py-1 max-w-full break-words"
-																	title={
-																		t.details ? String(t.details) : undefined
-																	}
-																>
-																	✓{" "}
-																	{t.code ? (
-																		<span className="font-mono">{t.code}</span>
-																	) : null}
-																	{t.code ? " · " : null}
-																	{t.details || t.header || "—"}
-																</span>
-															))}
-														</div>
-													)}
-												</div>
-											</div>
-											<button
-												type="button"
-												aria-expanded={expandedCard === globalIdx}
-												onClick={() =>
-													setExpandedCard(
-														expandedCard === globalIdx ? null : globalIdx,
-													)
-												}
-												className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-gray-50 border-t border-gray-200 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-											>
-												<span className="font-medium">
-													{expandedCard === globalIdx
-														? "Hide details"
-														: "Details (terms, VehID)"}
-												</span>
-												<ChevronDown
-													className={`w-4 h-4 text-gray-500 shrink-0 transition-transform ${expandedCard === globalIdx ? "rotate-180" : ""}`}
-													aria-hidden
-												/>
-											</button>
-											{expandedCard === globalIdx && (
-												<div className="px-4 pb-4 pt-3 sm:px-5 border-t border-gray-200 bg-gray-50/90 space-y-4 text-sm text-gray-800">
-													{offer.veh_id && (
-														<div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-															<p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
-																VehID / CarOrderID
-															</p>
-															<code className="text-xs sm:text-sm font-mono text-gray-900 break-all block bg-gray-50 border border-gray-100 rounded-md px-2 py-1.5">
-																{offer.veh_id}
-															</code>
-														</div>
-													)}
-													{offer.gloria_vehdetails_attributes &&
-														Object.keys(offer.gloria_vehdetails_attributes)
-															.length > 0 && (
-															<div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-																<p className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-2">
-																	GLORIA vehdetails (@attributes)
-																</p>
-																<dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
-																	{sortedGloriaVehdetailEntries(
-																		offer.gloria_vehdetails_attributes as Record<
-																			string,
-																			string
-																		>,
-																	).map(([k, v]) => (
-																		<div
-																			key={k}
-																			className="flex gap-2 min-w-0 sm:col-span-2"
-																		>
-																			<dt className="text-gray-500 shrink-0 w-36">
-																				{k}
-																			</dt>
-																			<dd className="text-gray-900 min-w-0 break-words font-mono">
-																				{k === "ImageURL" &&
-																				v.startsWith("http") ? (
-																					<a
-																						href={v}
-																						target="_blank"
-																						rel="noopener noreferrer"
-																						className="text-blue-600 underline"
-																					>
-																						{v}
-																					</a>
-																				) : (
-																					v || "—"
-																				)}
-																			</dd>
-																		</div>
-																	))}
-																</dl>
-															</div>
-														)}
-													{offer.gloria_response_meta &&
-														typeof offer.gloria_response_meta === "object" && (
-															<div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm text-xs text-gray-700">
-																<p className="font-semibold uppercase tracking-wide text-gray-500 mb-1">
-																	GLORIA response meta
-																</p>
-																<p className="font-mono break-all">
-																	{Object.entries(
-																		offer.gloria_response_meta as Record<
-																			string,
-																			string
-																		>,
-																	)
-																		.filter(([, v]) => v)
-																		.map(([k, v]) => `${k}: ${v}`)
-																		.join(" · ") || "—"}
-																</p>
-															</div>
-														)}
-													{offer.gloria_pricing_attributes &&
-														Object.keys(offer.gloria_pricing_attributes)
-															.length > 0 && (
-															<div className="rounded-lg border border-amber-200/80 bg-white p-3 shadow-sm">
-																<p className="text-xs font-semibold text-amber-900 uppercase tracking-wide mb-2">
-																	pricing @attributes
-																</p>
-																<dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
-																	{Object.entries(
-																		offer.gloria_pricing_attributes,
-																	).map(([k, v]) => (
-																		<div key={k} className="flex gap-2 min-w-0">
-																			<dt className="text-gray-500 shrink-0">
-																				{k}
-																			</dt>
-																			<dd
-																				className="font-mono text-gray-900 truncate"
-																				title={String(v)}
-																			>
-																				{String(v)}
-																			</dd>
-																		</div>
-																	))}
-																</dl>
-															</div>
-														)}
-													{offer.gloria_terms &&
-														Array.isArray(offer.gloria_terms) &&
-														offer.gloria_terms.length > 0 && (
-															<details className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-																<summary className="text-xs font-semibold text-gray-700 cursor-pointer">
-																	Terms ({offer.gloria_terms.length} item(s))
-																</summary>
-																<pre className="mt-2 text-[10px] font-mono text-gray-800 bg-gray-50 border border-gray-100 rounded p-2 max-h-48 overflow-auto">
-																	{JSON.stringify(offer.gloria_terms, null, 2)}
-																</pre>
-															</details>
-														)}
-													{includedList.length > 0 && (
-														<div className="rounded-lg border border-emerald-200/80 bg-white p-3 shadow-sm">
-															<p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide mb-2">
-																Included
-															</p>
-															<ul className="space-y-3 text-sm text-gray-800">
-																{includedList.map((t: any, i: number) => (
-																	<li
-																		key={i}
-																		className="flex gap-2 border-b border-emerald-100/80 pb-2 last:border-0 last:pb-0"
-																	>
-																		<span className="text-emerald-600 shrink-0">
-																			✓
-																		</span>
-																		<div className="min-w-0 break-words flex-1">
-																			{t.code ? (
-																				<p className="text-xs font-mono text-emerald-900/90 mb-0.5">
-																					{t.code}
-																				</p>
-																			) : null}
-																			<p className="font-medium text-gray-900 whitespace-pre-wrap">
-																				{t.details || t.header || "—"}
-																			</p>
-																			<p className="text-xs text-gray-600 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-																				{t.currency ? (
-																					<span>Currency: {t.currency}</span>
-																				) : null}
-																				{t.excess != null &&
-																				String(t.excess).trim() !== "" ? (
-																					<span>Excess: {t.excess}</span>
-																				) : null}
-																				{t.deposit != null &&
-																				String(t.deposit).trim() !== "" ? (
-																					<span>Deposit: {t.deposit}</span>
-																				) : null}
-																				{t.price != null &&
-																				String(t.price).trim() !== "" &&
-																				String(t.price) !== "0.00" ? (
-																					<span>Price: {t.price}</span>
-																				) : null}
-																			</p>
-																		</div>
-																	</li>
-																))}
-															</ul>
-														</div>
-													)}
-													{notIncludedList.length > 0 && (
-														<div className="rounded-lg border border-blue-200/80 bg-white p-3 shadow-sm">
-															<p className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-2">
-																Not included in price
-															</p>
-															<ul className="space-y-3 text-sm text-gray-800">
-																{notIncludedList.map((t: any, i: number) => (
-																	<li
-																		key={i}
-																		className="flex gap-2 border-b border-blue-100/80 pb-2 last:border-0 last:pb-0"
-																	>
-																		<span className="text-blue-600 shrink-0">
-																			+
-																		</span>
-																		<div className="min-w-0 break-words flex-1">
-																			{t.code ? (
-																				<p className="text-xs font-mono text-blue-900/90 mb-0.5">
-																					{t.code}
-																				</p>
-																			) : null}
-																			<p className="font-medium text-gray-900 whitespace-pre-wrap">
-																				{t.details || t.header || "—"}
-																			</p>
-																			<p className="text-xs text-gray-600 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-																				{t.price != null &&
-																				String(t.price).trim() !== "" ? (
-																					<span>
-																						Price: {t.price}{" "}
-																						{t.currency || offer.currency || ""}
-																					</span>
-																				) : null}
-																				{t.cover_amount != null &&
-																				String(t.cover_amount).trim() !== "" ? (
-																					<span>Cover: {t.cover_amount}</span>
-																				) : null}
-																				{t.excess != null &&
-																				String(t.excess).trim() !== "" ? (
-																					<span>Excess: {t.excess}</span>
-																				) : null}
-																				{t.deposit != null &&
-																				String(t.deposit).trim() !== "" ? (
-																					<span>Deposit: {t.deposit}</span>
-																				) : null}
-																				{!t.price && t.currency ? (
-																					<span>Currency: {t.currency}</span>
-																				) : null}
-																			</p>
-																		</div>
-																	</li>
-																))}
-															</ul>
-														</div>
-													)}
-													{(offer.priced_equips?.length ?? 0) > 0 && (
-														<div className="rounded-lg border border-violet-200/80 bg-white p-3 shadow-sm">
-															<p className="text-xs font-semibold text-violet-900 uppercase tracking-wide mb-2">
-																Equipment add-ons
-															</p>
-															<ul className="space-y-1.5 text-sm text-gray-800">
-																{(offer.priced_equips as any[]).map(
-																	(eq: any, i: number) => (
-																		<li key={i} className="flex gap-2">
-																			<span className="text-violet-600 shrink-0">
-																				•
-																			</span>
-																			<span className="min-w-0 break-words">
-																				{eq.description || eq.equip_type || "—"}
-																				{eq.long_description ? (
-																					<span className="text-gray-500 block text-xs mt-0.5 whitespace-pre-wrap">
-																						{eq.long_description}
-																					</span>
-																				) : null}
-																				{eq.charge?.Amount ? (
-																					<span className="text-gray-600">
-																						{" "}
-																						—{" "}
-																						{eq.currency ||
-																							offer.currency ||
-																							""}{" "}
-																						{Number(eq.charge.Amount).toFixed(
-																							2,
-																						)}
-																					</span>
-																				) : null}
-																			</span>
-																		</li>
-																	),
-																)}
-															</ul>
-														</div>
-													)}
 												</div>
 											)}
 										</article>
 									);
 								})}
 							</div>
-
-							{totalPages > 1 && (
-								<div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2 border-t border-gray-200">
-									<p className="text-xs text-gray-500 sm:mr-2">Jump to page</p>
-									<div className="flex flex-wrap justify-center gap-1.5">
-										{Array.from({ length: totalPages }, (_, i) => (
-											<button
-												key={i}
-												type="button"
-												aria-label={`Page ${i + 1}`}
-												aria-current={i === page ? "page" : undefined}
-												onClick={() => goPage(i)}
-												className={`min-h-9 min-w-9 px-2.5 text-xs sm:text-sm rounded-lg border transition-colors font-medium ${
-													i === page
-														? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
-														: "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-												}`}
-											>
-												{i + 1}
-											</button>
-										))}
-									</div>
-								</div>
-							)}
 						</>
 					)}
 				</div>
@@ -2390,7 +2184,7 @@ export default function SourcePage() {
 	const buildDailyPricingLink = useCallback(
 		(sampleId: string, offerIndex: number) => {
 			const p = new URLSearchParams();
-			p.set("tab", "daily-pricing");
+			p.set("tab", "pricing");
 			p.set("sample", sampleId);
 			p.set("offer", String(Math.max(0, offerIndex)));
 			return `/source?${p.toString()}`;
@@ -2419,7 +2213,13 @@ export default function SourcePage() {
 		| "settings"
 		| null;
 	const initialTab =
-		tabFromUrl === "location-requests" ? "locations" : tabFromUrl;
+		tabFromUrl === "location-requests" || tabFromUrl === "locations"
+			? "location-branches"
+			: tabFromUrl === "branches"
+				? "location-branches"
+				: tabFromUrl === "daily-pricing"
+					? "pricing"
+					: tabFromUrl;
 	const [activeTab, setActiveTab] = useState<
 		| "dashboard"
 		| "agreements"
@@ -2447,6 +2247,10 @@ export default function SourcePage() {
 	} | null>(null);
 	const [isLocationRequestModalOpen, setIsLocationRequestModalOpen] =
 		useState(false);
+	const [
+		isLocationRequestsStatusModalOpen,
+		setIsLocationRequestsStatusModalOpen,
+	] = useState(false);
 	const startPanelTour = useCallback(() => {
 		setPanelTourStartTab(activeTab);
 		setPanelTourOpen(true);
@@ -2603,12 +2407,25 @@ export default function SourcePage() {
 			| "settings",
 		opts?: { branchImport?: "endpoint" | "manual" },
 	) => {
-		if (tab === "location-requests") {
-			setActiveTab("locations");
+		if (tab === "daily-pricing") {
+			setActiveTab("pricing");
 			setSearchParams((prev) => {
 				const next = new URLSearchParams(prev);
-				next.set("tab", "locations");
+				next.set("tab", "pricing");
 				if (next.has("branchImport")) next.delete("branchImport");
+				return next;
+			});
+			return;
+		}
+		if (tab === "locations" || tab === "location-requests") {
+			setActiveTab("location-branches");
+			if (tab === "location-requests") {
+				setIsLocationRequestsStatusModalOpen(true);
+			}
+			setSearchParams((prev) => {
+				const next = new URLSearchParams(prev);
+				next.set("tab", "location-branches");
+				next.set("branchImport", "endpoint");
 				return next;
 			});
 			if (user?.company?.id) {
@@ -2665,13 +2482,29 @@ export default function SourcePage() {
 	// Sync tab when URL changes (back/forward button)
 	useEffect(() => {
 		const tab = searchParams.get("tab");
-		if (tab === "location-requests") {
-			setActiveTab("locations");
+		if (tab === "daily-pricing") {
+			setActiveTab("pricing");
 			setSearchParams(
 				(prev) => {
 					const next = new URLSearchParams(prev);
-					next.set("tab", "locations");
+					next.set("tab", "pricing");
 					if (next.has("branchImport")) next.delete("branchImport");
+					return next;
+				},
+				{ replace: true },
+			);
+			return;
+		}
+		if (tab === "locations" || tab === "location-requests") {
+			setActiveTab("location-branches");
+			if (tab === "location-requests") {
+				setIsLocationRequestsStatusModalOpen(true);
+			}
+			setSearchParams(
+				(prev) => {
+					const next = new URLSearchParams(prev);
+					next.set("tab", "location-branches");
+					next.set("branchImport", "endpoint");
 					return next;
 				},
 				{ replace: true },
@@ -2696,10 +2529,8 @@ export default function SourcePage() {
 			[
 				"dashboard",
 				"agreements",
-				"locations",
 				"location-branches",
 				"pricing",
-				"daily-pricing",
 				"transactions",
 				"reservations",
 				"cancellations",
@@ -2749,17 +2580,24 @@ export default function SourcePage() {
 
 	// Keep Pricing list + TanStack cache in sync with GET /sources/availability-samples
 	useEffect(() => {
-		if (activeTab === "pricing" || activeTab === "daily-pricing") {
+		if (activeTab === "pricing") {
 			loadStoredSamples();
 		}
 	}, [activeTab]);
 
+	useEffect(() => {
+		if (activeTab !== "pricing" || !dailyPricingDeeplinkSampleId) return;
+		const timer = window.setTimeout(() => {
+			document
+				.getElementById("pricing-daily-prices")
+				?.scrollIntoView({ behavior: "smooth", block: "start" });
+		}, 250);
+		return () => window.clearTimeout(timer);
+	}, [activeTab, dailyPricingDeeplinkSampleId, dailyPricingDeeplinkOfferIndex]);
+
 	const [agents, setAgents] = useState<Agent[]>([]);
 	const [isLoadingAgents, setIsLoadingAgents] = useState(false);
 	const [isCreatingAgreement, setIsCreatingAgreement] = useState(false);
-	const [isOfferingAgreement, setIsOfferingAgreement] = useState<string | null>(
-		null,
-	);
 
 	// Endpoint configuration state
 	const [endpointConfig, setEndpointConfig] = useState<EndpointConfig | null>(
@@ -2870,6 +2708,12 @@ export default function SourcePage() {
 	>("endpoint");
 	const [grpcEndpointAddress, setGrpcEndpointAddress] = useState("");
 	const [showManualImportModal, setShowManualImportModal] = useState(false);
+	const [manualFleetId, setManualFleetId] = useState<string | null>(null);
+	const [manualSelectedFleet, setManualSelectedFleet] = useState<SourceFleet | null>(
+		null,
+	);
+	const [showGloriaXmlResponseModal, setShowGloriaXmlResponseModal] =
+		useState(false);
 	const [isSubmittingManualImport, setIsSubmittingManualImport] =
 		useState(false);
 	const [customAcrissCodes, setCustomAcrissCodes] = useState<string[]>([]);
@@ -2910,7 +2754,7 @@ export default function SourcePage() {
 	const [manualPricingTotalTax, setManualPricingTotalTax] = useState("");
 	const [manualPricingTotalGross, setManualPricingTotalGross] = useState("");
 	const [manualPricingTaxRate, setManualPricingTaxRate] = useState("");
-	const [manualTermsJson, setManualTermsJson] = useState("[]");
+	const [manualTermRows, setManualTermRows] = useState<ManualImportTermRow[]>([]);
 	type ManualLineRow = {
 		id: string;
 		code: string;
@@ -2941,6 +2785,7 @@ export default function SourcePage() {
 	// Branches state
 	const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
 	const [isEditBranchModalOpen, setIsEditBranchModalOpen] = useState(false);
+	const [isBranchCreateModalOpen, setIsBranchCreateModalOpen] = useState(false);
 
 	// gRPC Test state
 	const [grpcTestResult, setGrpcTestResult] =
@@ -3023,6 +2868,34 @@ export default function SourcePage() {
 			return false;
 		},
 		[subscriptionActive, isLoadingSubscription, openPlanRequired],
+	);
+
+	const selectBranchImportMode = useCallback(
+		(mode: "endpoint" | "manual") => {
+			setSearchParams((prev) => {
+				const n = new URLSearchParams(prev);
+				n.set("tab", "location-branches");
+				n.set("branchImport", mode === "manual" ? "manual" : "endpoint");
+				return n;
+			});
+			if (mode === "manual") {
+				setIsLocationListConfigOpen(false);
+				if (
+					requireActivePlan(
+						"add a branch",
+						"Adding a branch creates an operational branch record. Choose a plan before adding branches.",
+					)
+				) {
+					setIsBranchCreateModalOpen(true);
+				}
+			} else {
+				setIsBranchCreateModalOpen(false);
+				setLocationListConfigTab("settings");
+				setLocationListSampleValidation(null);
+				setIsLocationListConfigOpen(true);
+			}
+		},
+		[setSearchParams, requireActivePlan],
 	);
 
 	const dashboardDataEnabled =
@@ -3247,9 +3120,11 @@ export default function SourcePage() {
 
 	// Form state for creating agreement
 	const [selectedAgentId, setSelectedAgentId] = useState("");
-	const [agreementRef, setAgreementRef] = useState("");
-	const [validFrom, setValidFrom] = useState("");
-	const [validTo, setValidTo] = useState("");
+	const [agreementAccountNumber, setAgreementAccountNumber] = useState("");
+	const [agreementMarginPercent, setAgreementMarginPercent] = useState("0");
+	const [agreementContactName, setAgreementContactName] = useState("");
+	const [agreementContactEmail, setAgreementContactEmail] = useState("");
+	const [agreementContactPhone, setAgreementContactPhone] = useState("");
 
 	useEffect(() => {
 		// Load user data from localStorage
@@ -3258,6 +3133,26 @@ export default function SourcePage() {
 			try {
 				const parsedUser = JSON.parse(userData);
 				setUser(parsedUser);
+				setAgreementContactEmail(
+					(prev) => prev || parsedUser.email || parsedUser.company?.email || "",
+				);
+				setAgreementContactName(
+					(prev) =>
+						prev ||
+						parsedUser.name ||
+						parsedUser.fullName ||
+						parsedUser.company?.companyName ||
+						"",
+				);
+				setAgreementContactPhone(
+					(prev) =>
+						prev ||
+						parsedUser.phone ||
+						parsedUser.telephone ||
+						parsedUser.company?.phone ||
+						parsedUser.company?.telephone ||
+						"",
+				);
 
 				// Check if company exists before accessing its properties
 				if (!parsedUser?.company?.id) {
@@ -4101,18 +3996,13 @@ export default function SourcePage() {
 		setManualModalReturnLoc(otaReturnLoc);
 		setManualModalPickupDt(otaPickupDateTime);
 		setManualModalReturnDt(otaReturnDateTime);
-		setManualPricingCurrency((c) => c || manualCurrency);
+		setManualPricingCurrency((c) => c || manualCurrency || "EUR");
 		setManualPricingTotalGross((g) => g || manualTotalPrice);
-		setIncludedRows([
-			{
-				id: newManualImportRowId(),
-				code: "",
-				description: "",
-				excess: "",
-				deposit: "",
-				currency: "",
-			},
-		]);
+		setManualCurrency((c) => c || manualPricingCurrency || "EUR");
+		const carOrderId = newManualCarOrderId();
+		setManualCarOrderId(carOrderId);
+		setManualPricingCarOrderId(carOrderId);
+		setIncludedRows(buildDefaultIncludedRows(newManualImportRowId));
 		setNotIncludedRows([
 			{
 				id: newManualImportRowId(),
@@ -4135,8 +4025,17 @@ export default function SourcePage() {
 				long_description: "",
 			},
 		]);
-		setManualTermsJson("[]");
+		setManualTermRows([createEmptyTermRow(newManualImportRowId)]);
 		setShowManualImportModal(true);
+	};
+
+	const selectPricingEntryMode = (mode: "endpoint" | "manual") => {
+		setPricingEntryMode(mode);
+		if (mode === "manual") {
+			openManualImportModal();
+		} else {
+			setShowManualImportModal(false);
+		}
 	};
 
 	const handleAddCustomAcriss = () => {
@@ -4193,6 +4092,22 @@ export default function SourcePage() {
 			toast.error("Pick-up and return date/time are required");
 			return;
 		}
+		if (manualFleetId && manualSelectedFleet) {
+			const fleetCodes = manualSelectedFleet.branches.map((b) =>
+				b.branchCode.toUpperCase(),
+			);
+			const pickup = manualModalPickupLoc.trim().toUpperCase();
+			const ret = manualModalReturnLoc.trim().toUpperCase();
+			if (
+				fleetCodes.length > 0 &&
+				(!fleetCodes.includes(pickup) || !fleetCodes.includes(ret))
+			) {
+				toast.error(
+					"Pick-up and return branches must belong to the selected fleet",
+				);
+				return;
+			}
+		}
 		if (!manualAcriss.trim()) {
 			toast.error("Select or add an ACRISS code");
 			return;
@@ -4201,24 +4116,26 @@ export default function SourcePage() {
 			toast.error("Select make and model");
 			return;
 		}
+		const currencyStr = (manualPricingCurrency || manualCurrency).trim().toUpperCase();
+		if (!currencyStr || currencyStr.length < 3) {
+			toast.error("Currency is required (pricing @Currency)");
+			return;
+		}
 		const totalGrossStr = (manualPricingTotalGross || manualTotalPrice).trim();
 		const total = Number(totalGrossStr);
 		if (!Number.isFinite(total) || total < 0) {
-			toast.error("Enter a valid total gross (pricing) or total price");
+			toast.error("Total gross is required (pricing @TotalGross)");
 			return;
 		}
-		let termsParsed: unknown[] | undefined;
-		try {
-			const t = JSON.parse(manualTermsJson.trim() || "[]");
-			if (!Array.isArray(t)) {
-				toast.error("Terms must be a JSON array (Terms.Item[])");
-				return;
-			}
-			termsParsed = t.length ? t : undefined;
-		} catch {
-			toast.error("Terms must be valid JSON");
+		const missingIncluded = missingRequiredIncludedCodes(includedRows);
+		if (missingIncluded.length > 0) {
+			toast.error(
+				`Included in price must include: ${missingIncluded.join(", ")}`,
+			);
 			return;
 		}
+		const termsBuilt = buildGloriaTermsFromRows(manualTermRows);
+		const termsParsed = termsBuilt.length ? termsBuilt : undefined;
 		for (const ex of extraRows) {
 			if (!ex.description.trim()) continue;
 			const p = Number(ex.price);
@@ -4240,12 +4157,13 @@ export default function SourcePage() {
 			const s = (v: string) => (v.trim() ? v.trim() : undefined);
 			const pricing: ManualGloriaPricingPayload = {
 				total_gross: totalGrossStr,
-				currency: (manualPricingCurrency || manualCurrency)
-					.trim()
-					.toUpperCase(),
+				currency: currencyStr,
 			};
-			const co = s(manualPricingCarOrderId) || s(manualCarOrderId);
-			if (co) pricing.car_order_id = co;
+			const carOrderId =
+				s(manualCarOrderId) ||
+				s(manualPricingCarOrderId) ||
+				newManualCarOrderId();
+			pricing.car_order_id = carOrderId;
 			if (s(manualPricingDuration)) pricing.duration = s(manualPricingDuration);
 			if (s(manualPricingDailyNet))
 				pricing.daily_net = s(manualPricingDailyNet);
@@ -4282,6 +4200,15 @@ export default function SourcePage() {
 				driverAge: otaDriverAge || undefined,
 				citizenCountry: otaCitizenCountry.trim() || undefined,
 				force: forceRefreshAvailability || undefined,
+				...(manualFleetId
+					? {
+							fleet_id: manualFleetId,
+							fleet_code: manualSelectedFleet?.fleetCode,
+							fleet_branch_codes: manualSelectedFleet?.branches.map((b) =>
+								b.branchCode.toUpperCase(),
+							),
+						}
+					: {}),
 				response_meta,
 				pricing,
 				included: includedRows
@@ -4331,7 +4258,7 @@ export default function SourcePage() {
 					max_lead_days: optInt(manualMaxLead),
 					mileage: optInt(manualMileage),
 					image_url: manualImageUrl.trim() || undefined,
-					car_order_id: s(manualCarOrderId),
+					car_order_id: carOrderId,
 				},
 			});
 			setFetchAvailabilityResult(result);
@@ -4771,15 +4698,33 @@ export default function SourcePage() {
 	};
 
 	const createAgreement = async () => {
-		if (!selectedAgentId || !agreementRef || !validFrom || !validTo) {
-			toast.error("Please fill in all fields");
+		if (!selectedAgentId) {
+			toast.error("Select the agent receiving supplier access");
 			return;
 		}
+		if (!agreementAccountNumber.trim()) {
+			toast.error("Enter the supplier account/requester number");
+			return;
+		}
+		const margin = Number(agreementMarginPercent);
+		if (!Number.isFinite(margin) || margin < 0) {
+			toast.error("Enter a valid margin percentage");
+			return;
+		}
+		if (!agreementContactName.trim() || !agreementContactEmail.trim()) {
+			toast.error("Enter a commercial contact name and email");
+			return;
+		}
+		if (!agreementContactPhone.trim()) {
+			toast.error("Enter a commercial contact telephone");
+			return;
+		}
+		const agreementRefToUse = agreementAccountNumber.trim().toUpperCase();
 
 		// Duplicate check
 		try {
 			const dup = await agreementsApi.checkDuplicate({
-				agreementRef,
+				agreementRef: agreementRefToUse,
 				agentId: selectedAgentId,
 				sourceId: user.company.id,
 			});
@@ -4798,19 +4743,21 @@ export default function SourcePage() {
 			const agreementData: CreateAgreementRequest = {
 				agent_id: selectedAgentId,
 				source_id: user.company.id,
-				agreement_ref: agreementRef,
-				valid_from: validFrom,
-				valid_to: validTo,
+				agreement_ref: agreementRefToUse,
+				account_number: agreementAccountNumber.trim(),
+				margin_percent: margin,
+				contact_name: agreementContactName.trim(),
+				contact_email: agreementContactEmail.trim(),
+				contact_phone: agreementContactPhone.trim(),
 			};
 
-			await agreementsApi.createAgreement(agreementData);
-			toast.success("Agreement created successfully!");
+			const created = await agreementsApi.createAgreement(agreementData);
+			toast.success(created.message || "Operational agreement saved!");
 
 			// Reset form
 			setSelectedAgentId("");
-			setAgreementRef("");
-			setValidFrom("");
-			setValidTo("");
+			setAgreementAccountNumber("");
+			setAgreementMarginPercent("0");
 
 			// Reload agents to get updated data
 			await loadAgents();
@@ -4826,35 +4773,12 @@ export default function SourcePage() {
 		}
 	};
 
-	const offerAgreement = async (agreementId: string) => {
-		setIsOfferingAgreement(agreementId);
-		try {
-			await agreementsApi.offerAgreement(agreementId);
-			toast.success("Agreement offered successfully!");
-			// Reload agents to get updated data
-			await loadAgents();
-		} catch (error) {
-			console.error("Failed to offer agreement:", error);
-			toast.error("Failed to offer agreement");
-		} finally {
-			setIsOfferingAgreement(null);
-		}
-	};
-
 	const handleLogout = () => {
 		localStorage.removeItem("token");
 		localStorage.removeItem("refreshToken");
 		localStorage.removeItem("user");
 		toast.success("Logged out successfully");
 		navigate("/login");
-	};
-
-	const generateAgreementRef = () => {
-		const year = new Date().getFullYear();
-		const random = Math.floor(Math.random() * 1000)
-			.toString()
-			.padStart(3, "0");
-		setAgreementRef(`AG-${year}-${random}`);
 	};
 
 	const branchImportIsManual =
@@ -4880,7 +4804,7 @@ export default function SourcePage() {
 					<div className="px-6 py-4 flex items-center justify-between">
 						<div className="flex items-center space-x-4">
 							<h2 className="text-lg font-semibold text-gray-900">
-								Gloria Connect - Source
+								Gloria - Rental company
 							</h2>
 						</div>
 
@@ -4902,7 +4826,7 @@ export default function SourcePage() {
 								onClick={startPanelTour}
 								title={
 									activeTab === "dashboard"
-										? "Walk through the full Source Portal"
+										? "Walk through the full Gloria - Rental company portal"
 										: `Walk through this ${activeTab.replace(/-/g, " ")} page`
 								}
 							>
@@ -5367,10 +5291,12 @@ export default function SourcePage() {
 															</div>
 															<button
 																type="button"
-																onClick={() => handleTabChange("locations")}
+																onClick={() =>
+																	handleTabChange("location-branches")
+																}
 																className="mt-4 text-sm font-semibold text-emerald-700 hover:text-emerald-900"
 															>
-																Review coverage →
+																Review Location & Branches →
 															</button>
 														</CardContent>
 													</Card>
@@ -5576,7 +5502,7 @@ export default function SourcePage() {
 																					agreement.status === "OFFERED",
 																			)
 																			.length.toLocaleString()}{" "}
-																		pending offers
+																		pending setup
 																	</p>
 																</div>
 															</div>
@@ -5600,10 +5526,12 @@ export default function SourcePage() {
 															</button>
 															<button
 																type="button"
-																onClick={() => handleTabChange("locations")}
+																onClick={() =>
+																	handleTabChange("location-branches")
+																}
 																className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-semibold text-gray-900 hover:border-emerald-200 hover:bg-emerald-50"
 															>
-																Sync or review coverage
+																Import locations or request missing places
 																<span className="text-emerald-700">→</span>
 															</button>
 															<button
@@ -5942,9 +5870,9 @@ export default function SourcePage() {
 																	Agreements made easy
 																</h1>
 																<p className="mt-3 text-sm leading-6 text-blue-100 sm:text-base">
-																	Agreements decide which agents may search,
-																	price, book, amend, cancel, and check
-																	reservation status against your Source supply.
+																	Legal paperwork stays offline. Register which
+																	agents can access your supply, the supplier
+																	account/requester ID, and the price margin.
 																</p>
 															</div>
 															<div className="rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-blue-50 backdrop-blur">
@@ -5952,8 +5880,8 @@ export default function SourcePage() {
 																	Your company contact
 																</p>
 																<p className="mt-1 text-blue-100">
-																	Share this email with agents/admins for
-																	external signing.
+																	Share this email with agents for offline legal
+																	documents and account setup.
 																</p>
 																<div className="mt-3 flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 font-mono text-xs">
 																	<span className="min-w-0 flex-1 truncate">
@@ -5996,7 +5924,7 @@ export default function SourcePage() {
 														</div>
 														<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
 															<p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-																Agreement refs
+																Access records
 															</p>
 															<p className="mt-2 text-2xl font-bold text-blue-950">
 																{
@@ -6027,12 +5955,12 @@ export default function SourcePage() {
 																}
 															</p>
 															<p className="mt-1 text-xs text-emerald-700">
-																Accepted / active
+																Active or legacy accepted
 															</p>
 														</div>
 														<div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
 															<p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-																Pending offers
+																Pending setup
 															</p>
 															<p className="mt-2 text-2xl font-bold text-amber-950">
 																{
@@ -6061,12 +5989,11 @@ export default function SourcePage() {
 																<FileText className="mt-0.5 h-5 w-5 text-blue-700" />
 																<div>
 																	<p className="font-bold text-blue-950">
-																		Agreement reference
+																		Account / requester ID
 																	</p>
 																	<p className="mt-1 text-sm leading-6 text-blue-800">
-																		The reference authorizes agent search,
-																		pricing, booking, cancellation, and status
-																		calls.
+																		The supplier-assigned account number is sent
+																		as RequestorID when Gloria asks for prices.
 																	</p>
 																</div>
 															</div>
@@ -6078,11 +6005,11 @@ export default function SourcePage() {
 																<CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-700" />
 																<div>
 																	<p className="font-bold text-emerald-950">
-																		Accepted means usable
+																		Active means usable
 																	</p>
 																	<p className="mt-1 text-sm leading-6 text-emerald-800">
-																		Accepted or active agreements are ready for
-																		agent trading against your supply.
+																		Saved operational agreements become active
+																		after offline legal terms are confirmed.
 																	</p>
 																</div>
 															</div>
@@ -6094,12 +6021,11 @@ export default function SourcePage() {
 																<Info className="mt-0.5 h-5 w-5 text-amber-700" />
 																<div>
 																	<p className="font-bold text-amber-950">
-																		Signing stays external
+																		Margin is applied here
 																	</p>
 																	<p className="mt-1 text-sm leading-6 text-amber-800">
-																		Use this portal for visibility; complete
-																		commercial signing with the agent/admin
-																		team.
+																		Enter the agreed percentage and Gloria adds
+																		it to supplier prices returned to agents.
 																	</p>
 																</div>
 															</div>
@@ -6109,14 +6035,34 @@ export default function SourcePage() {
 
 												<div className="mt-6 space-y-6">
 													{user?.company?.status === "ACTIVE" ? (
+														<CreateAgreementForm
+															agents={agents}
+															selectedAgentId={selectedAgentId}
+															accountNumber={agreementAccountNumber}
+															marginPercent={agreementMarginPercent}
+															contactName={agreementContactName}
+															contactEmail={agreementContactEmail}
+															contactPhone={agreementContactPhone}
+															isCreatingAgreement={isCreatingAgreement}
+															setSelectedAgentId={setSelectedAgentId}
+															setAccountNumber={setAgreementAccountNumber}
+															setMarginPercent={setAgreementMarginPercent}
+															setContactName={setAgreementContactName}
+															setContactEmail={setAgreementContactEmail}
+															setContactPhone={setAgreementContactPhone}
+															createAgreement={createAgreement}
+															user={user}
+														/>
+													) : null}
+													{user?.company?.status === "ACTIVE" ? (
 														<MyAgreements user={user} />
 													) : (
 														<Card className="border border-amber-200 bg-amber-50">
 															<CardContent className="p-4 text-sm text-amber-900">
 																Your Source company must be active before
-																agreement references can be used. Once approved,
-																this section will show your connected
-																agreements.
+																operational supplier access can be used. Once
+																approved, this section will show connected
+																agents and account IDs.
 															</CardContent>
 														</Card>
 													)}
@@ -6480,7 +6426,7 @@ export default function SourcePage() {
 																	<p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
 																		Choose whether to view all Source coverage
 																		or the locations allowed by a specific
-																		agreement reference.
+																		supplier access record.
 																	</p>
 																</div>
 															</div>
@@ -6950,14 +6896,7 @@ export default function SourcePage() {
 															type="button"
 															role="radio"
 															aria-checked={!branchImportIsManual}
-															onClick={() => {
-																setSearchParams((prev) => {
-																	const n = new URLSearchParams(prev);
-																	n.set("tab", "location-branches");
-																	n.set("branchImport", "endpoint");
-																	return n;
-																});
-															}}
+															onClick={() => selectBranchImportMode("endpoint")}
 															className={`group relative rounded-2xl border p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${!branchImportIsManual ? "border-blue-300 bg-blue-50 shadow-sm" : "border-slate-200 bg-white hover:border-blue-200"}`}
 														>
 															<div className="flex items-start gap-4">
@@ -6991,7 +6930,7 @@ export default function SourcePage() {
 																			Best for scheduled imports
 																		</span>
 																		<span className="rounded-xl bg-white/80 px-3 py-2 ring-1 ring-slate-200">
-																			Opens endpoint setup below
+																			Import actions appear below
 																		</span>
 																	</div>
 																</div>
@@ -7001,14 +6940,7 @@ export default function SourcePage() {
 															type="button"
 															role="radio"
 															aria-checked={branchImportIsManual}
-															onClick={() => {
-																setSearchParams((prev) => {
-																	const n = new URLSearchParams(prev);
-																	n.set("tab", "location-branches");
-																	n.set("branchImport", "manual");
-																	return n;
-																});
-															}}
+															onClick={() => selectBranchImportMode("manual")}
 															className={`group relative rounded-2xl border p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 ${branchImportIsManual ? "border-slate-400 bg-slate-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}
 														>
 															<div className="flex items-start gap-4">
@@ -7051,203 +6983,109 @@ export default function SourcePage() {
 													</CardContent>
 												</Card>
 
-												{!branchImportIsManual && (
-													<>
-														<Card className="mb-6 overflow-hidden border-0 shadow-sm ring-1 ring-slate-200">
-															<CardHeader className="border-b border-slate-200 bg-gradient-to-r from-white to-blue-50">
-																<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-																	<div>
-																		<div className="mb-2 inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-blue-700">
-																			<RefreshCw className="h-3.5 w-3.5" /> Live
-																			endpoint workflow
-																		</div>
-																		<CardTitle className="text-2xl font-bold text-slate-950">
-																			Supplier Location List endpoint
-																		</CardTitle>
-																		<p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
-																			Configure your saved endpoint once,
-																			validate the response shape, then import
-																			or re-sync safely. Sync upserts matching
-																			branch codes and never deletes missing
-																			supplier rows.
-																		</p>
-																	</div>
-																	<div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
-																		<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-																			Active transport
-																		</p>
-																		<p className="mt-1 font-bold text-slate-950">
-																			{locationListTransport === "grpc"
-																				? "gRPC GetLocations"
-																				: "HTTP POST XML"}
-																		</p>
-																	</div>
+												<Card
+													className="mb-6 overflow-hidden border-0 shadow-sm ring-1 ring-cyan-200"
+													data-tour="locations-request-card"
+												>
+													<CardHeader className="border-b border-cyan-100 bg-gradient-to-r from-cyan-50 via-white to-blue-50">
+														<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+															<div className="flex items-start gap-3">
+																<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200">
+																	<MapPin className="h-5 w-5" />
 																</div>
-															</CardHeader>
-															<CardContent className="space-y-5 p-5">
-																<div className="grid gap-3 md:grid-cols-3">
-																	<div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-																		<p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-																			1. Settings
-																		</p>
-																		<p className="mt-1 text-sm font-semibold text-slate-950">
-																			URL or host:port
-																		</p>
-																		<p className="mt-1 text-xs leading-5 text-slate-600">
-																			Store endpoint, transport, and credentials
-																			in the configuration modal.
-																		</p>
-																	</div>
-																	<div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
-																		<p className="text-xs font-bold uppercase tracking-wide text-blue-700">
-																			2. Validate
-																		</p>
-																		<p className="mt-1 text-sm font-semibold text-blue-950">
-																			Sample & response checks
-																		</p>
-																		<p className="mt-1 text-xs leading-5 text-blue-700">
-																			Use sample payloads to verify XML
-																			LocationDetail rows or gRPC coverage
-																			output.
-																		</p>
-																	</div>
-																	<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-																		<p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
-																			3. Import / sync
-																		</p>
-																		<p className="mt-1 text-sm font-semibold text-emerald-950">
-																			Safe upsert pipeline
-																		</p>
-																		<p className="mt-1 text-xs leading-5 text-emerald-700">
-																			Existing branch codes are updated, new
-																			codes are added, and omitted rows stay
-																			untouched.
-																		</p>
-																	</div>
+																<div>
+																	<CardTitle className="text-xl font-bold text-slate-950">
+																		Missing location requests
+																	</CardTitle>
+																	<p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+																		If your supplier feed uses a pickup or
+																		return place that is not yet in Gloria,
+																		request it here. Admins review the details
+																		and mark it approved or rejected with notes.
+																	</p>
 																</div>
-																<div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-																	<Button
-																		variant="secondary"
-																		onClick={() => {
-																			setLocationListConfigTab("settings");
-																			setIsLocationListConfigOpen(true);
-																		}}
-																		type="button"
-																		data-tour="location-branches-configure-endpoint"
-																	>
-																		Configure Endpoint
-																	</Button>
-																	<Button
-																		variant="primary"
-																		onClick={importLocationList}
-																		loading={isImportingLocationList}
-																		disabled={
-																			isImportingLocationList ||
-																			(subscriptionActive &&
-																				(locationListTransport === "grpc"
-																					? !(
-																							grpcEndpoint ||
-																							endpointConfig?.grpcEndpoint ||
-																							""
-																						)
-																							.toString()
-																							.trim()
-																					: !locationListEndpointUrl.trim()))
-																		}
-																		type="button"
-																		data-tour="location-branches-import-endpoint"
-																	>
-																		Import from endpoint
-																	</Button>
-																	<Button
-																		variant="secondary"
-																		onClick={syncLocationListFromEndpoint}
-																		loading={isImportingLocationList}
-																		disabled={
-																			isImportingLocationList ||
-																			(subscriptionActive &&
-																				(locationListTransport === "grpc"
-																					? !(
-																							grpcEndpoint ||
-																							endpointConfig?.grpcEndpoint ||
-																							""
-																						)
-																							.toString()
-																							.trim()
-																					: !locationListEndpointUrl.trim()))
-																		}
-																		type="button"
-																		className="gap-2"
-																		title="Re-fetch from supplier. Branches and locations are upserted; nothing is deleted."
-																		data-tour="location-branches-sync-endpoint"
-																	>
-																		<RefreshCw
-																			className={`w-4 h-4 shrink-0 ${isImportingLocationList ? "animate-spin" : ""}`}
-																		/>
-																		Sync from endpoint
-																	</Button>
-																	{locationListTransport === "http" &&
-																		locationListEndpointUrl && (
-																			<span
-																				className="min-w-0 truncate rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
-																				title={locationListEndpointUrl}
-																			>
-																				{locationListEndpointUrl}
-																			</span>
-																		)}
-																	{locationListTransport === "grpc" &&
-																		(grpcEndpoint ||
-																			endpointConfig?.grpcEndpoint) && (
-																			<span
-																				className="min-w-0 truncate rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
-																				title={
-																					grpcEndpoint ||
-																					endpointConfig?.grpcEndpoint ||
-																					""
-																				}
-																			>
-																				gRPC:{" "}
-																				{grpcEndpoint ||
-																					endpointConfig?.grpcEndpoint}
-																			</span>
-																		)}
-																</div>
-																<div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-																	<strong>Important:</strong> HTTP/XML imports
-																	full{" "}
-																	<code className="rounded bg-white px-1 text-xs">
-																		LocationDetail
-																	</code>{" "}
-																	branch rows. gRPC{" "}
-																	<code className="rounded bg-white px-1 text-xs">
-																		GetLocations
-																	</code>{" "}
-																	only updates served UN/LOCODE coverage, so use
-																	manual/file tools if you need branch addresses
-																	after a gRPC coverage import.
-																</div>
-															</CardContent>
-														</Card>
+															</div>
+															<div className="flex flex-wrap gap-2">
+																<Button
+																	type="button"
+																	variant="primary"
+																	onClick={() =>
+																		setIsLocationRequestModalOpen(true)
+																	}
+																	data-tour="locations-request-button"
+																	className="shadow-sm"
+																>
+																	<Plus className="mr-2 h-4 w-4" />
+																	Request location
+																</Button>
+																<Button
+																	type="button"
+																	variant="secondary"
+																	onClick={() =>
+																		setIsLocationRequestsStatusModalOpen(true)
+																	}
+																	data-tour="locations-requests-list"
+																	className="shadow-sm"
+																>
+																	<FileText className="mr-2 h-4 w-4" />
+																	View request status
+																</Button>
+															</div>
+														</div>
+													</CardHeader>
+													<CardContent className="bg-white p-5">
+														<div className="grid gap-3 md:grid-cols-3">
+															<div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+																<p className="text-sm font-bold text-blue-950">
+																	1. Submit details
+																</p>
+																<p className="mt-1 text-xs leading-5 text-blue-800">
+																	Enter location name, country code, city/IATA
+																	code, address, and the business reason.
+																</p>
+															</div>
+															<div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+																<p className="text-sm font-bold text-amber-950">
+																	2. Admin review
+																</p>
+																<p className="mt-1 text-xs leading-5 text-amber-800">
+																	The admin team validates the place and decides
+																	whether it should be added.
+																</p>
+															</div>
+															<div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+																<p className="text-sm font-bold text-emerald-950">
+																	3. Track approval
+																</p>
+																<p className="mt-1 text-xs leading-5 text-emerald-800">
+																	Use status history to see pending, approved,
+																	rejected, review date, and admin notes.
+																</p>
+															</div>
+														</div>
+													</CardContent>
+												</Card>
 
-														<Card className="mb-6 overflow-hidden border-0 shadow-lg ring-1 ring-slate-200">
-															<CardHeader className="border-b border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white">
-																<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-																	<div>
-																		<div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-cyan-100">
-																			<FileText className="h-3.5 w-3.5" />
-																			Supplier response guide
-																		</div>
-																		<CardTitle className="text-2xl font-bold text-white">
-																			Sample supplier payloads
-																		</CardTitle>
-																		<p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-																			Use these examples to decide which
-																			integration fits your system. HTTP/XML can
-																			import full branch rows and coverage. gRPC
-																			GetLocations is intentionally lighter and
-																			updates coverage only.
-																		</p>
+												{!branchImportIsManual && (
+													<Card className="mb-6 overflow-hidden border-0 shadow-lg ring-1 ring-slate-200">
+														<CardHeader className="border-b border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white">
+															<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+																<div>
+																	<div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-cyan-100">
+																		<FileText className="h-3.5 w-3.5" />
+																		Supplier response guide
 																	</div>
+																	<CardTitle className="text-2xl font-bold text-white">
+																		Sample supplier payloads
+																	</CardTitle>
+																	<p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+																		HTTP/XML imports full branch rows and
+																		coverage. gRPC GetLocations updates coverage
+																		only. Use Sample &amp; Validate for full
+																		payload examples.
+																	</p>
+																</div>
+																<div className="flex flex-wrap gap-2">
 																	<Button
 																		type="button"
 																		variant="secondary"
@@ -7263,221 +7101,124 @@ export default function SourcePage() {
 																			setIsLocationListConfigOpen(true);
 																		}}
 																	>
-																		Open Sample &amp; Validate
-																		<ExternalLink className="ml-2 h-4 w-4" />
+																		Sample &amp; Validate
 																	</Button>
 																</div>
-															</CardHeader>
-															<CardContent className="bg-slate-50 p-5">
-																<div className="mb-5 grid gap-3 md:grid-cols-3">
-																	<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-																		<div className="flex items-center gap-2 text-sm font-bold text-emerald-900">
-																			<CheckCircle2 className="h-4 w-4" /> Best
-																			for full import
-																		</div>
-																		<p className="mt-2 text-xs leading-5 text-emerald-800">
-																			HTTP/XML carries branch names, address,
-																			phone, coordinates, opening hours, and
-																			UN/LOCODE hints.
-																		</p>
-																	</div>
-																	<div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
-																		<div className="flex items-center gap-2 text-sm font-bold text-blue-900">
-																			<Info className="h-4 w-4" /> Coverage only
-																		</div>
-																		<p className="mt-2 text-xs leading-5 text-blue-800">
-																			gRPC GetLocations only says which
-																			UN/LOCODEs you serve. It does not create
-																			detailed branch rows.
-																		</p>
-																	</div>
-																	<div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-																		<div className="flex items-center gap-2 text-sm font-bold text-amber-900">
-																			<AlertCircle className="h-4 w-4" />{" "}
-																			Important mapping
-																		</div>
-																		<p className="mt-2 text-xs leading-5 text-amber-800">
-																			Branch rows are matched by{" "}
-																			<code className="rounded bg-white px-1">
-																				LocationDetail Code
-																			</code>
-																			. Keep codes stable to update existing
-																			branches.
-																		</p>
-																	</div>
-																</div>
-
-																<div className="grid gap-4 xl:grid-cols-2">
-																	<div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-																		<div className="border-b border-slate-200 bg-white p-4">
-																			<div className="flex flex-wrap items-center gap-2">
-																				<span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
-																					Recommended
-																				</span>
-																				<span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-																					HTTP / XML
-																				</span>
-																			</div>
-																			<h3 className="mt-3 text-base font-bold text-slate-950">
-																				GLORIA location list response
-																			</h3>
-																			<p className="mt-1 text-sm leading-6 text-slate-600">
-																				Use this when your supplier system can
-																				return countries, coverage, and detailed
-																				branches in one response.
-																			</p>
-																		</div>
-																		<div className="p-4">
-																			<pre className="max-h-80 overflow-x-auto rounded-xl bg-slate-950 p-4 font-mono text-[11px] leading-relaxed text-slate-100">{`<GLORIA_locationlistrs TimeStamp="2026-06-01T10:00:00" Target="Production" Version="1.00">
-  <Success />
-  <CountryList>
-    <Country>United Arab Emirates</Country>
-    <CountryCode>AE</CountryCode>
-    <VehMatchedLocs>
-      <VehMatchedLoc>
-        <LocationDetail Code="DXB01" Name="Dubai Desk" LocationCode="AEDXB"
-          Latitude="25.2532" Longitude="55.3657" AtAirport="true">
-          <Address>
-            <AddressLine>Dubai International Airport</AddressLine>
-            <CityName>Dubai</CityName>
-            <CountryName Code="AE">United Arab Emirates</CountryName>
-          </Address>
-          <Telephone PhoneNumber="+971 4 123 4567" />
-          <Opening>
-            <Monday Open="08:00" Closed="18:00" />
-          </Opening>
-        </LocationDetail>
-      </VehMatchedLoc>
-    </VehMatchedLocs>
-  </CountryList>
-</GLORIA_locationlistrs>`}</pre>
-																			<div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
-																				<div className="rounded-xl bg-slate-50 p-3">
-																					<strong className="text-slate-900">
-																						Creates/updates branches:
-																					</strong>{" "}
-																					Code, Name, address, contact,
-																					coordinates, hours.
-																				</div>
-																				<div className="rounded-xl bg-slate-50 p-3">
-																					<strong className="text-slate-900">
-																						Coverage mapping:
-																					</strong>{" "}
-																					LocationCode / CountryCode helps map
-																					to UN/LOCODE.
-																				</div>
-																			</div>
-																		</div>
-																	</div>
-
-																	<div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-																		<div className="border-b border-slate-200 bg-white p-4">
-																			<div className="flex flex-wrap items-center gap-2">
-																				<span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-800">
-																					Coverage only
-																				</span>
-																				<span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-																					gRPC
-																				</span>
-																			</div>
-																			<h3 className="mt-3 text-base font-bold text-slate-950">
-																				GetLocations response
-																			</h3>
-																			<p className="mt-1 text-sm leading-6 text-slate-600">
-																				Use this when your gRPC service only
-																				reports supported Gloria locations. Add
-																				branch details manually or through
-																				HTTP/XML.
-																			</p>
-																		</div>
-																		<div className="p-4">
-																			<pre className="overflow-x-auto rounded-xl bg-slate-950 p-4 font-mono text-[11px] leading-relaxed text-slate-100">{`{
-  "locations": [
-    { "unlocode": "AEDXB", "name": "Dubai" },
-    { "unlocode": "GBLON", "name": "London" }
-  ]
-}`}</pre>
-																			<div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-900">
-																				<strong>
-																					What happens after import:
-																				</strong>{" "}
-																				Gloria coverage rows are updated for
-																				these UN/LOCODEs. No Branches-table rows
-																				are created because this response has no{" "}
-																				<code className="rounded bg-white px-1">
-																					LocationDetail
-																				</code>{" "}
-																				payload.
-																			</div>
-																		</div>
-																	</div>
-																</div>
-															</CardContent>
-														</Card>
-													</>
-												)}
-
-												{branchImportIsManual && (
-													<Card className="mb-6 border border-gray-200 shadow-sm">
-														<CardHeader className="bg-gray-50 border-b border-gray-200">
-															<CardTitle className="text-lg">
-																Manual branch tools
-															</CardTitle>
-															<p className="text-sm text-gray-600 mt-1">
-																Use <strong>Upload File</strong> for XML / JSON
-																/ CSV / Excel batches. <strong>Sync</strong>{" "}
-																pulls from your{" "}
-																<strong>branch import HTTP endpoint</strong>{" "}
-																saved under <strong>Settings</strong> (same
-																behaviour as the previous “Manual Branch import”
-																page). <strong>Add Branch</strong> creates a row
-																directly; when an endpoint is configured, new
-																branches can be merged with a follow-up sync.
-															</p>
+															</div>
 														</CardHeader>
+														<CardContent className="space-y-4 bg-white p-5">
+															<div className="flex flex-wrap items-center gap-3">
+																<Button
+																	variant="secondary"
+																	onClick={() => {
+																		setLocationListConfigTab("settings");
+																		setIsLocationListConfigOpen(true);
+																	}}
+																	type="button"
+																	data-tour="location-branches-configure-endpoint"
+																>
+																	Configure Endpoint
+																</Button>
+																<Button
+																	variant="primary"
+																	onClick={importLocationList}
+																	loading={isImportingLocationList}
+																	disabled={
+																		isImportingLocationList ||
+																		(subscriptionActive &&
+																			(locationListTransport === "grpc"
+																				? !(
+																						grpcEndpoint ||
+																						endpointConfig?.grpcEndpoint ||
+																						""
+																					)
+																						.toString()
+																						.trim()
+																				: !locationListEndpointUrl.trim()))
+																	}
+																	type="button"
+																	data-tour="location-branches-import-endpoint"
+																>
+																	Import from endpoint
+																</Button>
+																<Button
+																	variant="secondary"
+																	onClick={syncLocationListFromEndpoint}
+																	loading={isImportingLocationList}
+																	disabled={
+																		isImportingLocationList ||
+																		(subscriptionActive &&
+																			(locationListTransport === "grpc"
+																				? !(
+																						grpcEndpoint ||
+																						endpointConfig?.grpcEndpoint ||
+																						""
+																					)
+																						.toString()
+																						.trim()
+																				: !locationListEndpointUrl.trim()))
+																	}
+																	type="button"
+																	className="gap-2"
+																	title="Re-fetch from supplier. Branches and locations are upserted; nothing is deleted."
+																	data-tour="location-branches-sync-endpoint"
+																>
+																	<RefreshCw
+																		className={`w-4 h-4 shrink-0 ${isImportingLocationList ? "animate-spin" : ""}`}
+																	/>
+																	Sync from endpoint
+																</Button>
+																{locationListTransport === "http" &&
+																	locationListEndpointUrl && (
+																		<span
+																			className="min-w-0 truncate rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
+																			title={locationListEndpointUrl}
+																		>
+																			{locationListEndpointUrl}
+																		</span>
+																	)}
+																{locationListTransport === "grpc" &&
+																	(grpcEndpoint ||
+																		endpointConfig?.grpcEndpoint) && (
+																		<span
+																			className="min-w-0 truncate rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
+																			title={
+																				grpcEndpoint ||
+																				endpointConfig?.grpcEndpoint ||
+																				""
+																			}
+																		>
+																			gRPC:{" "}
+																			{grpcEndpoint ||
+																				endpointConfig?.grpcEndpoint}
+																		</span>
+																	)}
+															</div>
+															<p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+																<strong>Sync</strong> upserts by branch code —
+																existing rows update, new codes add, omitted
+																codes are not deleted. gRPC only updates
+																UN/LOCODE coverage; switch to manual tools for
+																branch details after gRPC.
+															</p>
+														</CardContent>
 													</Card>
 												)}
 
-												<div className="mt-6 space-y-4">
-													{!branchImportIsManual && (
-														<Card className="overflow-hidden border-0 shadow-sm ring-1 ring-slate-200">
-															<CardContent className="flex flex-col gap-3 bg-white p-5 lg:flex-row lg:items-center lg:justify-between">
-																<div>
-																	<p className="text-xs font-bold uppercase tracking-wide text-blue-700">
-																		Imported branch workspace
-																	</p>
-																	<h2 className="mt-1 text-xl font-bold text-slate-950">
-																		Review and maintain supplier branch rows
-																	</h2>
-																	<p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-																		After an HTTP/XML import, branch rows appear
-																		here for review and editing. Coverage-only
-																		gRPC imports may not add detailed rows until
-																		you upload or create them manually.
-																	</p>
-																</div>
-																<div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-																	<strong className="block text-slate-900">
-																		Matching rule
-																	</strong>
-																	Stable branch codes update existing records.
-																</div>
-															</CardContent>
-														</Card>
-													)}
-													<BranchList
-														subscriptionActive={subscriptionActive}
-														onRequirePlan={openPlanRequired}
-														onEdit={(branch) => {
-															setSelectedBranch(branch);
-															setIsEditBranchModalOpen(true);
-														}}
-														onQuotaExceeded={(payload, retry) =>
-															setQuotaModal({ payload, retry })
-														}
-														hideHeader={!branchImportIsManual}
-													/>
-												</div>
+												<BranchList
+													subscriptionActive={subscriptionActive}
+													onRequirePlan={openPlanRequired}
+													onEdit={(branch) => {
+														setSelectedBranch(branch);
+														setIsEditBranchModalOpen(true);
+													}}
+													onQuotaExceeded={(payload, retry) =>
+														setQuotaModal({ payload, retry })
+													}
+													hideHeader={!branchImportIsManual}
+													createModalOpen={isBranchCreateModalOpen}
+													onCreateModalOpenChange={setIsBranchCreateModalOpen}
+												/>
 
 												<Modal
 													isOpen={isLocationListConfigOpen}
@@ -8264,7 +8005,7 @@ message LocationsResponse {
 																	type="button"
 																	data-tour="pricing-entry-endpoint"
 																	onClick={() =>
-																		setPricingEntryMode("endpoint")
+																		selectPricingEntryMode("endpoint")
 																	}
 																	className={`rounded-2xl border p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${pricingEntryMode === "endpoint" ? "border-emerald-300 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-emerald-200"}`}
 																>
@@ -8310,7 +8051,7 @@ message LocationsResponse {
 																<button
 																	type="button"
 																	data-tour="pricing-entry-manual"
-																	onClick={() => setPricingEntryMode("manual")}
+																	onClick={() => selectPricingEntryMode("manual")}
 																	className={`rounded-2xl border p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 ${pricingEntryMode === "manual" ? "border-slate-400 bg-slate-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}
 																>
 																	<div className="flex items-start gap-4">
@@ -8910,1050 +8651,224 @@ message AvailabilityRequest {
 														</CardContent>
 													</Card>
 
-													<Modal
-														isOpen={showManualImportModal}
-														onClose={() => setShowManualImportModal(false)}
-														title="Manual availability import"
-														size="xl"
-													>
-														<div className="space-y-5 text-sm text-gray-800 -mx-2 sm:mx-0 max-h-[85vh] overflow-y-auto pr-1">
-															<p className="text-xs text-gray-600 leading-relaxed">
-																Mirrors <strong>GLORIA_availabilityrs</strong>{" "}
-																shape:{" "}
-																<code className="bg-gray-100 px-1 rounded text-xs">
-																	VehAvairsdetails
-																</code>{" "}
-																(locations + dates),{" "}
-																<code className="bg-gray-100 px-1 rounded text-xs">
-																	availcars[]
-																</code>{" "}
-																(one car),{" "}
-																<code className="bg-gray-100 px-1 rounded text-xs">
-																	pricing
-																</code>
-																, included / not-included / optional extras, and
-																optional{" "}
-																<code className="bg-gray-100 px-1 rounded text-xs">
-																	Terms
-																</code>{" "}
-																as JSON. Stored in the same samples list as
-																fetched results.
-															</p>
+													<ManualAvailabilityImportModal
+													isOpen={showManualImportModal}
+													onClose={() => setShowManualImportModal(false)}
+													onSubmit={handleManualImportSubmit}
+													isSubmitting={isSubmittingManualImport}
+													selectedFleetId={manualFleetId}
+													selectedFleet={manualSelectedFleet}
+													onFleetChange={(id, fleet) => {
+														setManualFleetId(id);
+														setManualSelectedFleet(fleet);
+													}}
+													forceRefresh={forceRefreshAvailability}
+													onForceRefreshChange={setForceRefreshAvailability}
+													pickupLoc={manualModalPickupLoc}
+													onPickupLoc={setManualModalPickupLoc}
+													returnLoc={manualModalReturnLoc}
+													onReturnLoc={setManualModalReturnLoc}
+													pickupDt={manualModalPickupDt}
+													onPickupDt={setManualModalPickupDt}
+													returnDt={manualModalReturnDt}
+													onReturnDt={setManualModalReturnDt}
+													acriss={manualAcriss}
+													onAcriss={setManualAcriss}
+													customAcrissCodes={customAcrissCodes}
+													newAcrissDraft={newAcrissDraft}
+													onNewAcrissDraft={setNewAcrissDraft}
+													onAddCustomAcriss={handleAddCustomAcriss}
+													make={manualMake}
+													onMake={setManualMake}
+													onMakeCommit={() => setManualModel("")}
+													model={manualModel}
+													onModel={setManualModel}
+													makeOptions={manualMakeOptions}
+													modelOptions={manualModelOptions}
+													makeTrimmed={makeTrimmed}
+													nhtsaMakesLoading={nhtsaMakesQuery.isLoading}
+													nhtsaModelsLoading={
+														!!makeTrimmed && nhtsaModelsQuery.isLoading
+													}
+													rentalDuration={manualRentalDuration}
+													onRentalDuration={(v) => {
+														setManualRentalDuration(v);
+														setManualPricingDuration(v);
+													}}
+													carOrderId={manualCarOrderId || manualPricingCarOrderId}
+													onCarOrderId={(v) => {
+														setManualCarOrderId(v);
+														setManualPricingCarOrderId(v);
+													}}
+													currency={manualPricingCurrency || manualCurrency}
+													onCurrency={(v) => {
+														const c = v.toUpperCase();
+														setManualPricingCurrency(c);
+														setManualCurrency(c);
+													}}
+													totalGross={manualPricingTotalGross || manualTotalPrice}
+													onTotalGross={(v) => {
+														setManualPricingTotalGross(v);
+														setManualTotalPrice(v);
+													}}
+													metaTimestamp={gloriaMetaTimestamp}
+													onMetaTimestamp={setGloriaMetaTimestamp}
+													metaTarget={gloriaMetaTarget}
+													onMetaTarget={setGloriaMetaTarget}
+													metaVersion={gloriaMetaVersion}
+													onMetaVersion={setGloriaMetaVersion}
+													pricingDuration={manualPricingDuration}
+													onPricingDuration={setManualPricingDuration}
+													pricingDailyNet={manualPricingDailyNet}
+													onPricingDailyNet={setManualPricingDailyNet}
+													pricingDailyTax={manualPricingDailyTax}
+													onPricingDailyTax={setManualPricingDailyTax}
+													pricingDailyGross={manualPricingDailyGross}
+													onPricingDailyGross={setManualPricingDailyGross}
+													pricingTotalNet={manualPricingTotalNet}
+													onPricingTotalNet={setManualPricingTotalNet}
+													pricingTotalTax={manualPricingTotalTax}
+													onPricingTotalTax={setManualPricingTotalTax}
+													pricingTaxRate={manualPricingTaxRate}
+													onPricingTaxRate={setManualPricingTaxRate}
+													includedRows={includedRows}
+													setIncludedRows={setIncludedRows}
+													notIncludedRows={notIncludedRows}
+													setNotIncludedRows={setNotIncludedRows}
+													extraRows={extraRows}
+													setExtraRows={setExtraRows}
+													newRowId={newManualImportRowId}
+													termRows={manualTermRows}
+													setTermRows={setManualTermRows}
+													transmission={manualTransmission}
+													onTransmission={setManualTransmission}
+													doors={manualDoors}
+													onDoors={setManualDoors}
+													seats={manualSeats}
+													onSeats={setManualSeats}
+													bagsS={manualBagsS}
+													onBagsS={setManualBagsS}
+													bagsM={manualBagsM}
+													onBagsM={setManualBagsM}
+													minLead={manualMinLead}
+													onMinLead={setManualMinLead}
+													maxLead={manualMaxLead}
+													onMaxLead={setManualMaxLead}
+													mileage={manualMileage}
+													onMileage={setManualMileage}
+													imageUrl={manualImageUrl}
+													onImageUrl={setManualImageUrl}
+													imageInputRef={manualVehicleImageInputRef}
+													onImageSelected={handleManualVehicleImageSelected}
+													isUploadingImage={isUploadingManualVehicleImage}
+													displayImageUrl={displayVehicleImageUrl}
+												/>
 
-															<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-																<div>
-																	<label className="block text-sm font-medium text-gray-700 mb-1">
-																		Pick-up location code
-																	</label>
-																	<Input
-																		value={manualModalPickupLoc}
-																		onChange={(e) =>
-																			setManualModalPickupLoc(
-																				e.target.value.toUpperCase(),
-																			)
-																		}
-																		placeholder="TIAA02"
-																	/>
-																</div>
-																<div>
-																	<label className="block text-sm font-medium text-gray-700 mb-1">
-																		Return location code
-																	</label>
-																	<Input
-																		value={manualModalReturnLoc}
-																		onChange={(e) =>
-																			setManualModalReturnLoc(
-																				e.target.value.toUpperCase(),
-																			)
-																		}
-																		placeholder="TIAA02"
-																	/>
-																</div>
-																<div>
-																	<label className="block text-sm font-medium text-gray-700 mb-1">
-																		Availability from
-																	</label>
-																	<input
-																		type="datetime-local"
-																		value={manualModalPickupDt}
-																		onChange={(e) =>
-																			setManualModalPickupDt(e.target.value)
-																		}
-																		className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-																	/>
-																</div>
-																<div>
-																	<label className="block text-sm font-medium text-gray-700 mb-1">
-																		Availability to
-																	</label>
-																	<input
-																		type="datetime-local"
-																		value={manualModalReturnDt}
-																		onChange={(e) =>
-																			setManualModalReturnDt(e.target.value)
-																		}
-																		className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-																	/>
-																</div>
-															</div>
 
-															<div className="border-t border-gray-200 pt-4 space-y-4">
-																<div className="flex flex-col sm:flex-row sm:items-end gap-3">
-																	<div className="flex-1 min-w-0">
-																		<label
-																			htmlFor="manual-acriss-picker"
-																			className="block text-sm font-medium text-gray-700 mb-1"
-																		>
-																			ACRISS code{" "}
-																			<span className="text-red-500">*</span>
-																		</label>
-																		<AcrissCodePicker
-																			id="manual-acriss-picker"
-																			value={manualAcriss}
-																			onChange={setManualAcriss}
-																			customCodes={customAcrissCodes}
-																		/>
-																	</div>
-																	<div className="flex flex-1 gap-2 items-end min-w-0">
-																		<Input
-																			className="flex-1"
-																			value={newAcrissDraft}
-																			onChange={(e) =>
-																				setNewAcrissDraft(
-																					e.target.value.toUpperCase(),
-																				)
-																			}
-																			placeholder="New code…"
-																			maxLength={8}
-																		/>
-																		<Button
-																			type="button"
-																			variant="secondary"
-																			className="shrink-0"
-																			onClick={handleAddCustomAcriss}
-																		>
-																			<Plus
-																				className="w-4 h-4 mr-1 inline"
-																				aria-hidden
-																			/>
-																			New ACRISS
-																		</Button>
-																	</div>
-																</div>
 
-																<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-																	<div>
-																		<label
-																			htmlFor="manual-import-make"
-																			className="block text-sm font-medium text-gray-700 mb-1"
-																		>
-																			Make{" "}
-																			<span className="text-red-500">*</span>
-																		</label>
-																		<SearchableStringPicker
-																			id="manual-import-make"
-																			value={manualMake}
-																			onChange={setManualMake}
-																			onCommit={() => setManualModel("")}
-																			options={manualMakeOptions}
-																			loading={nhtsaMakesQuery.isLoading}
-																			placeholder="Search or type make (e.g. Toyota)…"
-																			helperText="Suggestions from NHTSA vPIC (US DOT, no API key) plus local presets — any typed make is allowed."
-																			initialVisible={50}
-																		/>
-																	</div>
-																	<div>
-																		<label
-																			htmlFor="manual-import-model"
-																			className="block text-sm font-medium text-gray-700 mb-1"
-																		>
-																			Model{" "}
-																			<span className="text-red-500">*</span>
-																		</label>
-																		<SearchableStringPicker
-																			id="manual-import-model"
-																			value={manualModel}
-																			onChange={setManualModel}
-																			options={manualModelOptions}
-																			loading={
-																				!!makeTrimmed &&
-																				nhtsaModelsQuery.isLoading
-																			}
-																			disabled={!makeTrimmed}
-																			placeholder={
-																				makeTrimmed
-																					? "Search or type model…"
-																					: "Choose a make first…"
-																			}
-																			helperText={
-																				makeTrimmed
-																					? "Models load from vPIC for that make; you can always type a model name not in the list."
-																					: undefined
-																			}
-																			emptyListHint="No catalog match for this make yet — enter the model name manually."
-																			initialVisible={50}
-																		/>
-																	</div>
-																</div>
 
-																<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-																	<div>
-																		<label className="block text-xs font-medium text-gray-600 mb-1">
-																			Rental duration (days)
-																		</label>
-																		<Input
-																			value={manualRentalDuration}
-																			onChange={(e) =>
-																				setManualRentalDuration(e.target.value)
-																			}
-																			placeholder="vehavailmaindet Duration"
-																			inputMode="numeric"
-																		/>
-																	</div>
-																	<div>
-																		<label className="block text-xs font-medium text-gray-600 mb-1">
-																			Vehicle currency
-																		</label>
-																		<Input
-																			value={manualCurrency}
-																			onChange={(e) =>
-																				setManualCurrency(
-																					e.target.value.toUpperCase(),
-																				)
-																			}
-																			maxLength={3}
-																			placeholder="EUR"
-																		/>
-																	</div>
-																	<div>
-																		<label className="block text-xs font-medium text-gray-600 mb-1">
-																			Fallback total (if pricing blank)
-																		</label>
-																		<Input
-																			value={manualTotalPrice}
-																			onChange={(e) =>
-																				setManualTotalPrice(e.target.value)
-																			}
-																			inputMode="decimal"
-																		/>
-																	</div>
-																</div>
-
-																<div className="rounded-lg border border-dashed border-gray-300 bg-white p-3 space-y-2">
-																	<p className="text-xs font-semibold text-gray-700">
-																		Response{" "}
-																		<code className="bg-gray-100 px-1 rounded">
-																			@attributes
-																		</code>{" "}
-																		(optional)
-																	</p>
-																	<div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-																		<Input
-																			value={gloriaMetaTimestamp}
-																			onChange={(e) =>
-																				setGloriaMetaTimestamp(e.target.value)
-																			}
-																			placeholder="TimeStamp"
-																		/>
-																		<Input
-																			value={gloriaMetaTarget}
-																			onChange={(e) =>
-																				setGloriaMetaTarget(e.target.value)
-																			}
-																			placeholder="Target"
-																		/>
-																		<Input
-																			value={gloriaMetaVersion}
-																			onChange={(e) =>
-																				setGloriaMetaVersion(e.target.value)
-																			}
-																			placeholder="Version"
-																		/>
-																	</div>
-																</div>
-
-																<div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
-																	<p className="text-xs font-semibold text-gray-800">
-																		pricing{" "}
-																		<code className="bg-white px-1 rounded border">
-																			@attributes
-																		</code>
-																	</p>
-																	<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-																		<Input
-																			value={manualPricingCarOrderId}
-																			onChange={(e) =>
-																				setManualPricingCarOrderId(
-																					e.target.value,
-																				)
-																			}
-																			placeholder="CarOrderID"
-																		/>
-																		<Input
-																			value={manualPricingCurrency}
-																			onChange={(e) =>
-																				setManualPricingCurrency(
-																					e.target.value.toUpperCase(),
-																				)
-																			}
-																			placeholder="Currency"
-																			maxLength={3}
-																		/>
-																		<Input
-																			value={manualPricingDuration}
-																			onChange={(e) =>
-																				setManualPricingDuration(e.target.value)
-																			}
-																			placeholder="Duration"
-																		/>
-																		<Input
-																			value={manualPricingDailyNet}
-																			onChange={(e) =>
-																				setManualPricingDailyNet(e.target.value)
-																			}
-																			placeholder="DailyNet"
-																		/>
-																		<Input
-																			value={manualPricingDailyTax}
-																			onChange={(e) =>
-																				setManualPricingDailyTax(e.target.value)
-																			}
-																			placeholder="DailyTax"
-																		/>
-																		<Input
-																			value={manualPricingDailyGross}
-																			onChange={(e) =>
-																				setManualPricingDailyGross(
-																					e.target.value,
-																				)
-																			}
-																			placeholder="DailyGross"
-																		/>
-																		<Input
-																			value={manualPricingTotalNet}
-																			onChange={(e) =>
-																				setManualPricingTotalNet(e.target.value)
-																			}
-																			placeholder="TotalNet"
-																		/>
-																		<Input
-																			value={manualPricingTotalTax}
-																			onChange={(e) =>
-																				setManualPricingTotalTax(e.target.value)
-																			}
-																			placeholder="TotalTax"
-																		/>
-																		<Input
-																			value={manualPricingTotalGross}
-																			onChange={(e) =>
-																				setManualPricingTotalGross(
-																					e.target.value,
-																				)
-																			}
-																			placeholder="TotalGross *"
-																		/>
-																		<Input
-																			value={manualPricingTaxRate}
-																			onChange={(e) =>
-																				setManualPricingTaxRate(e.target.value)
-																			}
-																			placeholder="TaxRate"
-																		/>
-																	</div>
-																	<p className="text-xs text-gray-500">
-																		Total gross (or fallback total) is required.
-																		Other fields map 1:1 to GLORIA XML/JSON.
-																	</p>
-																</div>
-
-																<div className="space-y-2">
-																	<div className="flex items-center justify-between">
-																		<p className="text-xs font-semibold text-gray-800">
-																			includedinprice.Item
-																		</p>
-																		<Button
-																			type="button"
-																			variant="ghost"
-																			className="text-xs h-8"
-																			onClick={() =>
-																				setIncludedRows((r) => [
-																					...r,
-																					{
-																						id: newManualImportRowId(),
-																						code: "",
-																						description: "",
-																						excess: "",
-																						deposit: "",
-																						currency: "",
-																					},
-																				])
-																			}
-																		>
-																			+ Add line
-																		</Button>
-																	</div>
-																	{includedRows.map((row) => (
-																		<div
-																			key={row.id}
-																			className="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end border border-gray-100 rounded-lg p-2 bg-white"
-																		>
-																			<Input
-																				value={row.code}
-																				onChange={(e) =>
-																					setIncludedRows((rows) =>
-																						rows.map((x) =>
-																							x.id === row.id
-																								? { ...x, code: e.target.value }
-																								: x,
-																						),
-																					)
-																				}
-																				placeholder="Code"
-																			/>
-																			<div className="sm:col-span-2">
-																				<Input
-																					value={row.description}
-																					onChange={(e) =>
-																						setIncludedRows((rows) =>
-																							rows.map((x) =>
-																								x.id === row.id
-																									? {
-																											...x,
-																											description:
-																												e.target.value,
-																										}
-																									: x,
-																							),
-																						)
-																					}
-																					placeholder="ItemDescription"
-																				/>
-																			</div>
-																			<Input
-																				value={row.excess}
-																				onChange={(e) =>
-																					setIncludedRows((rows) =>
-																						rows.map((x) =>
-																							x.id === row.id
-																								? {
-																										...x,
-																										excess: e.target.value,
-																									}
-																								: x,
-																						),
-																					)
-																				}
-																				placeholder="Excess"
-																			/>
-																			<Input
-																				value={row.deposit}
-																				onChange={(e) =>
-																					setIncludedRows((rows) =>
-																						rows.map((x) =>
-																							x.id === row.id
-																								? {
-																										...x,
-																										deposit: e.target.value,
-																									}
-																								: x,
-																						),
-																					)
-																				}
-																				placeholder="Deposit"
-																			/>
-																			<div className="flex gap-1">
-																				<Input
-																					value={row.currency}
-																					onChange={(e) =>
-																						setIncludedRows((rows) =>
-																							rows.map((x) =>
-																								x.id === row.id
-																									? {
-																											...x,
-																											currency: e.target.value,
-																										}
-																									: x,
-																							),
-																						)
-																					}
-																					placeholder="Cur"
-																					maxLength={3}
-																				/>
-																				<Button
-																					type="button"
-																					variant="ghost"
-																					className="text-xs shrink-0"
-																					onClick={() =>
-																						setIncludedRows((rows) =>
-																							rows.filter(
-																								(x) => x.id !== row.id,
-																							),
-																						)
-																					}
-																					disabled={includedRows.length <= 1}
-																				>
-																					Remove
-																				</Button>
-																			</div>
-																		</div>
-																	))}
-																</div>
-
-																<div className="space-y-2">
-																	<div className="flex items-center justify-between">
-																		<p className="text-xs font-semibold text-gray-800">
-																			notincludedinprice.Item
-																		</p>
-																		<Button
-																			type="button"
-																			variant="ghost"
-																			className="text-xs h-8"
-																			onClick={() =>
-																				setNotIncludedRows((r) => [
-																					...r,
-																					{
-																						id: newManualImportRowId(),
-																						code: "",
-																						description: "",
-																						excess: "",
-																						deposit: "",
-																						currency: "",
-																						cover_amount: "",
-																						price: "",
-																					},
-																				])
-																			}
-																		>
-																			+ Add line
-																		</Button>
-																	</div>
-																	{notIncludedRows.map((row) => (
-																		<div
-																			key={row.id}
-																			className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end border border-gray-100 rounded-lg p-2 bg-white"
-																		>
-																			<Input
-																				className="sm:col-span-1"
-																				value={row.code}
-																				onChange={(e) =>
-																					setNotIncludedRows((rows) =>
-																						rows.map((x) =>
-																							x.id === row.id
-																								? { ...x, code: e.target.value }
-																								: x,
-																						),
-																					)
-																				}
-																				placeholder="Code"
-																			/>
-																			<div className="sm:col-span-3">
-																				<Input
-																					value={row.description}
-																					onChange={(e) =>
-																						setNotIncludedRows((rows) =>
-																							rows.map((x) =>
-																								x.id === row.id
-																									? {
-																											...x,
-																											description:
-																												e.target.value,
-																										}
-																									: x,
-																							),
-																						)
-																					}
-																					placeholder="ItemDescription"
-																				/>
-																			</div>
-																			<Input
-																				className="sm:col-span-1"
-																				value={row.excess}
-																				onChange={(e) =>
-																					setNotIncludedRows((rows) =>
-																						rows.map((x) =>
-																							x.id === row.id
-																								? {
-																										...x,
-																										excess: e.target.value,
-																									}
-																								: x,
-																						),
-																					)
-																				}
-																				placeholder="Excess"
-																			/>
-																			<Input
-																				className="sm:col-span-1"
-																				value={row.deposit}
-																				onChange={(e) =>
-																					setNotIncludedRows((rows) =>
-																						rows.map((x) =>
-																							x.id === row.id
-																								? {
-																										...x,
-																										deposit: e.target.value,
-																									}
-																								: x,
-																						),
-																					)
-																				}
-																				placeholder="Deposit"
-																			/>
-																			<Input
-																				className="sm:col-span-1"
-																				value={row.cover_amount}
-																				onChange={(e) =>
-																					setNotIncludedRows((rows) =>
-																						rows.map((x) =>
-																							x.id === row.id
-																								? {
-																										...x,
-																										cover_amount:
-																											e.target.value,
-																									}
-																								: x,
-																						),
-																					)
-																				}
-																				placeholder="Cover"
-																			/>
-																			<Input
-																				className="sm:col-span-1"
-																				value={row.price}
-																				onChange={(e) =>
-																					setNotIncludedRows((rows) =>
-																						rows.map((x) =>
-																							x.id === row.id
-																								? {
-																										...x,
-																										price: e.target.value,
-																									}
-																								: x,
-																						),
-																					)
-																				}
-																				placeholder="Price"
-																			/>
-																			<Input
-																				className="sm:col-span-1"
-																				value={row.currency}
-																				onChange={(e) =>
-																					setNotIncludedRows((rows) =>
-																						rows.map((x) =>
-																							x.id === row.id
-																								? {
-																										...x,
-																										currency: e.target.value,
-																									}
-																								: x,
-																						),
-																					)
-																				}
-																				placeholder="Cur"
-																				maxLength={3}
-																			/>
-																			<Button
-																				type="button"
-																				variant="ghost"
-																				className="text-xs sm:col-span-2"
-																				onClick={() =>
-																					setNotIncludedRows((rows) =>
-																						rows.filter((x) => x.id !== row.id),
-																					)
-																				}
-																				disabled={notIncludedRows.length <= 1}
-																			>
-																				Remove
-																			</Button>
-																		</div>
-																	))}
-																</div>
-
-																<div className="space-y-2">
-																	<div className="flex items-center justify-between">
-																		<p className="text-xs font-semibold text-gray-800">
-																			OptionalExtras.Item
-																		</p>
-																		<Button
-																			type="button"
-																			variant="ghost"
-																			className="text-xs h-8"
-																			onClick={() =>
-																				setExtraRows((r) => [
-																					...r,
-																					{
-																						id: newManualImportRowId(),
-																						code: "",
-																						description: "",
-																						price: "",
-																						currency: "",
-																						long_description: "",
-																					},
-																				])
-																			}
-																		>
-																			+ Add line
-																		</Button>
-																	</div>
-																	{extraRows.map((row) => (
-																		<div
-																			key={row.id}
-																			className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end border border-gray-100 rounded-lg p-2 bg-white"
-																		>
-																			<Input
-																				className="sm:col-span-1"
-																				value={row.code}
-																				onChange={(e) =>
-																					setExtraRows((rows) =>
-																						rows.map((x) =>
-																							x.id === row.id
-																								? { ...x, code: e.target.value }
-																								: x,
-																						),
-																					)
-																				}
-																				placeholder="Code"
-																			/>
-																			<div className="sm:col-span-3">
-																				<Input
-																					value={row.description}
-																					onChange={(e) =>
-																						setExtraRows((rows) =>
-																							rows.map((x) =>
-																								x.id === row.id
-																									? {
-																											...x,
-																											description:
-																												e.target.value,
-																										}
-																									: x,
-																							),
-																						)
-																					}
-																					placeholder="ItemDescription"
-																				/>
-																			</div>
-																			<Input
-																				className="sm:col-span-2"
-																				value={row.price}
-																				onChange={(e) =>
-																					setExtraRows((rows) =>
-																						rows.map((x) =>
-																							x.id === row.id
-																								? {
-																										...x,
-																										price: e.target.value,
-																									}
-																								: x,
-																						),
-																					)
-																				}
-																				placeholder="Price"
-																				inputMode="decimal"
-																			/>
-																			<Input
-																				className="sm:col-span-1"
-																				value={row.currency}
-																				onChange={(e) =>
-																					setExtraRows((rows) =>
-																						rows.map((x) =>
-																							x.id === row.id
-																								? {
-																										...x,
-																										currency: e.target.value,
-																									}
-																								: x,
-																						),
-																					)
-																				}
-																				placeholder="Cur"
-																				maxLength={3}
-																			/>
-																			<div className="sm:col-span-3">
-																				<Input
-																					value={row.long_description}
-																					onChange={(e) =>
-																						setExtraRows((rows) =>
-																							rows.map((x) =>
-																								x.id === row.id
-																									? {
-																											...x,
-																											long_description:
-																												e.target.value,
-																										}
-																									: x,
-																							),
-																						)
-																					}
-																					placeholder="Description (attr)"
-																				/>
-																			</div>
-																			<Button
-																				type="button"
-																				variant="ghost"
-																				className="text-xs sm:col-span-2"
-																				onClick={() =>
-																					setExtraRows((rows) =>
-																						rows.filter((x) => x.id !== row.id),
-																					)
-																				}
-																				disabled={extraRows.length <= 1}
-																			>
-																				Remove
-																			</Button>
-																		</div>
-																	))}
-																</div>
-
-																<div>
-																	<label className="block text-xs font-semibold text-gray-800 mb-1">
-																		Terms.Item[] (JSON array — optional)
-																	</label>
-																	<textarea
-																		value={manualTermsJson}
-																		onChange={(e) =>
-																			setManualTermsJson(e.target.value)
-																		}
-																		rows={5}
-																		className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-																		placeholder='[ { "@attributes": { "Code": "...", "Name": "..." } } ]'
-																	/>
-																</div>
-
-																<div>
-																	<label className="block text-xs font-medium text-gray-600 mb-1">
-																		Car order ID (vehicle / booking ref)
-																	</label>
-																	<Input
-																		value={manualCarOrderId}
-																		onChange={(e) =>
-																			setManualCarOrderId(e.target.value)
-																		}
-																		placeholder="Optional if set in pricing"
-																	/>
-																</div>
-															</div>
-
-															<div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
-																<div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-																	<Settings
-																		className="w-4 h-4 text-gray-500"
-																		aria-hidden
-																	/>
-																	Vehicle details
-																	<span className="text-xs font-normal text-gray-500">
-																		(optional)
-																	</span>
-																</div>
-																<div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-																	<div>
-																		<label className="block text-xs font-medium text-gray-600 mb-1">
-																			Transmission
-																		</label>
-																		<Input
-																			value={manualTransmission}
-																			onChange={(e) =>
-																				setManualTransmission(e.target.value)
-																			}
-																		/>
-																	</div>
-																	<div>
-																		<label className="block text-xs font-medium text-gray-600 mb-1">
-																			Doors
-																		</label>
-																		<Input
-																			value={manualDoors}
-																			onChange={(e) =>
-																				setManualDoors(e.target.value)
-																			}
-																			inputMode="numeric"
-																		/>
-																	</div>
-																	<div>
-																		<label className="block text-xs font-medium text-gray-600 mb-1">
-																			Seats
-																		</label>
-																		<Input
-																			value={manualSeats}
-																			onChange={(e) =>
-																				setManualSeats(e.target.value)
-																			}
-																			inputMode="numeric"
-																		/>
-																	</div>
-																	<div>
-																		<label className="block text-xs font-medium text-gray-600 mb-1">
-																			Bags (S)
-																		</label>
-																		<Input
-																			value={manualBagsS}
-																			onChange={(e) =>
-																				setManualBagsS(e.target.value)
-																			}
-																			inputMode="numeric"
-																		/>
-																	</div>
-																	<div>
-																		<label className="block text-xs font-medium text-gray-600 mb-1">
-																			Bags (M)
-																		</label>
-																		<Input
-																			value={manualBagsM}
-																			onChange={(e) =>
-																				setManualBagsM(e.target.value)
-																			}
-																			inputMode="numeric"
-																		/>
-																	</div>
-																	<div>
-																		<label className="block text-xs font-medium text-gray-600 mb-1">
-																			Min lead (hrs)
-																		</label>
-																		<Input
-																			value={manualMinLead}
-																			onChange={(e) =>
-																				setManualMinLead(e.target.value)
-																			}
-																			inputMode="numeric"
-																		/>
-																	</div>
-																	<div>
-																		<label className="block text-xs font-medium text-gray-600 mb-1">
-																			Max lead (days)
-																		</label>
-																		<Input
-																			value={manualMaxLead}
-																			onChange={(e) =>
-																				setManualMaxLead(e.target.value)
-																			}
-																			inputMode="numeric"
-																		/>
-																	</div>
-																	<div>
-																		<label className="block text-xs font-medium text-gray-600 mb-1">
-																			Mileage
-																		</label>
-																		<Input
-																			value={manualMileage}
-																			onChange={(e) =>
-																				setManualMileage(e.target.value)
-																			}
-																			inputMode="numeric"
-																		/>
-																	</div>
-																</div>
-																<div className="rounded-md border border-dashed border-gray-300 bg-white p-3 space-y-2">
-																	<label className="block text-xs font-medium text-gray-600 mb-1">
-																		Vehicle image
-																	</label>
-																	<Input
-																		value={manualImageUrl}
-																		onChange={(e) =>
-																			setManualImageUrl(e.target.value)
-																		}
-																		placeholder="https://… Or choose a file to upload — stored on Gloria"
-																		className="text-sm"
-																	/>
-																	<div className="flex flex-wrap items-center gap-2">
-																		<input
-																			ref={manualVehicleImageInputRef}
-																			type="file"
-																			accept="image/jpeg,image/png,image/gif,image/webp"
-																			onChange={
-																				handleManualVehicleImageSelected
-																			}
-																			disabled={isUploadingManualVehicleImage}
-																			className="block w-full max-w-xs text-xs text-gray-600 file:mr-2 file:rounded file:border file:border-gray-300 file:bg-gray-50 file:px-2 file:py-1"
-																		/>
-																		{isUploadingManualVehicleImage && (
-																			<span className="text-xs text-gray-500">
-																				Uploading…
-																			</span>
-																		)}
-																		{manualImageUrl.trim() && (
-																			<Button
-																				type="button"
-																				variant="ghost"
-																				className="text-xs h-8 shrink-0"
-																				onClick={() => setManualImageUrl("")}
-																			>
-																				Clear image URL
-																			</Button>
-																		)}
-																	</div>
-																	{manualImageUrl.trim() !== "" && (
-																		<img
-																			src={displayVehicleImageUrl(
-																				manualImageUrl,
-																			)}
-																			alt="Vehicle preview"
-																			className="max-h-28 max-w-full object-contain rounded border border-gray-200 bg-gray-50 p-2"
-																		/>
-																	)}
-																</div>
-															</div>
-
-															<label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-gray-600">
-																<input
-																	type="checkbox"
-																	checked={forceRefreshAvailability}
-																	onChange={(e) =>
-																		setForceRefreshAvailability(
-																			e.target.checked,
-																		)
-																	}
-																	className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-																/>
-																Force re-store (overwrite duplicate guard)
-															</label>
-
-															<div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-gray-100">
-																<Button
-																	type="button"
-																	variant="ghost"
-																	onClick={() =>
-																		setShowManualImportModal(false)
-																	}
-																>
-																	Cancel
-																</Button>
-																<Button
-																	type="button"
-																	variant="primary"
-																	onClick={handleManualImportSubmit}
-																	loading={isSubmittingManualImport}
-																>
-																	Store sample
-																</Button>
-															</div>
-														</div>
-													</Modal>
 
 													{/* ── Stored Availability Samples ── */}
-													<Card className="shadow-sm">
-														<CardHeader>
-															<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-																<div className="min-w-0">
-																	<CardTitle className="text-lg">
-																		Stored availability samples
-																	</CardTitle>
-																	<p className="text-sm text-gray-600 mt-1 max-w-3xl">
-																		All previously fetched results for this
-																		source — each unique search criteria is
-																		stored separately.
-																	</p>
+													<Card className="overflow-hidden border-0 shadow-sm ring-1 ring-slate-200">
+														<CardHeader className="border-b border-slate-200 bg-gradient-to-br from-slate-50 via-white to-blue-50/90 px-6 py-6">
+															<div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+																<div className="flex min-w-0 gap-4">
+																	<div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md sm:flex">
+																		<Layers
+																			className="h-6 w-6"
+																			aria-hidden
+																		/>
+																	</div>
+																	<div className="min-w-0 flex-1">
+																		<div className="mb-2 flex flex-wrap items-center gap-2">
+																			<span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-blue-800">
+																				<Sparkles
+																					className="h-3.5 w-3.5"
+																					aria-hidden
+																				/>
+																				Saved searches
+																			</span>
+																			{storedSamples.length > 0 ? (
+																				<Badge
+																					variant="info"
+																					className="font-semibold"
+																				>
+																					{storedSamples.length} sample
+																					{storedSamples.length !== 1
+																						? "s"
+																						: ""}
+																				</Badge>
+																			) : null}
+																		</div>
+																		<CardTitle className="text-2xl font-bold tracking-tight text-slate-950">
+																			Stored availability samples
+																		</CardTitle>
+																		<p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+																			Each sample is one availability test —
+																			pickup and return branches, travel dates,
+																			and the vehicle offers Gloria stored from
+																			your live endpoint or a manual entry.
+																		</p>
+																		<div className="mt-4 grid gap-2 sm:grid-cols-3">
+																			<div className="rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-sm">
+																				<p className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+																					<RefreshCw
+																						className="h-3.5 w-3.5 text-blue-600"
+																						aria-hidden
+																					/>
+																					How they appear
+																				</p>
+																				<p className="mt-1 text-xs leading-5 text-slate-600">
+																					After{" "}
+																					<strong>Fetch &amp; Store</strong> or{" "}
+																					<strong>manual import</strong> above.
+																				</p>
+																			</div>
+																			<div className="rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-sm">
+																				<p className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+																					<ChevronDown
+																						className="h-3.5 w-3.5 text-violet-600"
+																						aria-hidden
+																					/>
+																					Expand a sample
+																				</p>
+																				<p className="mt-1 text-xs leading-5 text-slate-600">
+																					See vehicles, prices, terms, cover,
+																					and extras — summaries only, not full
+																					policy text.
+																				</p>
+																			</div>
+																			<div className="rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-sm">
+																				<p className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+																					<MapPin
+																						className="h-3.5 w-3.5 text-emerald-600"
+																						aria-hidden
+																					/>
+																					Daily prices
+																				</p>
+																				<p className="mt-1 text-xs leading-5 text-slate-600">
+																					Use{" "}
+																					<strong>
+																						Manage daily prices
+																					</strong>{" "}
+																					on a vehicle card below.
+																				</p>
+																			</div>
+																		</div>
+																	</div>
 																</div>
 																<Button
-																	variant="ghost"
+																	variant="secondary"
 																	onClick={loadStoredSamples}
 																	loading={isLoadingStoredSamples}
-																	className="text-xs shrink-0 self-start"
+																	className="shrink-0 self-start rounded-full border-slate-200 bg-white shadow-sm hover:bg-slate-50"
 																>
-																	Refresh
+																	<RefreshCw className="mr-2 h-4 w-4" />
+																	Refresh list
 																</Button>
 															</div>
 														</CardHeader>
-														<CardContent className="max-w-full overflow-x-hidden">
+														<CardContent className="max-w-full overflow-x-hidden bg-slate-50/40 p-5">
 															{isLoadingStoredSamples &&
 															storedSamples.length === 0 ? (
 																<div className="flex items-center gap-2 text-sm text-gray-500 py-4">
@@ -10005,18 +8920,51 @@ message AvailabilityRequest {
 														</CardContent>
 													</Card>
 
+													<div
+														id="pricing-daily-prices"
+														data-tour="pricing-daily-prices"
+														className="scroll-mt-24"
+													>
+														<DailyPricingCalendar
+															deeplinkSampleId={dailyPricingDeeplinkSampleId}
+															deeplinkOfferIndex={dailyPricingDeeplinkOfferIndex}
+															requireActivePlan={requireActivePlan}
+														/>
+													</div>
+
+													<GloriaXmlResponseBuilderModal
+														isOpen={showGloriaXmlResponseModal}
+														onClose={() => setShowGloriaXmlResponseModal(false)}
+													/>
+
 													{/* ── OTA Format Reference ── */}
 													{/* ── Format reference — switches with the format selector above ── */}
 													<Card className="border border-gray-200 shadow-sm">
 														<CardHeader>
-															<CardTitle className="text-lg">
-																{availabilityAdapterType === "xml" &&
-																	"Gloria XML — request & responses"}
-																{availabilityAdapterType === "json" &&
-																	"Gloria JSON format reference"}
-																{availabilityAdapterType === "grpc" &&
-																	"Gloria gRPC format reference"}
-															</CardTitle>
+															<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+																<CardTitle className="text-lg">
+																	{availabilityAdapterType === "xml" &&
+																		"Gloria XML — request & responses"}
+																	{availabilityAdapterType === "json" &&
+																		"Gloria JSON format reference"}
+																	{availabilityAdapterType === "grpc" &&
+																		"Gloria gRPC format reference"}
+																</CardTitle>
+																{availabilityAdapterType === "xml" && (
+																	<Button
+																		type="button"
+																		variant="secondary"
+																		size="sm"
+																		className="shrink-0 gap-1.5"
+																		onClick={() =>
+																			setShowGloriaXmlResponseModal(true)
+																		}
+																	>
+																		<FileCode2 className="h-4 w-4" />
+																		Build expected XML response
+																	</Button>
+																)}
+															</div>
 														</CardHeader>
 														<CardContent className="space-y-4">
 															{/* ── OTA XML reference ── */}
@@ -10509,12 +9457,6 @@ service SourceProviderService {
 											</>
 										)}
 
-										{activeTab === "daily-pricing" && (
-											<DailyPricingCalendar
-												deeplinkSampleId={dailyPricingDeeplinkSampleId}
-												deeplinkOfferIndex={dailyPricingDeeplinkOfferIndex}
-											/>
-										)}
 
 										{activeTab === "transactions" && <SourceTransactionsTab />}
 
@@ -10666,8 +9608,26 @@ service SourceProviderService {
 			>
 				<div className="max-h-[85vh] overflow-y-auto pr-1">
 					<LocationRequestForm
-						onSuccess={() => setIsLocationRequestModalOpen(false)}
+						onSuccess={() => {
+							setIsLocationRequestModalOpen(false);
+							setIsLocationRequestsStatusModalOpen(true);
+						}}
 					/>
+				</div>
+			</Modal>
+
+			{/* Location Request Status Modal */}
+			<Modal
+				isOpen={isLocationRequestsStatusModalOpen}
+				onClose={() => setIsLocationRequestsStatusModalOpen(false)}
+				title="Location Request Status"
+				size="xl"
+			>
+				<div
+					className="max-h-[85vh] overflow-y-auto pr-1"
+					data-tour="locations-requests-list"
+				>
+					<LocationRequestList />
 				</div>
 			</Modal>
 
@@ -10765,7 +9725,7 @@ service SourceProviderService {
 									</h3>
 									<p className="mt-2 text-sm leading-6 text-slate-600">
 										{planRequiredContext.description ||
-											"You can keep exploring the Source Portal and docs, but write actions such as imports, syncs, and stored availability require an active plan."}
+											"You can keep exploring the Gloria - Rental company portal and docs, but write actions such as imports, syncs, and stored availability require an active plan."}
 									</p>
 								</div>
 							</div>
@@ -10786,7 +9746,7 @@ service SourceProviderService {
 						<div className="min-w-0 flex-1">
 							<p className="text-sm font-bold text-slate-900">
 								{activeTab === "dashboard"
-									? "New Source Portal tour"
+									? "New Gloria - Rental company tour"
 									: "Page tour available"}
 							</p>
 							<p className="mt-1 text-xs leading-5 text-slate-600">

@@ -12,39 +12,25 @@ import {
   MapPin, Mail, Globe, Clock, Plane, Navigation, Tag, Info,
   ChevronDown, ChevronUp,
 } from 'lucide-react'
-
-const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
-const DAY_LABELS: Record<string, string> = {
-  monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu',
-  friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
-}
-const DAY_CAPITALIZED: Record<string, string> = {
-  monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday',
-  friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday',
-}
+import { BranchOpeningHoursEditor } from './BranchOpeningHoursEditor'
+import {
+  type BranchDay,
+  type DayOpeningHours,
+  buildOpeningPayload,
+  emptyWeekOpeningHours,
+  weekHasOpeningHours,
+} from '../lib/branchOpeningHours'
 
 function buildRawJsonForCreate(
-  openingHours: Record<string, string>,
+  openingHours: Record<BranchDay, DayOpeningHours>,
   pickupInstructions: string,
   atAirport: boolean,
   brand: string
 ): Record<string, unknown> | null {
   const raw: Record<string, unknown> = {}
-  const hasOpening = DAYS.some((d) => openingHours[d]?.trim())
-  if (hasOpening) {
-    const opening: Record<string, unknown> = {}
-    DAYS.forEach((d) => {
-      const val = openingHours[d]?.trim()
-      if (!val) return
-      const cap = DAY_CAPITALIZED[d]
-      const parts = val.split(/\s*-\s*/)
-      if (parts.length === 2) {
-        opening[cap] = { attr: { Open: parts[0].trim(), Closed: parts[1].trim() } }
-      } else {
-        opening[cap] = { attr: { Open: val } }
-      }
-    })
-    raw.Opening = opening
+  if (weekHasOpeningHours(openingHours)) {
+    const opening = buildOpeningPayload(openingHours)
+    if (opening) raw.Opening = opening
   }
   if (pickupInstructions.trim()) {
     raw.PickupInstructions = { attr: { Pickup: pickupInstructions.trim() } }
@@ -87,11 +73,9 @@ export const BranchCreateModal: React.FC<BranchCreateModalProps> = ({ isOpen, on
     agreementId: '',
   })
 
-  const [openingHours, setOpeningHours] = useState<Record<string, string>>(() => {
-    const h: Record<string, string> = {}
-    DAYS.forEach((d) => { h[d] = '' })
-    return h
-  })
+  const [openingHours, setOpeningHours] = useState<Record<BranchDay, DayOpeningHours>>(
+    emptyWeekOpeningHours,
+  )
   const [pickupInstructions, setPickupInstructions] = useState('')
   const [atAirport, setAtAirport] = useState(false)
   const [brand, setBrand] = useState('')
@@ -162,9 +146,7 @@ export const BranchCreateModal: React.FC<BranchCreateModalProps> = ({ isOpen, on
       natoLocode: '',
       agreementId: '',
     })
-    const h: Record<string, string> = {}
-    DAYS.forEach((d) => { h[d] = '' })
-    setOpeningHours(h)
+    setOpeningHours(emptyWeekOpeningHours())
     setPickupInstructions('')
     setAtAirport(false)
     setBrand('')
@@ -292,7 +274,7 @@ export const BranchCreateModal: React.FC<BranchCreateModalProps> = ({ isOpen, on
   )
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Create New Branch" size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title="Create New Branch" size="xl">
       <form onSubmit={handleSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
         <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
           <Tag className="w-4 h-4 text-blue-600 shrink-0" />
@@ -538,25 +520,11 @@ export const BranchCreateModal: React.FC<BranchCreateModalProps> = ({ isOpen, on
 
         <SectionHeader id="hours" icon={Clock} title="Opening hours" />
         {expandedSections.hours && (
-          <div className="space-y-2 pl-1">
-            <p className="text-xs text-gray-500 mb-2">Format: HH:mm - HH:mm (open - close)</p>
-            <div className="grid grid-cols-1 gap-1.5">
-              {DAYS.map((day) => {
-                const val = openingHours[day]
-                const hasValue = val && val.trim() !== ''
-                return (
-                  <div key={day} className="flex items-center gap-2">
-                    <span className="w-10 text-xs font-semibold text-gray-500 text-right shrink-0">{DAY_LABELS[day]}</span>
-                    <Input
-                      value={val}
-                      onChange={(e) => setOpeningHours({ ...openingHours, [day]: e.target.value })}
-                      placeholder="e.g. 04:00 - 18:00"
-                      className={`flex-1 text-sm ${hasValue ? 'border-green-300 bg-green-50/30' : ''}`}
-                    />
-                  </div>
-                )
-              })}
-            </div>
+          <div className="pl-1">
+            <BranchOpeningHoursEditor
+              value={openingHours}
+              onChange={setOpeningHours}
+            />
           </div>
         )}
 

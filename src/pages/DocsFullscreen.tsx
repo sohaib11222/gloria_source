@@ -274,7 +274,7 @@ const getEndpointGuide = (endpoint: DocEndpoint): EndpointGuide => {
 			},
 			{
 				title: "Use in portal",
-				text: "This endpoint is part of the Gloria Connect Source/API workflow.",
+				text: "This endpoint is part of the Gloria - Rental company API workflow.",
 			},
 		],
 		requestExample: buildRequestExample(endpoint),
@@ -800,7 +800,7 @@ const DocsFullscreen: React.FC = () => {
 		<div className="docs-fullscreen">
 			<header className="docs-header">
 				<div className="docs-header-content">
-					<h1 className="docs-logo">Gloria Connect Docs</h1>
+					<h1 className="docs-logo">Gloria - Rental company Docs</h1>
 					<nav className="docs-nav">
 						<button
 							className={`docs-nav-btn ${showGettingStarted ? "active" : ""}`}

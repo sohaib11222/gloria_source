@@ -195,10 +195,10 @@ const SourcePortalGuide: React.FC = () => {
 
 			<article className="source-doc-content">
 				<section id="overview" className="source-doc-hero">
-					<div className="source-doc-eyebrow">Gloria Connect Source Portal</div>
-					<h1>Source integration guide</h1>
+					<div className="source-doc-eyebrow">Gloria - Rental company portal</div>
+					<h1>Gloria - Rental company integration guide</h1>
 					<p>
-						This guide follows the same flow as your Source Portal sidebar and
+						This guide follows the same flow as your Gloria - Rental company portal sidebar and
 						explains what data Gloria needs, which endpoint formats are
 						supported, and how each tab contributes to going live.
 					</p>
@@ -215,7 +215,7 @@ const SourcePortalGuide: React.FC = () => {
 						<h2>End-to-end portal flow</h2>
 						<p>
 							Work through these stages from top to bottom. Each stage maps to a
-							tab in the Source Portal.
+							tab in the Gloria - Rental company portal.
 						</p>
 					</div>
 					<div className="source-doc-flow-grid">
@@ -230,7 +230,7 @@ const SourcePortalGuide: React.FC = () => {
 						<span>Overview / Settings</span>
 						<h2>Company profile, approval, and readiness</h2>
 						<p>
-							The Source Portal only becomes operational after email
+							The Gloria - Rental company portal only becomes operational after email
 							verification, admin approval, and an active plan.
 						</p>
 					</div>
@@ -353,12 +353,12 @@ const SourcePortalGuide: React.FC = () => {
 
 				<section id="pricing" className="source-doc-section">
 					<div className="source-doc-section-heading">
-						<span>Pricing / Daily Prices</span>
-						<h2>Availability, pricing, samples, and daily prices</h2>
+						<span>Pricing</span>
+						<h2>Availability, pricing samples, and daily prices</h2>
 						<p>
-							The Pricing tab tests live availability endpoints. Daily Prices
-							and manual samples help you maintain offer visibility when you do
-							not yet have a fully automated endpoint.
+							The Pricing tab tests live availability endpoints, stores sample
+							offers, and now contains daily price management in the same
+							workspace for each stored sample/vehicle.
 						</p>
 					</div>
 					<div className="source-doc-two-col">

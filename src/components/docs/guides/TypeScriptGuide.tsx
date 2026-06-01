@@ -392,7 +392,7 @@ server.bindAsync(port, grpc.ServerCredentials.createInsecure(), (error, port) =>
 yarn add axios`}</pre>
             </div>
             <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#6b7280' }}>
-              <strong>Note:</strong> You can use any HTTP client library (axios, fetch, etc.) to interact with the Gloria Connect API. The examples above use axios, but you can adapt them to your preferred library.
+              <strong>Note:</strong> You can use any HTTP client library (axios, fetch, etc.) to interact with the Gloria - Rental company API. The examples above use axios, but you can adapt them to your preferred library.
             </p>
           </div>
         );

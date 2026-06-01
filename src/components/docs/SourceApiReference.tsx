@@ -234,7 +234,7 @@ const SourceApiReference: React.FC = () => {
 						This page documents the interfaces Gloria calls when a Source goes
 						live: gRPC service methods, HTTP/XML location imports, Gloria
 						XML/JSON availability testing, booking callbacks, validation rules,
-						and health behavior. It mirrors the actual Source Portal tabs and
+						and health behavior. It mirrors the actual Gloria - Rental company portal tabs and
 						backend adapters.
 					</p>
 					<div className="source-doc-hero-actions">

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card";
 import { Loader } from "./ui/Loader";
 import { Badge } from "./ui/Badge";
@@ -9,6 +10,7 @@ import {
 	Eye,
 	FileText,
 	Mail,
+	Phone,
 	ShieldCheck,
 	Users,
 } from "lucide-react";
@@ -39,7 +41,7 @@ function statusVariant(
 	}
 }
 
-function formatDate(value?: string) {
+function formatDate(value?: string | null) {
 	if (!value) return "Not set";
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return "Not set";
@@ -60,19 +62,21 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
 	isLoadingAgents,
 	onViewAgreement,
 }) => {
-	const activeAgents = agents.filter(
-		(agent) => agent.status === "ACTIVE",
-	).length;
-	const agreementCount = agents.reduce(
-		(total, agent) => total + (agent.agentAgreements?.length || 0),
-		0,
+	const connectedAgents = useMemo(
+		() =>
+			agents
+				.map((agent) => ({
+					...agent,
+					agentAgreements: (agent.agentAgreements || []).filter((agreement) =>
+						isLiveStatus(agreement.status),
+					),
+				}))
+				.filter((agent) => agent.agentAgreements.length > 0),
+		[agents],
 	);
-	const liveAgreementCount = agents.reduce(
-		(total, agent) =>
-			total +
-			(agent.agentAgreements || []).filter((agreement) =>
-				isLiveStatus(agreement.status),
-			).length,
+
+	const liveAgreementCount = connectedAgents.reduce(
+		(total, agent) => total + agent.agentAgreements.length,
 		0,
 	);
 
@@ -86,34 +90,26 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
 						</div>
 						<div>
 							<CardTitle className="text-xl font-bold text-slate-950">
-								Agent directory
+								Connected agents
 							</CardTitle>
 							<p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-								See which agents are registered, how to contact them, and which
-								agreement references already connect them to your supply.
+								Agents with active operational access to your supply — account
+								requester ID, margin, and contact details.
 							</p>
 						</div>
 					</div>
-					<div className="grid min-w-full gap-2 sm:grid-cols-3 lg:min-w-[420px]">
-						<div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-							<p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-								Agents
-							</p>
-							<p className="mt-1 text-2xl font-bold text-slate-950">
-								{agents.length}
-							</p>
-						</div>
+					<div className="grid min-w-full gap-2 sm:grid-cols-2 lg:min-w-[280px]">
 						<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
 							<p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
-								Active
+								Connected
 							</p>
 							<p className="mt-1 text-2xl font-bold text-emerald-950">
-								{activeAgents}
+								{connectedAgents.length}
 							</p>
 						</div>
 						<div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
 							<p className="text-xs font-bold uppercase tracking-wide text-blue-700">
-								Live refs
+								Access records
 							</p>
 							<p className="mt-1 text-2xl font-bold text-blue-950">
 								{liveAgreementCount}
@@ -127,26 +123,24 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
 					<div className="flex justify-center py-16">
 						<Loader size="lg" />
 					</div>
-				) : agents.length === 0 ? (
+				) : connectedAgents.length === 0 ? (
 					<div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-14 text-center">
 						<div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
 							<Users className="h-8 w-8 text-slate-400" />
 						</div>
 						<h3 className="text-lg font-bold text-slate-950">
-							No agents available yet
+							No connected agents yet
 						</h3>
 						<p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
-							Once agent companies are active in Gloria, they appear here with
-							contact details and any existing agreement references.
+							When an access record is active, the agent appears here with
+							account/requester ID and margin details.
 						</p>
 					</div>
 				) : (
 					<div className="grid gap-4 xl:grid-cols-2">
-						{agents.map((agent) => {
-							const agreements = agent.agentAgreements || [];
-							const liveForAgent = agreements.filter((agreement) =>
-								isLiveStatus(agreement.status),
-							).length;
+						{connectedAgents.map((agent) => {
+							const agreements = agent.agentAgreements;
+							const liveForAgent = agreements.length;
 							return (
 								<div
 									key={agent.id}
@@ -178,6 +172,23 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
 													<Mail className="h-4 w-4 shrink-0" />
 													<span className="truncate">{agent.email}</span>
 												</a>
+												<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+													{agent.companyCode && <span>Code: {agent.companyCode}</span>}
+													{agent.registrationBranchName && (
+														<span>Branch: {agent.registrationBranchName}</span>
+													)}
+													{agent.companyAddress && <span>{agent.companyAddress}</span>}
+													{agent.companyWebsiteUrl && (
+														<a
+															className="text-blue-700 hover:text-blue-900"
+															href={agent.companyWebsiteUrl}
+															target="_blank"
+															rel="noreferrer"
+														>
+															{agent.companyWebsiteUrl}
+														</a>
+													)}
+												</div>
 											</div>
 										</div>
 										<div className="flex gap-2 sm:justify-end">
@@ -186,7 +197,7 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
 													{agreements.length}
 												</p>
 												<p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-													Refs
+													Access
 												</p>
 											</div>
 											<div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-center">
@@ -204,12 +215,10 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
 										<div className="mb-3 flex items-center justify-between gap-2">
 											<div className="flex items-center gap-2 text-sm font-bold text-slate-950">
 												<FileText className="h-4 w-4 text-indigo-600" />{" "}
-												Agreement references
+												Operational access
 											</div>
 											<Badge variant="info" size="sm">
-												{agreementCount === 0
-													? "Directory"
-													: `${agreements.length} linked`}
+												{`${agreements.length} linked`}
 											</Badge>
 										</div>
 
@@ -251,6 +260,36 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
 																		{formatDate(agreement.validFrom)} →{" "}
 																		{formatDate(agreement.validTo)}
 																	</span>
+																	<span className="inline-flex items-center gap-1 font-mono text-indigo-700">
+																		Acct{" "}
+																		{agreement.accountNumber ||
+																			agreement.agreementRef}
+																	</span>
+																	<span className="inline-flex items-center gap-1 text-emerald-700">
+																		Margin{" "}
+																		{Number(
+																			agreement.marginPercent || 0,
+																		).toFixed(2)}
+																		%
+																	</span>
+																	{agreement.contactEmail && (
+																		<a
+																			className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900"
+																			href={`mailto:${agreement.contactEmail}`}
+																		>
+																			{agreement.contactName ||
+																				agreement.contactEmail}
+																		</a>
+																	)}
+																	{agreement.contactPhone && (
+																		<a
+																			className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900"
+																			href={`tel:${agreement.contactPhone}`}
+																		>
+																			<Phone className="h-3.5 w-3.5" />
+																			{agreement.contactPhone}
+																		</a>
+																	)}
 																	{agreement.source?.companyName && (
 																		<span className="inline-flex items-center gap-1">
 																			<ShieldCheck className="h-3.5 w-3.5" />
@@ -276,11 +315,11 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
 											<div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-5 text-center">
 												<Clock className="mx-auto h-6 w-6 text-slate-400" />
 												<p className="mt-2 text-sm font-semibold text-slate-700">
-													No agreement reference with this agent yet
+													No account access with this agent yet
 												</p>
 												<p className="mt-1 text-xs leading-5 text-slate-500">
-													Coordinate externally with the agent/admin team; once
-													provisioned, it will appear here.
+													Complete legal terms offline, then register the account
+													and margin above.
 												</p>
 											</div>
 										)}
@@ -294,7 +333,7 @@ export const AvailableAgents: React.FC<AvailableAgentsProps> = ({
 										{agent.status === "ACTIVE" && (
 											<span className="inline-flex items-center gap-1 text-emerald-700">
 												<CheckCircle2 className="h-3.5 w-3.5" /> Ready for
-												agreements
+												access
 											</span>
 										)}
 									</div>

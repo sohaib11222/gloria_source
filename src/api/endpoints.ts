@@ -544,6 +544,9 @@ export interface ManualAvailabilitySamplePayload {
 	driverAge?: number;
 	citizenCountry?: string;
 	force?: boolean;
+	fleet_id?: string;
+	fleet_code?: string;
+	fleet_branch_codes?: string[];
 	response_meta?: { timestamp?: string; target?: string; version?: string };
 	pricing?: ManualGloriaPricingPayload;
 	vehicle: {

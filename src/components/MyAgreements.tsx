@@ -23,6 +23,11 @@ interface Agreement {
 	agentId: string;
 	sourceId: string;
 	agreementRef: string;
+	accountNumber?: string | null;
+	marginPercent?: number;
+	contactName?: string | null;
+	contactEmail?: string | null;
+	contactPhone?: string | null;
 	status:
 		| "DRAFT"
 		| "OFFERED"
@@ -31,8 +36,8 @@ interface Agreement {
 		| "SUSPENDED"
 		| "EXPIRED"
 		| "REJECTED";
-	validFrom: string;
-	validTo: string;
+	validFrom?: string | null;
+	validTo?: string | null;
 	createdAt: string;
 	updatedAt: string;
 	agent?: {
@@ -53,19 +58,6 @@ interface MyAgreementsProps {
 	user: any;
 }
 
-const STATUSES = [
-	"ALL",
-	"DRAFT",
-	"OFFERED",
-	"ACCEPTED",
-	"ACTIVE",
-	"SUSPENDED",
-	"EXPIRED",
-	"REJECTED",
-] as const;
-
-type StatusFilter = (typeof STATUSES)[number];
-
 function statusVariant(
 	status?: string,
 ): "default" | "success" | "warning" | "danger" | "info" {
@@ -85,7 +77,7 @@ function statusVariant(
 	}
 }
 
-function formatDate(value?: string) {
+function formatDate(value?: string | null) {
 	if (!value) return "Not set";
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return "Not set";
@@ -96,7 +88,7 @@ function formatDate(value?: string) {
 	});
 }
 
-function formatDateTime(value?: string) {
+function formatDateTime(value?: string | null) {
 	if (!value) return "Not set";
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return "Not set";
@@ -119,8 +111,6 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
 		null,
 	);
 	const [isModalOpen, setIsModalOpen] = useState(false);
-	const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-
 	const {
 		data: agreementsData,
 		isLoading,
@@ -141,34 +131,12 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
 
 	const agreements: Agreement[] = (agreementsData?.items || []) as Agreement[];
 
-	const statusCounts = useMemo(() => {
-		const counts: Record<StatusFilter, number> = {
-			ALL: agreements.length,
-			DRAFT: 0,
-			OFFERED: 0,
-			ACCEPTED: 0,
-			ACTIVE: 0,
-			SUSPENDED: 0,
-			EXPIRED: 0,
-			REJECTED: 0,
-		};
+	const connectedAgreements = useMemo(
+		() => agreements.filter((agreement) => isLiveAgreement(agreement.status)),
+		[agreements],
+	);
 
-		agreements.forEach((agreement) => {
-			const status = (agreement.status || "DRAFT") as StatusFilter;
-			if (status in counts) counts[status] += 1;
-		});
-
-		return counts;
-	}, [agreements]);
-
-	const filteredAgreements = useMemo(() => {
-		if (statusFilter === "ALL") return agreements;
-		return agreements.filter((agreement) => agreement.status === statusFilter);
-	}, [agreements, statusFilter]);
-
-	const liveCount = agreements.filter((agreement) =>
-		isLiveAgreement(agreement.status),
-	).length;
+	const liveCount = connectedAgreements.length;
 	const pendingCount = agreements.filter((agreement) =>
 		["DRAFT", "OFFERED"].includes(agreement.status),
 	).length;
@@ -197,12 +165,11 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
 									Source agreements
 								</div>
 								<CardTitle className="text-2xl font-bold text-white">
-									Agreement workspace
+									Supplier access workspace
 								</CardTitle>
 								<p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-									Track every agent agreement connected to your Source company.
-									Use this view to confirm who can search, quote, and book your
-									supply.
+									Track offline legal agreements as operational access records:
+									agent, account/requester ID, margin, and commercial contact.
 								</p>
 							</div>
 						</div>
@@ -222,15 +189,15 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
 					<div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 						<div className="rounded-2xl border border-white/10 bg-white/10 p-4">
 							<p className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-								Total agreements
+								Access records
 							</p>
 							<p className="mt-2 text-3xl font-bold text-white">
-								{agreements.length}
+								{connectedAgreements.length}
 							</p>
 						</div>
 						<div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-4">
 							<p className="text-xs font-semibold uppercase tracking-wide text-emerald-100">
-								Live / accepted
+								Usable now
 							</p>
 							<p className="mt-2 text-3xl font-bold text-white">{liveCount}</p>
 						</div>
@@ -258,22 +225,22 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
 						<div className="grid gap-3 md:grid-cols-3">
 							<div className="rounded-2xl border border-blue-100 bg-white p-4">
 								<div className="flex items-center gap-2 text-sm font-bold text-blue-950">
-									<FileText className="h-4 w-4 text-blue-600" /> 1. Agreement is
-									assigned
+									<FileText className="h-4 w-4 text-blue-600" /> 1. Access is
+									registered
 								</div>
 								<p className="mt-2 text-xs leading-5 text-slate-600">
-									The commercial agreement reference is provisioned for one
-									agent and your Source company.
+									Select the agent, then save the account/requester ID assigned
+									in your offline legal paperwork.
 								</p>
 							</div>
 							<div className="rounded-2xl border border-amber-100 bg-white p-4">
 								<div className="flex items-center gap-2 text-sm font-bold text-amber-950">
-									<Clock className="h-4 w-4 text-amber-600" /> 2. Signing /
-									acceptance
+									<Clock className="h-4 w-4 text-amber-600" /> 2. Offline legal
+									process
 								</div>
 								<p className="mt-2 text-xs leading-5 text-slate-600">
-									External signing or admin review moves the agreement from
-									draft/offered into accepted or active state.
+									Legal signing happens by email or local process; Gloria stores
+									only the operational setup after signing.
 								</p>
 							</div>
 							<div className="rounded-2xl border border-emerald-100 bg-white p-4">
@@ -282,78 +249,44 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
 									can trade
 								</div>
 								<p className="mt-2 text-xs leading-5 text-slate-600">
-									Accepted/active agreements are used by search, pricing,
-									booking, cancellation, and status flows.
+									Active agreements send the account number as RequestorID and
+									apply the saved margin to availability prices.
 								</p>
 							</div>
 						</div>
 					</div>
 
 					<div className="p-4 sm:p-5">
-						<div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-							<div>
-								<h3 className="text-lg font-bold text-slate-950">
-									Your agreement references
-								</h3>
-								<p className="mt-1 text-sm text-slate-600">
-									Filter by status, then open an agreement to inspect its
-									validity window and connected agent.
-								</p>
-							</div>
-							{isFetching && !isInitialLoading && (
+						{isFetching && !isInitialLoading && (
+							<div className="mb-4 flex justify-end">
 								<span className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500">
 									<RefreshCw className="h-3.5 w-3.5 animate-spin" /> Updating…
 								</span>
-							)}
-						</div>
+							</div>
+						)}
 
-						<div className="mb-6 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-1">
-							{STATUSES.map((status) => {
-								const active = statusFilter === status;
-								return (
-									<button
-										key={status}
-										onClick={() => setStatusFilter(status)}
-										className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold transition ${
-											active
-												? "bg-slate-900 text-white shadow-sm"
-												: "text-slate-600 hover:bg-white hover:text-slate-950"
-										}`}
-									>
-										{status === "ALL" ? "All" : status}
-										{statusCounts[status] > 0 && (
-											<span
-												className={`ml-2 rounded-full px-2 py-0.5 ${active ? "bg-white/15 text-white" : "bg-white text-slate-700 ring-1 ring-slate-200"}`}
-											>
-												{statusCounts[status]}
-											</span>
-										)}
-									</button>
-								);
-							})}
-						</div>
 
 						{isInitialLoading ? (
 							<div className="flex justify-center py-16">
 								<Loader size="lg" />
 							</div>
-						) : filteredAgreements.length === 0 ? (
+						) : connectedAgreements.length === 0 ? (
 							<div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-14 text-center">
 								<div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
 									<FileText className="h-8 w-8 text-slate-400" />
 								</div>
 								<h3 className="text-lg font-bold text-slate-950">
-									No agreements found
+									No connected agents yet
 								</h3>
 								<p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
-									{statusFilter === "ALL"
-										? "No agreement references are connected yet. Coordinate externally with an agent or admin, then refresh this page when the reference is provisioned."
-										: `No agreements currently have the ${statusFilter} status. Try another filter or refresh the list.`}
+									When an access record is active, it appears here. Register the
+									account/requester ID and margin above, then activate the
+									agreement.
 								</p>
 							</div>
 						) : (
 							<div className="grid gap-4">
-								{filteredAgreements.map((agreement) => (
+								{connectedAgreements.map((agreement) => (
 									<button
 										key={agreement.id}
 										type="button"
@@ -383,7 +316,7 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
 													</Badge>
 												</div>
 
-												<div className="mt-4 grid gap-3 md:grid-cols-3">
+												<div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
 													<div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
 														<div className="mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
 															<Building2 className="h-3.5 w-3.5" /> Agent
@@ -408,6 +341,20 @@ export const MyAgreements: React.FC<MyAgreementsProps> = ({ user }) => {
 														</p>
 														<p className="mt-1 text-xs text-slate-500">
 															to {formatDate(agreement.validTo)}
+														</p>
+													</div>
+													<div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-3">
+														<div className="mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-indigo-600">
+															<FileText className="h-3.5 w-3.5" /> Account /
+															requester
+														</div>
+														<p className="font-mono text-sm font-semibold text-indigo-950">
+															{agreement.accountNumber ||
+																agreement.agreementRef}
+														</p>
+														<p className="mt-1 text-xs text-indigo-700">
+															Margin{" "}
+															{Number(agreement.marginPercent || 0).toFixed(2)}%
 														</p>
 													</div>
 													<div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
